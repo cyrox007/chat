@@ -1,6 +1,6 @@
 from fastapi import FastAPI, APIRouter, status
 
-from views.health import handlers
+from views.service import handlers
 
 def install(app: FastAPI):
     router = APIRouter()
@@ -10,5 +10,11 @@ def install(app: FastAPI):
         methods=['GET'],
         status_code=status.HTTP_200_OK,
         endpoint=handlers.get_server
+    )
+    router.add_api_route(
+        '/refresh',
+        methods=['GET'],
+        status_code=status.HTTP_200_OK,
+        endpoint=handlers.refresh_tokens
     )
     app.include_router(router)

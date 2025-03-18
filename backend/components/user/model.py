@@ -100,6 +100,7 @@ class User(Database.Base):
         foreign_keys="[UserRelationship.to_user_uid]",
         back_populates="to_user"
     )
+    refresh_tokens = relationship("UserDevice", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"User {self.uid}"

@@ -8,7 +8,7 @@ from middlewares import csrf_middleware, error_handling_middleware
 
 def create_app() -> FastAPI:
     from views.csrf import routers as csrf_routes
-    from views.health import routers as health_routes
+    from views.service import routers as service_routes
     from views.users import routers as user_routes
     from views.rooms import routers as install_http_routes
     from views.rooms import routers as install_ws_routes
@@ -27,7 +27,7 @@ def create_app() -> FastAPI:
     error_handling_middleware(app)
 
     csrf_routes.install(app)
-    health_routes.install(app)
+    service_routes.install(app)
     user_routes.install(app)
     install_http_routes.install(app)
     install_ws_routes.install(app)

@@ -26,6 +26,7 @@ target_metadata = User.__table__.metadata
 
 from components.room.model import Room, RoomMember
 from components.message.model import Message, PrivateMessage
+from components.device.model import UserDevice
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
