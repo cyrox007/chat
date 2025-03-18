@@ -68,7 +68,7 @@ const handleLogout = async () => {
         const response = await AuthService.logout();
 
         // Проверяем статус ответа
-        if (response.status === 'ok') {
+        if (response.data.status === 'ok') {
             // Очищаем localStorage
             localStorage.clear();
 
