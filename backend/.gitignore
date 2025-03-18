@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+.vscode/
+.env
+static/uploads/*
+.logs/
+celerybeat-schedule
+.venv
+dump.rdb
+.vscode
