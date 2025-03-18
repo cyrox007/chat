@@ -17,4 +17,10 @@ def install(app: FastAPI):
         status_code=status.HTTP_200_OK,
         endpoint=handlers.login
     )
+    router.add_api_route(
+        '/logout',
+        methods=['POST'],
+        status_code=status.HTTP_200_OK,
+        endpoint=handlers.logout
+    )
     app.include_router(router)

@@ -161,3 +161,24 @@ async def login(request: Request, db_session=None):
     )
 
     return response
+
+@get_session
+async def logout(request: Request, db_session=None):
+    """
+    Выход пользователя.
+    """
+    # Извлекаем refresh_token из кук
+    refresh_token = request.cookies.get("refresh_token")
+    if not refresh_token:
+        return JSONResponse(content={"status": "ok", "message": "Already logged out"})
+
+    # Деактивируем токен в базе данных
+    try:
+        UserDevice.deactivate_token(db_session, refresh_token)
+    except ValueError:
+        pass  # Токен уже деактивирован или отсутствует
+
+    # Очищаем куки
+    response = JSONResponse(content={"status": "ok", "message": "Logged out successfully"})
+    response.delete_cookie(key="refresh_token")
+    return response

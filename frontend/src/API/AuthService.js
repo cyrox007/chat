@@ -8,7 +8,7 @@ export default class AuthService {
         return $api.post('/users/login', data);
     }
     static async logout() {
-        return $api.get('/auth/logout');
+        return $api.get('/users/logout');
     }
     // Другие методы...
 }

@@ -1,58 +1,88 @@
 <template>
-	<header class="row app-header" v-show="!isNoAuthenticated">
-		<div class="app-menu">
-			<ul>
-				<li v-for="item in navigation" :key="item.name">
-					<RouterLink :to="item.path">
-						<i :class="`fas ${item.icon}`"></i>
-						<span class="menu-text">{{ item.label }}</span>
-					</RouterLink>
-				</li>
-			</ul>
-		</div>
-	</header>
+    <header class="row app-header" v-show="!isNoAuthenticated">
+        <div class="app-menu">
+            <ul>
+                <li v-for="item in navigation" :key="item.name">
+                    <RouterLink v-if="item.path !== '/users/logout'" :to="item.path">
+                        <i :class="`fas ${item.icon}`"></i>
+                        <span class="menu-text">{{ item.label }}</span>
+                    </RouterLink>
+                    <a v-else href="#" @click.prevent="handleLogout">
+                        <i :class="`fas ${item.icon}`"></i>
+                        <span class="menu-text">{{ item.label }}</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </header>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
-import { RouterLink, useRoute } from 'vue-router'; // Импортируйте useRoute
-const route = useRoute(); // Получите текущий маршрут
+import { RouterLink, useRoute, useRouter } from 'vue-router';
+import AuthService from '@/API/AuthService';
+
+const route = useRoute();
+const router = useRouter();
+
 const isNoAuthenticated = computed(() => route.meta.requestGuest);
+
 const navigation = ref([
-	{
-		path: '/',
-		name: 'chats',
-		label: 'Чаты',
-		icon: 'fa-comments',
-	},
-	{
-		path: '/profile',
-		name: 'profile',
-		label: 'Профиль',
-		icon: 'fa-user-circle',
-	},
-	{
-		path: '/messages',
-		label: 'Сообщения',
-		icon: 'fa-envelope',
-	},
-	{
-		path: '/settings',
-		label: 'Настройки',
-		icon: 'fa-cog',
-	},
-	{
-		path: '/admin',
-		label: 'Админка',
-		icon: 'fa-user-shield',
-	},
-	{
-		path: '/logout',
-		label: 'Выход',
-		icon: 'fa-sign-out-alt',
-	},
+    {
+        path: '/',
+        name: 'chats',
+        label: 'Чаты',
+        icon: 'fa-comments',
+    },
+    {
+        path: '/profile',
+        name: 'profile',
+        label: 'Профиль',
+        icon: 'fa-user-circle',
+    },
+    {
+        path: '/messages',
+        label: 'Сообщения',
+        icon: 'fa-envelope',
+    },
+    {
+        path: '/settings',
+        label: 'Настройки',
+        icon: 'fa-cog',
+    },
+    {
+        path: '/admin',
+        label: 'Админка',
+        icon: 'fa-user-shield',
+    },
+    {
+        path: '/users/logout',
+        label: 'Выход',
+        icon: 'fa-sign-out-alt',
+    },
 ]);
+
+const handleLogout = async () => {
+    try {
+        // Отправляем запрос на сервер для выхода
+        const response = await AuthService.logout();
+
+        // Проверяем статус ответа
+        if (response.status === 'ok') {
+            // Очищаем localStorage
+            localStorage.clear();
+
+            // Перенаправляем на страницу входа
+            router.push('/login');
+        } else {
+            console.error('Unexpected server response:', response);
+        }
+    } catch (error) {
+        console.error('Logout failed:', error);
+    }
+};
 </script>
+
 <style>
 .chat-container .app-menu {
 	width: 100%;
