@@ -9,8 +9,12 @@
 			</button>
 			<h2>{{ currentRoom.name || 'Нет выбранной комнаты' }}</h2>
 
-			<button class="toggle-right-sidebar" id="toggle-right-sidebar" aria-label="Открыть/закрыть правый сайдбар"
-				@click="toggleRightSidebar">
+			<button 
+				class="toggle-right-sidebar" 
+				id="toggle-right-sidebar" 
+				aria-label="Открыть/закрыть правый сайдбар"
+				@click="toggleRightSidebar"
+				:disabled="!currentRoom.id">
 				<i class="fas fa-info-circle"></i>
 			</button>
 		</header>
@@ -20,7 +24,10 @@
 			<p>Выберите комнату, чтобы начать общение.</p>
 		</section>
 
-		<div v-else style="height: calc(100vh - 167px);">
+		<!-- Индикатор загрузки -->
+		<Loader :isLoading="isLoading" />
+
+		<div v-if="currentRoom.id && !isLoading" style="height: calc(100vh - 167px);">
 			<section class="chat-window-body" id="chat-messages" style="height: 100%;">
 				<Message v-for="(msg, index) in messages" :key="index" :message="msg" />
 			</section>
@@ -52,11 +59,16 @@
 			</section>
 		</div>
 	</main>
-	<RightSidebar :class="{ active: isRightSidebarActive }" @close="closeRightSidebar" :roomInfo="currentRoom"
+	<RightSidebar 
+		v-if="currentRoom.id && !isLoading"
+		:class="{ active: isRightSidebarActive }" 
+		@close="closeRightSidebar" 
+		:roomInfo="currentRoom" 
 		:users="connectedUsers" />
 </template>
 
 <script setup>
+import Loader from '@/components/Loader/index.vue';
 import LeftSidebar from '@/components/LeftSidebar/index.vue';
 import RightSidebar from '@/components/RightSidebar/index.vue';
 import { ref, onMounted } from 'vue';
@@ -64,6 +76,7 @@ import Message from '@/components/Message/index.vue';
 
 import RoomsService from '@/API/RoomsService';
 
+const isLoading = ref(false); // Состояние загрузки
 const messages = ref([]);
 const messageInput = ref('');
 const fileInput = ref(null);
@@ -132,15 +145,34 @@ const loadMessages = async (roomId) => {
 };
 
 // Функция для переключения комнаты
-const switchRoom = (room) => {
-	if (ws) {
-		ws.close(); // Закрываем предыдущее соединение
-	}
-	messages.value = [];
-	connectedUsers.value = [];
-	currentRoom.value = room; // Устанавливаем текущую комнату
-	loadRoomData(room.uid);
-	connectToWebSocket(room.uid);
+const switchRoom = async (room) => {
+    if (ws) {
+        ws.close(); // Закрываем предыдущее соединение
+    }
+
+    // Очистка данных
+    messages.value = [];
+    connectedUsers.value = [];
+    currentRoom.value = {};
+    isLoading.value = true; // Включаем индикатор загрузки
+
+    try {
+        // Загрузка данных о комнате
+        const roomData = await RoomsService.get_room(room.uid);
+        currentRoom.value = roomData.data.room;
+
+        // Подключение к WebSocket
+        connectToWebSocket(room.uid);
+
+        // Отключаем индикатор загрузки
+        isLoading.value = false;
+
+        // Показываем правый сайдбар
+        isRightSidebarActive.value = true;
+    } catch (error) {
+        console.error('Ошибка загрузки данных комнаты:', error);
+        isLoading.value = false; // Отключаем индикатор загрузки в случае ошибки
+    }
 };
 
 // Функция для переключения левого сайдбара
@@ -158,10 +190,9 @@ const closeLeftSidebar = () => {
 
 // Функция для переключения правого сайдбара
 const toggleRightSidebar = () => {
-	isRightSidebarActive.value = !isRightSidebarActive.value;
-	if (isLeftSidebarActive.value) {
-		isLeftSidebarActive.value = false; // Закрываем левый сайдбар, если он открыт
-	}
+    if (currentRoom.id) {
+        isRightSidebarActive.value = !isRightSidebarActive.value;
+    }
 };
 
 // Функция для закрытия правого сайдбара
