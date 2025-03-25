@@ -25,7 +25,7 @@ const checkServerAvailability = async () => {
 }
 const socket = ref(null);
 // Инициализация WebSocket
-const initializeWebSocket = () => {
+/* const initializeWebSocket = () => {
     socket.value = new WebSocket('ws://your-websocket-server-url');
 
     socket.value.onopen = () => {
@@ -48,12 +48,12 @@ const initializeWebSocket = () => {
     socket.value.onerror = (error) => {
         console.error('Ошибка WebSocket:', error);
     };
-};
+}; */
 
 // Проверяем доступность сервера и инициализируем WebSocket при монтировании компонента
 onMounted(() => {
     checkServerAvailability();
-    initializeWebSocket();
+    /* initializeWebSocket(); */
 });
 
 // Закрытие WebSocket при размонтировании компонента

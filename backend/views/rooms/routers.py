@@ -27,6 +27,14 @@ def install(app: FastAPI):
     # Обновление комнаты
     router.add_api_route(
         '/{room_uid}',
+        methods=['GET'],
+        status_code=status.HTTP_200_OK,
+        endpoint=handlers.get_room,
+        dependencies=[Depends(auth_middle)]
+    )
+    # Обновление комнаты
+    router.add_api_route(
+        '/{room_uid}',
         methods=['PUT'],
         status_code=status.HTTP_200_OK,
         endpoint=handlers.update_room,

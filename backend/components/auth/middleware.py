@@ -30,14 +30,14 @@ logger = logging.getLogger(__name__)
 async def auth_middle_ws(websocket: WebSocket):
     # Извлекаем токен из параметров запроса
     token = websocket.query_params.get("token")
-    logger.info(f"Received token: {token}")
+    logger.info(f"Received token: {token}")  # Логирование
 
     if not token:
         logger.warning("Missing token in WebSocket request")
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Missing token")
 
     # Валидируем токен
-    user_data = validate_access_token(token)
+    user_data = validate_access_token(f"Bearer {token}")
     if not user_data:
         logger.warning("Invalid token in WebSocket request")
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")

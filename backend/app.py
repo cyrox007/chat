@@ -11,7 +11,7 @@ def create_app() -> FastAPI:
     from views.service import routers as service_routes
     from views.users import routers as user_routes
     from views.rooms import routers as install_http_routes
-    from views.rooms import routers as install_ws_routes
+    from views.rooms import ws_routers as install_ws_routes
     
     app = FastAPI()
 

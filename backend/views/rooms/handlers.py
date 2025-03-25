@@ -18,6 +18,20 @@ async def create_room(room_data: dict, request: Request, db_session = None):
 
 
 @get_session
+async def get_room(room_uid: UUID, request: Request, db_session=None):
+    user = request.state.user  # Получаем данные пользователя из middleware
+
+    room = Room.get_room_by_uid(db_session, room_uid)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    """ if room.owner_uid != UUID(user["uid"]):
+        raise HTTPException(status_code=403, detail="You are not the owner of this room") """
+
+    #updated_room = Room.update_room(db_session, room_uid, room_data)
+    return {"status": "ok", "room": room.__dict__}
+
+@get_session
 def update_room(room_uid: UUID, room_data: dict, request: Request, db_session):
     user = request.state.user  # Получаем данные пользователя из middleware
 
