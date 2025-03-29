@@ -17,10 +17,10 @@ def create_access_token(payload: Dict[str, Any]) -> str:
         logger.debug(f"Генерация access-токена для пользователя: {user_uid}")
         return jwt.encode(
             {
-                "sub": user_uid,
+                "sub": user_uid,  # Основной идентификатор пользователя
                 "exp": datetime.utcnow() + timedelta(seconds=config.ACCESS_TOKEN_EXPIRE_MINUTES),
                 "type": "access",
-                "data": payload,
+                #"data": {k: v for k, v in payload.items() if k != "user_uid"},  # Исключаем user_uid из data
             },
             config.JWT_ACCESS_SECRET_KEY,
             algorithm=config.JWT_ALGORITHM,
@@ -30,7 +30,7 @@ def create_access_token(payload: Dict[str, Any]) -> str:
         raise
 
 
-def create_refresh_token(payload: Dict[str, Any], jti: str) -> str:
+def create_refresh_token(payload: Dict[str, Any]) -> str:
     """Генерация JWT refresh-токена"""
     try:
         user_uid = str(payload.get("user_uid"))  # Преобразуем user_uid в строку
@@ -40,11 +40,11 @@ def create_refresh_token(payload: Dict[str, Any], jti: str) -> str:
         logger.debug(f"Генерация refresh-токена для пользователя: {user_uid}")
         return jwt.encode(
             {
-                "sub": user_uid,
+                "sub": user_uid,  # Основной идентификатор пользователя
                 "exp": datetime.utcnow() + timedelta(days=config.REFRESH_TOKEN_EXPIRE_DAYS),
                 "type": "refresh",
-                "jti": jti,
-                "data": payload,
+                #"jti": jti,
+                #"data": {k: v for k, v in payload.items() if k != "user_uid"},  # Исключаем user_uid из data
             },
             config.JWT_REFRESH_SECRET_KEY,
             algorithm=config.JWT_ALGORITHM,
@@ -83,7 +83,7 @@ def validate_access_token(token: str) -> Optional[Dict[str, Any]]:
             return None
 
         logger.info(f"Access-токен успешно валидирован для пользователя: {sub}")
-        return payload.get("data")
+        return {"user_uid": sub}
 
     except jwt.ExpiredSignatureError:
         logger.info("Истек срок действия access-токена")
@@ -114,11 +114,7 @@ def validate_refresh_token(token: str) -> Optional[Dict[str, Any]]:
             return None
 
         logger.info(f"Refresh-токен успешно валидирован для пользователя: {sub}")
-        return {
-            "jti": payload.get("jti"),
-            "user_uid": sub,
-            "data": payload.get("data"),
-        }
+        return {"user_uid": sub}
 
     except jwt.ExpiredSignatureError:
         logger.info("Истек срок действия refresh-токена")

@@ -56,10 +56,10 @@ manager = ConnectionManager()
 @get_session
 async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user, db_session=None):
     logger.info("Обработка WebSocket соединения...")
-    
+    room_uid = UUID(room_uid)
+    user_uid = UUID(user["user_uid"])
+    print("0000")
     try:
-        room_uid = UUID(room_uid)
-        user_uid = UUID(user["user_uid"])
         room = Room.get_room_by_uid(db_session, room_uid)
         if not room:
             logger.warning(f"Комната не найдена: {room_uid}")
@@ -76,12 +76,22 @@ async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user,
 
         try:
             while True:
-                data = await websocket.receive_text()
+                # Используем receive_json для получения данных от клиента
+                data = await websocket.receive_json()
+
+                # Проверяем, что данные содержат необходимые поля
+                content = data.get("content")
+                content_type = data.get("content_type", "text")  # По умолчанию тип текст
+                if not content:
+                    logger.warning("Получено пустое сообщение")
+                    continue
+
+                # Формируем данные для сохранения в базу
                 message_data = {
-                    "content": data,
+                    "content": content,
                     "sender_uid": str(user_uid),
                     "room_uid": str(room_uid),
-                    "content_type": "text",
+                    "content_type": content_type,
                     "timestamp": datetime.utcnow().isoformat()
                 }
 

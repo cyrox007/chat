@@ -10,19 +10,19 @@ async def auth_middle(request: Request):
     # Получаем заголовок Authorization
     token = request.headers.get("authorization")
     if not token:
-        logger.warning("Missing token in HTTP request")
+        logger.warning("Отсутствующий токен в HTTP-запросе")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"status": "bad", "error_type": "missing_token"}
         )
 
     # Логируем полученный токен
-    logger.info(f"Received token from headers: {token}")
+    logger.info(f"Полученный токен из заголовков: {token}")
 
     # Валидируем токен
     user_data = validate_access_token(token)
     if not user_data:
-        logger.warning("Invalid token in HTTP request")
+        logger.warning("Недопустимый токен в HTTP-запросе")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"status": "bad", "error_type": "invalid_token"}
@@ -30,26 +30,17 @@ async def auth_middle(request: Request):
 
     # Сохраняем данные пользователя в request.state для дальнейшего использования
     request.state.user = user_data
-    logger.info(f"User authenticated: {user_data}")
+    logger.info(f"Аутентифицированный пользователь: {user_data}")
 
 
-async def auth_middle_ws(websocket: WebSocket):
-    # Извлекаем токен из заголовков
-    token = websocket.headers.get("Authorization")
-    logger.info(f"Received token from headers: {token}")  # Логирование
-
-    if not token or not token.startswith("Bearer "):
-        logger.warning("Missing or invalid token in WebSocket headers")
-        raise WebSocketException(code=WS_1008_POLICY_VIOLATION, reason="Missing or invalid token")
-
-    # Убираем префикс "Bearer " из токена
-    token = token.split(" ")[1]
+async def auth_middle_ws(token: str):
+    logger.info(f"Проверка токена по пути: {token[:10]}...")  # Логируем только начало токена
 
     # Валидируем токен
     user_data = validate_access_token(token)
     if not user_data:
-        logger.warning("Invalid token in WebSocket request")
-        raise WebSocketException(code=WS_1008_POLICY_VIOLATION, reason="Invalid token")
+        logger.warning("Недопустимый токен в запросе WebSocket")
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
 
-    logger.info(f"User authenticated: {user_data}")
+    logger.info(f"<WS>Аутентифицированный пользователь: {user_data}")
     return user_data

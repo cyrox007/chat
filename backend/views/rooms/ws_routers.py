@@ -1,25 +1,23 @@
 from fastapi import FastAPI, APIRouter, Query, WebSocket, Depends
 from views.rooms.ws_handlers import handle_websocket_connection
 from components.auth.middleware import auth_middle_ws
+from utils.logger import setup_logger
 
-
-import logging
-
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 def install(app: FastAPI):
-    router = APIRouter(prefix='/ws/rooms')
-    @router.websocket("/{room_uid}")
+    router = APIRouter(prefix='/ws')
+    @router.websocket("/{token}/rooms/{room_uid}")
     async def websocket_endpoint(
         websocket: WebSocket,
         room_uid: str,
-        token: str = Query(...),
+        token: str,
         user=Depends(auth_middle_ws)
     ):
-        logger.info(f"WebSocket request received for room {room_uid}")
+        logger.info(f"Получен запрос на подключение WebSocket к комнате {room_uid} с токеном {token[:10]}...")
         try:
             await websocket.accept()
-            logger.info(f"WebSocket connection established for room {room_uid}")
+            logger.info(f"Установлено подключение к WebSocket для комнаты {room_uid}")
             await handle_websocket_connection(websocket, room_uid, user)
         except Exception as e:
             logger.error(f"WebSocket error: {e}")

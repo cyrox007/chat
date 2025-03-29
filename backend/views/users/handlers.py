@@ -123,7 +123,7 @@ async def login(request: Request, db_session=None):
     jti = str(uuid.uuid4())
     user_uid = str(user.uid)
     access_token = create_access_token({"user_uid": user_uid})
-    refresh_token = create_refresh_token({"user_uid": user_uid}, jti)
+    refresh_token = create_refresh_token({"user_uid": user_uid})
 
     client_metadata = extract_client_metadata(request)
 

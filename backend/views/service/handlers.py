@@ -21,11 +21,11 @@ async def refresh_tokens(request: Request, db_session=None):
     user_agent = request.headers.get("User-Agent")
 
     # Генерация новых токенов
-    new_jti = str(uuid.uuid4())
-    user_uid = validate_refresh_token(refresh_token)  # Предполагается, что эта функция возвращает user_uid
+    #new_jti = str(uuid.uuid4())
+    user_uid = validate_refresh_token(refresh_token).get('user_uid')  # Предполагается, что эта функция возвращает user_uid
 
     new_access_token = create_access_token({"user_uid": user_uid})
-    new_refresh_token = create_refresh_token({"user_uid": user_uid}, new_jti)
+    new_refresh_token = create_refresh_token({"user_uid": user_uid})
 
     # Обновление записи о токене через метод модели
     try:
