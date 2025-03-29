@@ -58,7 +58,6 @@ async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user,
     logger.info("Обработка WebSocket соединения...")
     room_uid = UUID(room_uid)
     user_uid = UUID(user["user_uid"])
-    print("0000")
     try:
         room = Room.get_room_by_uid(db_session, room_uid)
         if not room:
