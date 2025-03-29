@@ -38,6 +38,9 @@ import { ref, onMounted } from 'vue';
 import Message from '@/components/Message/index.vue';
 import MessageComposer from '@/components/MessageComposer/index.vue';
 import RoomsService from '@/API/RoomsService';
+import UsersService from '@/API/UsersService';
+import { WebSocketService } from '@/services/WebSocketService';
+import CSRFService from '@/API/CSRFService';
 
 const isLoading = ref(false); // Состояние загрузки
 const messages = ref([]);
@@ -46,7 +49,23 @@ const isRightSidebarActive = ref(false);
 const currentRoom = ref({}); // Для хранения текущей комнаты
 const rooms = ref([]); // Для хранения списка комнат
 const connectedUsers = ref([]);
-let ws = null;
+const wsService = ref(null);
+
+const fetchUserData = async (userUids) => {
+    try {
+		await CSRFService.getCSRF();
+        const response = await UsersService.get_users_by_uids(userUids);
+        if (response.data.status === 'ok') {
+            return response.data.users; // Возвращаем массив пользователей
+        } else {
+            console.error('Неверный формат ответа:', response.data);
+            return [];
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки данных пользователей:', error);
+        return [];
+    }
+};
 
 // Загрузка списка комнат
 const loadRooms = async () => {
@@ -71,34 +90,44 @@ const connectToWebSocket = (roomId) => {
 	}
 	
 	// Создаем WebSocket соединение с передачей токена через Sec-WebSocket-Protocol
-	ws = new WebSocket(`ws://localhost:9001/ws/${token}/rooms/${roomId}`);
+	wsService.value = new WebSocketService(roomId, token);
+    const socket = wsService.value.connect();
 
-	ws.onopen = () => {
+	socket.onopen = () => {
 		console.log('Подключено к WebSocket');
 	};
 
-	ws.onmessage = (event) => {
+	socket.onmessage = async (event) => {
 		const data = JSON.parse(event.data);
 		if (data.type === 'message') {
 			messages.value.push(data.message);
 		} else if (data.type === 'user_list') {
-			connectedUsers.value = data.users;
+			const userUids = data.users; // Список user_uid
+			const usersData = await fetchUserData(userUids); // Запрашиваем данные о пользователях
+			connectedUsers.value = usersData; // Обновляем массив подключенных пользователей
 		}
 	};
 
-	ws.onclose = () => {
+	socket.onclose = () => {
 		console.log('Соединение закрыто');
 	};
 
-	ws.onerror = (error) => {
+	socket.onerror = (error) => {
 		console.error('Ошибка WebSocket:', error);
 	};
 };
 
+const disconnectFromWebSocket = () => {
+    if (wsService.value) {
+        wsService.value.disconnect();
+        wsService.value = null; // Очищаем ссылку на сервис
+    }
+};
+
 // Функция для переключения комнаты
 const switchRoom = async (room) => {
-	if (ws) {
-		ws.close(); // Закрываем предыдущее соединение
+	if (wsService.value) {
+		disconnectFromWebSocket(); // Закрываем предыдущее соединение
 	}
 
 	// Очистка данных

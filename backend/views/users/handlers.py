@@ -1,7 +1,7 @@
 from json import JSONDecodeError
 import re
 import uuid
-from fastapi import Request, HTTPException
+from fastapi import Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from components.device.model import UserDevice
 from utils.user_agents import parse_user_agent
@@ -9,7 +9,7 @@ from components.decorators.db import get_session
 from components.user.model import User
 from components.user.exceptions import UserValidationError
 from pydantic import BaseModel, EmailStr, Field, validator
-from typing import Annotated
+from typing import Annotated, List
 
 from utils.password import hash_password, verify_password
 from utils.jwt import create_access_token, create_refresh_token
@@ -182,3 +182,23 @@ async def logout(request: Request, db_session=None):
     response = JSONResponse(content={"status": "ok", "message": "Logged out successfully"})
     response.delete_cookie(key="refresh_token")
     return response
+
+@get_session
+async def get_users_by_uids(request: Request, db_session=None):
+    """
+    Получение данных о пользователях по их user_uid.
+    """
+    data = await parse_request_data(request)
+    user_uids = data['user_uids']
+    try:
+        # Проверяем, что список user_uid не пуст
+        if not user_uids:
+            raise ValueError("Список user_uid пуст")
+
+        # Используем метод модели для получения данных
+        users_data = User.get_users_by_uids(db_session, user_uids)
+
+        return {"status": "ok", "users": users_data}
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

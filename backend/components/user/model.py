@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import List
 
 from sqlalchemy import Column, Index, Integer, String, DateTime, Boolean, ForeignKey, Interval, UniqueConstraint
 from sqlalchemy import Enum as SQLEnum
@@ -206,6 +207,50 @@ class User(Database.Base):
         return db_session.query(cls).filter(
             cls.username.ilike(normalized)
         ).first()
+    
+    @staticmethod
+    def get_users_by_uids(db_session: Session, user_uids: List[str]):
+        """
+        Получение данных о пользователях по их user_uid.
+        :param db_session: SQLAlchemy сессия
+        :param user_uids: Список UUID пользователей
+        :return: Список словарей с данными пользователей
+        """
+        if not user_uids:
+            return []
+
+        # Запрос к базе данных
+        users = (
+            db_session.query(User)
+            .filter(User.uid.in_(user_uids))
+            .all()
+        )
+
+        # Формируем ответ
+        users_data = [
+            {
+                "uid": str(user.uid),
+                "username": user.username,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "avatar": user.avatar,
+                "global_role": user.global_role,
+                "rating": user.rating,
+                "city": user.city,
+                "country": user.country,
+                "bio": user.bio,
+                "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
+                "gender": user.gender,
+                "career": user.career,
+                "education": user.education,
+                "marital_status": user.marital_status,
+                "last_online": user.last_online.isoformat() if user.last_online else None,
+            }
+            for user in users
+        ]
+
+        return users_data
         
 class Penalty(Database.Base):
     __tablename__ = "penalties"

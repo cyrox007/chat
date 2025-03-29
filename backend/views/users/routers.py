@@ -23,4 +23,10 @@ def install(app: FastAPI):
         status_code=status.HTTP_200_OK,
         endpoint=handlers.logout
     )
+    router.add_api_route(
+        '/by-uids',
+        methods=['POST'],
+        status_code=status.HTTP_200_OK,
+        endpoint=handlers.get_users_by_uids
+    )
     app.include_router(router)

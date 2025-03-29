@@ -15,6 +15,7 @@ def create_app() -> FastAPI:
     
     app = FastAPI()
 
+    # Добавляем CORS middleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:5173"],
@@ -22,6 +23,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"]
     )
+
+    # Подключаем статические файлы
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
     csrf_middleware(app)
     error_handling_middleware(app)

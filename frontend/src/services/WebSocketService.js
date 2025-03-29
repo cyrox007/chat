@@ -6,7 +6,7 @@ export class WebSocketService {
     }
 
     connect() {
-        this.socket = new WebSocket(`ws://localhost:9001/ws/rooms/${this.roomId}?token=${this.token}`);
+        this.socket = new WebSocket(`ws://localhost:9001/ws/${this.token}/rooms/${this.roomId}`);
         return this.socket;
     }
 
