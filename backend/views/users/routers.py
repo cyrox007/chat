@@ -32,7 +32,7 @@ def install(app: FastAPI):
     )
     router.add_api_route(
         '/{uid}',
-        methods=['GET'],  # Используем GET для получения данных
+        methods=['GET'],
         status_code=status.HTTP_200_OK,
         endpoint=handlers.get_user_by_uid,
         dependencies=[Depends(auth_middle)]

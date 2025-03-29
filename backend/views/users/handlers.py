@@ -241,7 +241,11 @@ async def get_users_by_uids(request: Request, db_session=None):
 
 
 @get_session
-async def get_user_by_uid(uid: str, request: Request, db_session=None, current_user=Depends(auth_middle)):
+async def get_user_by_uid(
+    uid: str,
+    #current_user=Depends(auth_middle),  # Сначала разрешаем аутентификацию
+    db_session=None  # Затем передаем сессию БД через декоратор
+):
     """
     Получение данных пользователя по его UID.
     """
@@ -249,7 +253,7 @@ async def get_user_by_uid(uid: str, request: Request, db_session=None, current_u
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    is_owner = current_user.uid == user.uid
+    #is_owner = current_user.uid == user.uid
     user_data = {
         "full": {
             "uid": user.uid,
@@ -283,4 +287,4 @@ async def get_user_by_uid(uid: str, request: Request, db_session=None, current_u
         },
     }
 
-    return {"status": "ok", "user": user_data["full"] if is_owner else user_data["limited"]}
+    return {"status": "ok", "user": user_data["full"] }#if is_owner else user_data["limited"]}

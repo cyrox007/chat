@@ -52,19 +52,19 @@ const connectedUsers = ref([]);
 const wsService = ref(null);
 
 const fetchUserData = async (userUids) => {
-    try {
+	try {
 		await CSRFService.getCSRF();
-        const response = await UsersService.get_users_by_uids(userUids);
-        if (response.data.status === 'ok') {
-            return response.data.users; // Возвращаем массив пользователей
-        } else {
-            console.error('Неверный формат ответа:', response.data);
-            return [];
-        }
-    } catch (error) {
-        console.error('Ошибка загрузки данных пользователей:', error);
-        return [];
-    }
+		const response = await UsersService.get_users_by_uids(userUids);
+		if (response.data.status === 'ok') {
+			return response.data.users; // Возвращаем массив пользователей
+		} else {
+			console.error('Неверный формат ответа:', response.data);
+			return [];
+		}
+	} catch (error) {
+		console.error('Ошибка загрузки данных пользователей:', error);
+		return [];
+	}
 };
 
 // Загрузка списка комнат
@@ -88,10 +88,10 @@ const connectToWebSocket = (roomId) => {
 		console.error('Токен не найден');
 		return;
 	}
-	
+
 	// Создаем WebSocket соединение с передачей токена через Sec-WebSocket-Protocol
 	wsService.value = new WebSocketService(roomId, token);
-    const socket = wsService.value.connect();
+	const socket = wsService.value.connect();
 
 	socket.onopen = () => {
 		console.log('Подключено к WebSocket');
@@ -118,10 +118,19 @@ const connectToWebSocket = (roomId) => {
 };
 
 const disconnectFromWebSocket = () => {
-    if (wsService.value) {
-        wsService.value.disconnect();
-        wsService.value = null; // Очищаем ссылку на сервис
-    }
+	if (wsService.value) {
+		wsService.value.disconnect();
+		wsService.value = null; // Очищаем ссылку на сервис
+	}
+};
+// Функция для сохранения UID комнаты
+const saveCurrentRoom = (roomUid) => {
+	localStorage.setItem('currentRoomUid', roomUid);
+};
+
+// Функция для загрузки UID комнаты
+const loadCurrentRoom = () => {
+	return localStorage.getItem('currentRoomUid');
 };
 
 // Функция для переключения комнаты
@@ -140,7 +149,10 @@ const switchRoom = async (room) => {
 		// Загрузка данных о комнате
 		const roomData = await RoomsService.get_room(room.uid);
 		currentRoom.value = roomData.data.room;
-		
+
+		// Сохраняем UID комнаты
+		saveCurrentRoom(room.uid);
+
 		// Подключение к WebSocket
 		connectToWebSocket(room.uid);
 
@@ -181,8 +193,15 @@ const closeRightSidebar = () => {
 };
 
 // Вызов функции загрузки комнат при монтировании компонента
-onMounted(() => {
+onMounted(async () => {
 	loadRooms();
+	const savedRoomUid = loadCurrentRoom();
+	if (savedRoomUid) {
+		const savedRoom = rooms.value.find((room) => room.uid === savedRoomUid);
+		if (savedRoom) {
+			await switchRoom(savedRoom);
+		}
+	}
 });
 </script>
 
