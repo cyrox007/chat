@@ -1,10 +1,11 @@
 import jwt
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from settings import config
+from utils.logger import setup_logger  # Импортируем централизованный логгер
 
-logger = logging.getLogger(__name__)
+# Создаем логгер для этого модуля
+logger = setup_logger(__name__)
 
 def create_access_token(payload: Dict[str, Any]) -> str:
     """Генерация JWT access-токена"""
@@ -13,10 +14,11 @@ def create_access_token(payload: Dict[str, Any]) -> str:
         if not user_uid:
             raise ValueError("user_uid is required")
 
+        logger.debug(f"Генерация access-токена для пользователя: {user_uid}")
         return jwt.encode(
             {
                 "sub": user_uid,
-                "exp": datetime.utcnow() + timedelta(minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES),
+                "exp": datetime.utcnow() + timedelta(seconds=config.ACCESS_TOKEN_EXPIRE_MINUTES),
                 "type": "access",
                 "data": payload,
             },
@@ -35,6 +37,7 @@ def create_refresh_token(payload: Dict[str, Any], jti: str) -> str:
         if not user_uid:
             raise ValueError("user_uid is required")
 
+        logger.debug(f"Генерация refresh-токена для пользователя: {user_uid}")
         return jwt.encode(
             {
                 "sub": user_uid,
@@ -50,16 +53,19 @@ def create_refresh_token(payload: Dict[str, Any], jti: str) -> str:
         logger.error(f"Ошибка генерации refresh-токена: {e}")
         raise
 
+
 def validate_access_token(token: str) -> Optional[Dict[str, Any]]:
     """Валидация access-токена"""
     try:
         if not token:
+            logger.warning("Получен пустой access-токен")
             return None
         
         # Безопасное извлечение токена из заголовка
         if token.startswith("Bearer "):
             token = token.split(" ")[1]
 
+        logger.debug(f"Валидация access-токена: {token[:10]}...")  # Логируем начало токена
         payload = jwt.decode(
             token,
             config.JWT_ACCESS_SECRET_KEY,
@@ -76,6 +82,7 @@ def validate_access_token(token: str) -> Optional[Dict[str, Any]]:
             logger.warning("Subject must be a string")
             return None
 
+        logger.info(f"Access-токен успешно валидирован для пользователя: {sub}")
         return payload.get("data")
 
     except jwt.ExpiredSignatureError:
@@ -89,6 +96,7 @@ def validate_access_token(token: str) -> Optional[Dict[str, Any]]:
 def validate_refresh_token(token: str) -> Optional[Dict[str, Any]]:
     """Валидация refresh-токена"""
     try:
+        logger.debug(f"Валидация refresh-токена: {token[:10]}...")  # Логируем начало токена
         payload = jwt.decode(
             token,
             config.JWT_REFRESH_SECRET_KEY,
@@ -105,6 +113,7 @@ def validate_refresh_token(token: str) -> Optional[Dict[str, Any]]:
             logger.warning("Subject must be a string")
             return None
 
+        logger.info(f"Refresh-токен успешно валидирован для пользователя: {sub}")
         return {
             "jti": payload.get("jti"),
             "user_uid": sub,

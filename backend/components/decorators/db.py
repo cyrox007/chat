@@ -1,9 +1,10 @@
 import functools
-import logging
+from utils.logger import setup_logger  # Импортируем централизованный логгер
 from database import Database
 from fastapi import HTTPException, status
 
-logger = logging.getLogger(__name__)
+# Создаем логгер для этого модуля
+logger = setup_logger(__name__)
 
 def get_session(func):
     @functools.wraps(func)
@@ -14,6 +15,7 @@ def get_session(func):
             response = await func(*args, **kwargs)
             return response
         except HTTPException as http_exc:
+            logger.warning(f"HTTP exception raised: {http_exc.detail}")
             raise http_exc
         except Exception as e:
             logger.error(f"Database error: {str(e)}")

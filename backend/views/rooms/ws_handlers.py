@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from uuid import UUID
 from datetime import datetime
 from fastapi import WebSocket, WebSocketDisconnect
@@ -7,9 +6,10 @@ from sqlalchemy.orm import Session
 from components.room.model import Room
 from components.message.model import Message
 from components.decorators.db import get_session
+from utils.logger import setup_logger  # Импортируем централизованный логгер
 
-# Configure the logger
-logger = logging.getLogger(__name__)
+# Создаем логгер для этого модуля
+logger = setup_logger(__name__)
 
 # Менеджер для хранения активных соединений
 class ConnectionManager:
@@ -62,6 +62,7 @@ async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user,
         user_uid = UUID(user["user_uid"])
         room = Room.get_room_by_uid(db_session, room_uid)
         if not room:
+            logger.warning(f"Комната не найдена: {room_uid}")
             await websocket.close(code=1008, reason="Room not found")
             return
 
@@ -86,6 +87,7 @@ async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user,
 
                 # Сохраняем сообщение в базу данных
                 new_message = Message.create_message(db_session, message_data)
+                logger.debug(f"Сообщение сохранено в базе данных: {new_message.uid}")
 
                 # Рассылаем сообщение всем участникам комнаты
                 await manager.broadcast(room_uid, {
@@ -97,6 +99,8 @@ async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user,
                     "room_uid": str(new_message.room_uid),
                     "created_at": new_message.created_at.isoformat()
                 })
+                logger.info(f"Сообщение отправлено в комнату {room_uid}: {new_message.text}")
+
         except WebSocketDisconnect:
             logger.info("WebSocket отключен")
             manager.disconnect(websocket, room_uid)

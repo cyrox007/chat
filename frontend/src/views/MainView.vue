@@ -430,67 +430,6 @@ const errorMessage = ref(''); */
 	font-weight: bold;
 }
 
-
-/* .chat-window-inputs {
-	display: flex;
-	align-items: center;
-	padding: 10px;
-	background-color: var(--bg-light);
-	border-radius: 5px;
-}
-
-.chat-window-inputs .input-container {
-	position: relative;
-	width: 100%;
-}
-
-.chat-window-inputs .input-container input[type=text] {
-	width: 100%;
-	padding: 10px 40px;
-	border: 1px solid var(--primary-color);
-	border-radius: 5px;
-	font-size: 16px;
-}
-
-.chat-window-inputs .input-container input[type=text]:focus {
-	outline: none;
-	border-color: var(--primary-color);
-}
-
-.chat-window-inputs .input-container button {
-	position: absolute;
-	background: none;
-	border: none;
-	cursor: pointer;
-}
-
-.chat-window-inputs .input-container button i {
-	font-size: 20px;
-	color: var(--primary-color);
-}
-
-.chat-window-inputs .input-container button:hover {
-	color: var(--hover-color, #0056b3);
-}
-
-.chat-window-inputs .input-container .emoji-button {
-	left: 10px;
-	top: 50%;
-	transform: translateY(-50%);
-}
-
-.chat-window-inputs .input-container .attach-button {
-	right: 50px;
-	top: 50%;
-	transform: translateY(-50%);
-}
-
-.chat-window-inputs .input-container .send-button {
-	right: 10px;
-	top: 50%;
-	transform: translateY(-50%);
-} */ 
-
 .placeholder {
 	display: flex;
 	justify-content: center;

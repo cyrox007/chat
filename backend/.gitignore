@@ -8,3 +8,4 @@ celerybeat-schedule
 .venv
 dump.rdb
 .vscode
+*.log
