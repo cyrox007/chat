@@ -6,6 +6,10 @@ from uuid import uuid4
 from database import Database
 from components.room.model import Room
 
+# Configure the logger
+import logging
+logger = logging.getLogger(__name__)
+
 class Message(Database.Base):
     __tablename__ = "messages"
 
@@ -30,6 +34,37 @@ class Message(Database.Base):
 
     def __repr__(self):
         return f"<Message(uid={self.uid}, type={self.content_type}, room={self.room_uid})>"
+    
+    @staticmethod
+    def create_message(db_session, message_data: dict):
+        """
+        Создает новое сообщение и сохраняет его в базу данных.
+
+        :param db_session: SQLAlchemy сессия
+        :param message_data: Словарь с данными сообщения
+        :return: Созданный объект Message
+        """
+        try:
+            # Создаем новый объект Message
+            new_message = Message(
+                content_type=message_data.get("content_type", "text"),
+                text=message_data.get("content"),
+                room_uid=message_data.get("room_uid"),
+                author_uid=message_data.get("sender_uid"),
+                created_at=datetime.utcnow()
+            )
+
+            # Добавляем сообщение в сессию и фиксируем изменения
+            db_session.add(new_message)
+            db_session.commit()
+            db_session.refresh(new_message)
+
+            return new_message
+        except Exception as e:
+            # Логируем ошибку и откатываем транзакцию
+            logger.error(f"Error creating message: {e}")
+            db_session.rollback()
+            raise
 
 class PrivateMessage(Database.Base):
     __tablename__ = "private_messages"

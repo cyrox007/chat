@@ -36,7 +36,7 @@ $api.interceptors.response.use(
 
                 // Сохраняем новый access_token в localStorage
                 const { access_token } = refreshResponse.data;
-                console.log(access_token);
+                // console.log(access_token);
                 
                 localStorage.setItem('access_token', access_token);
 

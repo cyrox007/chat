@@ -1,9 +1,9 @@
 <template>
-	<LeftSidebar :class="{ active: isLeftSidebarActive }" @close="closeLeftSidebar" :rooms="rooms"
-		@switch-room="switchRoom" />
-	<main class="chat-window">
-		<header class="chat-window-header">
-			<button class="toggle-left-sidebar" id="toggle-left-sidebar" aria-label="Открыть/закрыть левый сайдбар"
+    <LeftSidebar :class="{ active: isLeftSidebarActive }" @close="closeLeftSidebar" :rooms="rooms"
+        @switch-room="switchRoom" />
+    <main class="chat-window">
+        <header class="chat-window-header">
+            <button class="toggle-left-sidebar" id="toggle-left-sidebar" aria-label="Открыть/закрыть левый сайдбар"
 				@click="toggleLeftSidebar">
 				<i class="fas fa-comments"></i>
 			</button>
@@ -17,54 +17,26 @@
 				:disabled="!currentRoom.id">
 				<i class="fas fa-info-circle"></i>
 			</button>
-		</header>
-
-		<!-- Заглушка или окно чата -->
-		<section v-if="!currentRoom.id && !isLoading" class="placeholder">
-			<p>Выберите комнату, чтобы начать общение.</p>
-		</section>
-
-		<!-- Индикатор загрузки -->
-		<Loader :isLoading="isLoading" />
-
-		<div v-if="currentRoom.id && !isLoading" style="height: calc(100vh - 167px);">
-			<section class="chat-window-body" id="chat-messages" style="height: 100%;">
-				<Message v-for="(msg, index) in messages" :key="index" :message="msg" />
-			</section>
-
-			<section class="chat-window-inputs">
-				<div class="input-container">
-					<div v-if="isRecording" class="recording-indicator">Запись идет...</div>
-					<button class="emoji-button">
-						<i class="fas fa-smile"></i>
-					</button>
-					<input type="text" id="message-input" v-model="messageInput" @input="updateSendButton"
-						placeholder="Введите сообщение" />
-					<button class="attach-button" @click="selectFile">
-						<i class="fas fa-paperclip"></i>
-					</button>
-
-					<input type="file" ref="fileInput" @change="handleFileUpload" style="display: none;" />
-
-					<!-- Условная отрисовка кнопки -->
-					<button class="send-button" id="send-message" @pointerdown="startRecording"
-						@pointerup="stopRecording" @mouseleave="stopRecording" v-if="messageInput.trim() === ''">
-						<i class="fas fa-microphone"></i>
-					</button>
-
-					<button class="send-button" id="send-message" v-else @click="sendMessage()">
-						<i class="fas fa-paper-plane"></i>
-					</button>
-				</div>
-			</section>
-		</div>
-	</main>
-	<RightSidebar 
-		v-if="currentRoom.id && !isLoading"
-		:class="{ active: isRightSidebarActive }" 
-		@close="closeRightSidebar" 
-		:roomInfo="currentRoom" 
-		:users="connectedUsers" />
+        </header>
+        <section v-if="!currentRoom.id && !isLoading" class="placeholder">
+            <p>Выберите комнату, чтобы начать общение.</p>
+        </section>
+        <Loader :isLoading="isLoading" />
+        <div v-if="currentRoom.id && !isLoading" style="height: calc(100vh - 167px);">
+            <section class="chat-window-body" id="chat-messages" style="height: 100%;">
+                <Message v-for="(msg, index) in messages" :key="index" :message="msg" />
+            </section>
+            <section class="chat-window-inputs">
+                <MessageComposer @send-message="handleSendMessage" />
+            </section>
+        </div>
+    </main>
+    <RightSidebar 
+        v-if="currentRoom.id && !isLoading"
+        :class="{ active: isRightSidebarActive }" 
+        @close="closeRightSidebar" 
+        :roomInfo="currentRoom" 
+        :users="connectedUsers" />
 </template>
 
 <script setup>
@@ -73,13 +45,14 @@ import LeftSidebar from '@/components/LeftSidebar/index.vue';
 import RightSidebar from '@/components/RightSidebar/index.vue';
 import { ref, onMounted } from 'vue';
 import Message from '@/components/Message/index.vue';
+import MessageComposer from '@/components/MessageComposer/index.vue';
 
 import RoomsService from '@/API/RoomsService';
 
 const isLoading = ref(false); // Состояние загрузки
 const messages = ref([]);
-const messageInput = ref('');
-const fileInput = ref(null);
+/* const messageInput = ref('');
+const fileInput = ref(null); */
 const isLeftSidebarActive = ref(false);
 const isRightSidebarActive = ref(false);
 const currentRoom = ref({}); // Для хранения текущей комнаты
@@ -104,7 +77,7 @@ const loadRooms = async () => {
 };
 
 // Загрузка данных комнаты
-const loadRoomData = async (roomId) => {
+/* const loadRoomData = async (roomId) => {
 	try {
 		const response = await RoomsService.get_room(roomId);
 		currentRoom.value = response.data.room;
@@ -112,7 +85,7 @@ const loadRoomData = async (roomId) => {
 	} catch (error) {
 		console.error('Ошибка загрузки данных комнаты:', error);
 	}
-};
+}; */
 
 // Подключение к WebSocket
 const connectToWebSocket = (roomId) => {
@@ -134,7 +107,7 @@ const connectToWebSocket = (roomId) => {
 	};
 };
 
-const loadMessages = async (roomId) => {
+/* const loadMessages = async (roomId) => {
 	try {
 		const response = await fetch(`/messages_${roomId}.json`); // Предполагается, что у вас есть отдельные файлы для каждой комнаты
 
@@ -142,7 +115,7 @@ const loadMessages = async (roomId) => {
 	} catch (error) {
 		console.error('Ошибка загрузки сообщений:', error);
 	}
-};
+}; */
 
 // Функция для переключения комнаты
 const switchRoom = async (room) => {
@@ -205,12 +178,12 @@ onMounted(() => {
 	loadRooms();
 });
 
-const recordedAudio = ref(null);
+/* const recordedAudio = ref(null);
 const isRecording = ref(false);
 let mediaRecorder = null;
-const errorMessage = ref('');
+const errorMessage = ref(''); */
 
-const sendMessage = async (file = null, messageType = 'text') => {
+/* const sendMessage = async (file = null, messageType = 'text') => {
 	// Проверяем, есть ли текст в поле ввода или записанное аудио
 	if (messageInput.value.trim() !== '' || (recordedAudio.value && recordedAudio.value.size > 0)) {
 		const newMessage = {
@@ -244,9 +217,9 @@ const sendMessage = async (file = null, messageType = 'text') => {
 			errorMessage.value = 'Ошибка отправки сообщения: ' + error.message; // Отображаем ошибку
 		}
 	}
-};
+}; */
 
-const startRecording = () => {
+/* const startRecording = () => {
 	if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
 		navigator.mediaDevices.getUserMedia({ audio: true })
 			.then(stream => {
@@ -273,20 +246,20 @@ const startRecording = () => {
 	} else {
 		console.error('Ваш браузер не поддерживает запись аудио.');
 	}
-};
+}; */
 
-const stopRecording = () => {
+/* const stopRecording = () => {
 	if (mediaRecorder) {
 		mediaRecorder.stop();
 		mediaRecorder = null; // Сбрасываем ссылку на mediaRecorder
 	}
-};
+}; */
 
-const selectFile = () => {
+/* const selectFile = () => {
 	fileInput.value.click(); // Открываем диалог выбора файла
-};
+}; */
 
-const handleFileUpload = (event) => {
+/* const handleFileUpload = (event) => {
 	const file = event.target.files[0]; // Получаем загруженный файл
 	if (file) {
 		// Проверяем тип файла, если нужно
@@ -299,7 +272,7 @@ const handleFileUpload = (event) => {
 		}
 	}
 	fileInput.value.value = ''; // Сбрасываем input после загрузки
-};
+}; */
 
 </script>
 
@@ -457,7 +430,8 @@ const handleFileUpload = (event) => {
 	font-weight: bold;
 }
 
-.chat-window-inputs {
+
+/* .chat-window-inputs {
 	display: flex;
 	align-items: center;
 	padding: 10px;
@@ -515,7 +489,7 @@ const handleFileUpload = (event) => {
 	right: 10px;
 	top: 50%;
 	transform: translateY(-50%);
-}
+} */ 
 
 .placeholder {
 	display: flex;

@@ -18,7 +18,13 @@ def get_session(func):
         except Exception as e:
             logger.error(f"Database error: {str(e)}")
             if "websocket" in kwargs:
-                await kwargs["websocket"].close(code=1011, reason="Internal server error")
+                # Проверяем, было ли соединение принято
+                websocket = kwargs["websocket"]
+                try:
+                    # Закрываем WebSocket только если он был принят
+                    await websocket.close(code=1011, reason="Internal server error")
+                except Exception as ws_error:
+                    logger.error(f"WebSocket close error: {ws_error}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Internal server error"
