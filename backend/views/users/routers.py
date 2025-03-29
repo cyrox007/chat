@@ -1,5 +1,6 @@
-from fastapi import FastAPI, APIRouter, status
+from fastapi import Depends, FastAPI, APIRouter, status
 
+from components.auth.middleware import auth_middle
 from views.users import handlers
 
 def install(app: FastAPI):
@@ -28,5 +29,12 @@ def install(app: FastAPI):
         methods=['POST'],
         status_code=status.HTTP_200_OK,
         endpoint=handlers.get_users_by_uids
+    )
+    router.add_api_route(
+        '/{uid}',
+        methods=['GET'],  # Используем GET для получения данных
+        status_code=status.HTTP_200_OK,
+        endpoint=handlers.get_user_by_uid,
+        dependencies=[Depends(auth_middle)]
     )
     app.include_router(router)

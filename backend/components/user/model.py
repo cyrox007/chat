@@ -1,40 +1,50 @@
+# Стандартные библиотеки Python
 from enum import Enum
+import re
 from typing import List
+from uuid import uuid4
 
+# Внешние зависимости
 from sqlalchemy import Column, Index, Integer, String, DateTime, Boolean, ForeignKey, Interval, UniqueConstraint
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
-from uuid import uuid4
 
+# Локальные модули
 from database import Database
-
 from components.room.model import Room
 from components.message.model import Message
-
 from components.user.exceptions import UserValidationError
+from utils.logger import setup_logger  # Централизованная утилита логирования
 
-import re
+# Создаем логгер
+logger = setup_logger(__name__)
 
+
+# Enums
 class PenaltyType(str, Enum):
     BAN = "ban"
     MUTE = "mute"
     WARNING = "warning"
 
+
 class RelationshipType(str, Enum):
-    SPOUSE = "spouse" 
+    SPOUSE = "spouse"
     PARENT = "parent"
     CHILD = "child"
     SIBLING = "sibling"
     FRIEND = "friend"
+
 
 class Gender(str, Enum):
     MALE = "male"
     FEMALE = "female"
     OTHER = "other"
 
+
+# Модель User
 class User(Database.Base):
     __tablename__ = "users"
 
@@ -42,30 +52,25 @@ class User(Database.Base):
     uid = Column(UUID(as_uuid=True), default=uuid4, unique=True, index=True)
     username = Column(String(50), unique=True, index=True)
     email = Column(String(100), unique=True, index=True)
-    phone = Column(String(20), unique=True, index=True)  # Добавлен номер телефона
-    first_name = Column(String(50))  # Добавлено имя
-    last_name = Column(String(50))  # Добавлена фамилия
+    phone = Column(String(20), unique=True, index=True)  # Номер телефона
+    first_name = Column(String(50))  # Имя
+    last_name = Column(String(50))  # Фамилия
     hashed_password = Column(String(255))
     avatar = Column(String(255))
-    global_role = Column(String(50), default="user")  # admin, moderator, user
-    rating = Column(Integer, default=0)  # Добавлен рейтинг
+    global_role = Column(String(50), default="user")  # Роль (admin, moderator, user)
+    rating = Column(Integer, default=0)  # Рейтинг
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)  # Подтверждение email
     deleted_at = Column(DateTime, nullable=True)  # Мягкое удаление
-
     city = Column(String(100), nullable=True)
     country = Column(String(100), nullable=True)
     bio = Column(String(500), nullable=True)
     date_of_birth = Column(DateTime, nullable=True)
-    gender = Column(
-        SQLEnum('male', 'female', 'other', name='gender'), 
-        nullable=True
-    )
+    gender = Column(SQLEnum('male', 'female', 'other', name='gender'), nullable=True)
     career = Column(String(100), nullable=True)
     education = Column(String(100), nullable=True)
     marital_status = Column(String(50), nullable=True)
-    #total_online_time = Column(Interval, default=datetime.timedelta())  # Время в сети
     last_online = Column(DateTime)
 
     __table_args__ = (
@@ -84,12 +89,12 @@ class User(Database.Base):
     penalties = relationship(
         "Penalty",
         back_populates="user",
-        foreign_keys="[Penalty.user_uid]"  # Указываем FK явно
+        foreign_keys="[Penalty.user_uid]"
     )
     issued_penalties = relationship(
         "Penalty",
         back_populates="issuer",
-        foreign_keys="[Penalty.issuer_uid]"  # Указываем FK явно
+        foreign_keys="[Penalty.issuer_uid]"
     )
     relationships = relationship(
         "UserRelationship",
@@ -105,7 +110,6 @@ class User(Database.Base):
 
     def __repr__(self):
         return f"User {self.uid}"
-    
 
     @classmethod
     def create_user(
@@ -116,8 +120,9 @@ class User(Database.Base):
         phone: str,
         password: str,
         gender: Gender = None,
-        first_name: str = None,  # Добавлено
-        last_name: str = None    # Добавлено
+        first_name: str = None,
+        last_name: str = None,
+        avatar: str = None  
     ):
         """
         Создает нового пользователя в БД.
@@ -126,39 +131,52 @@ class User(Database.Base):
         :param email: Почта пользователя
         :param phone: Номер телефона
         :param password: Хэшированный пароль
+        :param gender: Пол пользователя
+        :param first_name: Имя пользователя
+        :param last_name: Фамилия пользователя
+        :param avatar: Ссылка на аватар (необязательно)
         :return: Созданный пользователь или None при ошибке
         """
-        # 1. Валидация email
-        if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-            raise UserValidationError("Invalid email format")
-        
-        # 2. Валидация телефона (пример для Беларуси/России)
-        phone_pattern = r'^\+?(375\d{9}|7\d{10})$'
-        cleaned_phone = re.sub(r'[^\d+]', '', phone)  # Очистка от лишних символов
-        
-        if not re.fullmatch(phone_pattern, cleaned_phone):
-            raise UserValidationError("Invalid phone number format")
-        
-        # 3. Проверка уникальности
-        existing_user = db_session.query(User).filter(
-            (User.username == username) |
-            (User.email == email) |
-            (User.phone == phone)
-        ).first()
-
-        if existing_user:
-            if existing_user.username == username:
-                raise UserValidationError("Username already exists")
-            if existing_user.email == email:
-                raise UserValidationError("Email already exists")
-            if existing_user.phone == phone:
-                raise UserValidationError("Phone already exists")
-            
-        # 4. Определение аватара
-        avatar = "default_female.webp" if gender == Gender.FEMALE else "default_male.webp"
-
+        logger.info(f"Начало создания пользователя: {username}")
         try:
-            new_user = User(
+            # Валидация email
+            if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+                logger.error(f"Неверный формат email: {email}")
+                raise UserValidationError("Invalid email format")
+
+            # Валидация телефона
+            phone_pattern = r'^\+?(375\d{9}|7\d{10})$'
+            cleaned_phone = re.sub(r'[^\d+]', '', phone)  # Очистка от лишних символов
+            if not re.fullmatch(phone_pattern, cleaned_phone):
+                logger.error(f"Неверный формат номера телефона: {phone}")
+                raise UserValidationError("Invalid phone number format")
+
+            # Проверка уникальности
+            existing_user = db_session.query(cls).filter(
+                (cls.username == username) |
+                (cls.email == email) |
+                (cls.phone == phone)
+            ).first()
+            if existing_user:
+                if existing_user.username == username:
+                    logger.warning(f"Пользователь с таким username уже существует: {username}")
+                    raise UserValidationError("Username already exists")
+                if existing_user.email == email:
+                    logger.warning(f"Пользователь с такой почтой уже существует: {email}")
+                    raise UserValidationError("Email already exists")
+                if existing_user.phone == phone:
+                    logger.warning(f"Пользователь с таким телефоном уже существует: {phone}")
+                    raise UserValidationError("Phone already exists")
+
+            # Выбор аватара по умолчанию
+            if not avatar:
+                if gender == Gender.FEMALE:
+                    avatar = "/static/default_female.webp"
+                else:
+                    avatar = "/static/default_male.webp"
+
+            # Создание пользователя
+            new_user = cls(
                 username=username,
                 email=email,
                 phone=phone,
@@ -170,26 +188,34 @@ class User(Database.Base):
             )
             db_session.add(new_user)
             db_session.commit()
+            logger.info(f"Пользователь успешно создан: {username}")
             return new_user
+
         except IntegrityError:
+            logger.exception(f"Ошибка целостности данных при создании пользователя: {username}")
             db_session.rollback()
             return None
 
     @classmethod
     def get_user_by_credentials(cls, db_session: Session, identifier: str):
+        """
+        Получает пользователя по логину, email или телефону.
+        :param db_session: Сессия БД
+        :param identifier: Логин, email или телефон
+        :return: Объект пользователя или None
+        """
+        logger.info(f"Поиск пользователя по идентификатору: {identifier}")
         normalized = identifier.strip()
-        
-        # 1. Проверка email
-        if re.fullmatch(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", normalized):
-            return db_session.query(cls).filter(
-                cls.email.ilike(normalized)
-            ).first()
 
-        # 2. Проверка телефона
-        # Очистка от всех символов кроме цифр
+        # Поиск по email
+        if re.fullmatch(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", normalized):
+            user = db_session.query(cls).filter(cls.email.ilike(normalized)).first()
+            if user:
+                logger.info(f"Пользователь найден по email: {normalized}")
+            return user
+
+        # Поиск по телефону
         phone_digits = re.sub(r'[^\d]', '', normalized)
-        
-        # Генерация возможных вариантов
         possible_phones = []
         if len(phone_digits) == 11 and phone_digits.startswith('7'):
             possible_phones.append(f"+{phone_digits}")  # +79191234567
@@ -199,34 +225,31 @@ class User(Database.Base):
             possible_phones.append(phone_digits)        # 375291234567
 
         if possible_phones:
-            return db_session.query(cls).filter(
-                cls.phone.in_(possible_phones)
-            ).first()
+            user = db_session.query(cls).filter(cls.phone.in_(possible_phones)).first()
+            if user:
+                logger.info(f"Пользователь найден по телефону: {normalized}")
+            return user
 
-        # 3. Поиск по username
-        return db_session.query(cls).filter(
-            cls.username.ilike(normalized)
-        ).first()
-    
-    @staticmethod
-    def get_users_by_uids(db_session: Session, user_uids: List[str]):
+        # Поиск по username
+        user = db_session.query(cls).filter(cls.username.ilike(normalized)).first()
+        if user:
+            logger.info(f"Пользователь найден по username: {normalized}")
+        return user
+
+    @classmethod
+    def get_users_by_uids(cls, db_session: Session, user_uids: List[str]):
         """
         Получение данных о пользователях по их user_uid.
         :param db_session: SQLAlchemy сессия
         :param user_uids: Список UUID пользователей
         :return: Список словарей с данными пользователей
         """
+        logger.info(f"Получение данных о пользователях по UID: {user_uids}")
         if not user_uids:
+            logger.warning("Получен пустой список user_uids")
             return []
 
-        # Запрос к базе данных
-        users = (
-            db_session.query(User)
-            .filter(User.uid.in_(user_uids))
-            .all()
-        )
-
-        # Формируем ответ
+        users = db_session.query(cls).filter(cls.uid.in_(user_uids)).all()
         users_data = [
             {
                 "uid": str(user.uid),
@@ -249,12 +272,30 @@ class User(Database.Base):
             }
             for user in users
         ]
-
+        logger.info(f"Данные о пользователях успешно получены: {len(users_data)} пользователей")
         return users_data
-        
+
+    @classmethod
+    def get_user_by_uid(cls, db_session: Session, uid: str):
+        """
+        Получает пользователя по его UID.
+        :param db_session: Сессия БД
+        :param uid: UID пользователя
+        :return: Объект пользователя или None
+        """
+        logger.info(f"Поиск пользователя по UID: {uid}")
+        user = db_session.query(cls).filter(cls.uid == uid).first()
+        if user:
+            logger.info(f"Пользователь найден: {user.username}")
+        else:
+            logger.warning(f"Пользователь с UID {uid} не найден")
+        return user
+
+
+# Модель Penalty
 class Penalty(Database.Base):
     __tablename__ = "penalties"
-    
+
     id = Column(Integer, primary_key=True)
     user_uid = Column(UUID(as_uuid=True), ForeignKey("users.uid"))
     penalty_type = Column(SQLEnum(PenaltyType))
@@ -262,29 +303,32 @@ class Penalty(Database.Base):
     expires_at = Column(DateTime)
     issuer_uid = Column(UUID(as_uuid=True), ForeignKey("users.uid"))
     reason = Column(String(255))
-    
+
     user = relationship(
         "User",
         back_populates="penalties",
-        foreign_keys=[user_uid]  # Для user_uid
+        foreign_keys=[user_uid]
     )
     issuer = relationship(
         "User",
         back_populates="issued_penalties",
-        foreign_keys=[issuer_uid]  # Для issuer_uid
+        foreign_keys=[issuer_uid]
     )
 
+
+# Модель UserRelationship
 class UserRelationship(Database.Base):
     __tablename__ = "user_relationships"
+
     __table_args__ = (
         UniqueConstraint('from_user_uid', 'to_user_uid', name='unique_relationship'),
     )
-    
+
     id = Column(Integer, primary_key=True)
     from_user_uid = Column(UUID(as_uuid=True), ForeignKey("users.uid"))
     to_user_uid = Column(UUID(as_uuid=True), ForeignKey("users.uid"))
     relation_type = Column(SQLEnum(RelationshipType))
     since = Column(DateTime, default=datetime.utcnow)
-    
+
     from_user = relationship("User", back_populates="relationships", foreign_keys=[from_user_uid])
     to_user = relationship("User", back_populates="related_to", foreign_keys=[to_user_uid])

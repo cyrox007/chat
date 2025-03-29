@@ -44,3 +44,28 @@ async def auth_middle_ws(token: str):
 
     logger.info(f"<WS>Аутентифицированный пользователь: {user_data}")
     return user_data
+
+async def authorize_user(current_user, target_user_uid, required_role=None):
+    """
+    Проверяет права доступа пользователя.
+    :param current_user: Данные текущего пользователя (из токена).
+    :param target_user_uid: UID целевого пользователя.
+    :param required_role: Требуемая роль (необязательно).
+    :return: True, если доступ разрешен.
+    """
+    # Если пользователь запрашивает свои собственные данные
+    if current_user["uid"] == target_user_uid:
+        logger.info("Пользователь запрашивает свои собственные данные")
+        return True
+
+    # Если требуется роль (например, администратор)
+    if required_role and current_user["role"] != required_role:
+        logger.warning(f"Пользователь {current_user['uid']} не имеет роли {required_role}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"status": "bad", "error_type": "insufficient_permissions"}
+        )
+
+    # Ограниченный доступ для других пользователей
+    logger.info(f"Пользователь {current_user['uid']} запрашивает данные другого пользователя {target_user_uid}")
+    return False
