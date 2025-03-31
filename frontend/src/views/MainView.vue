@@ -3,38 +3,37 @@
 		@switch-room="switchRoom" />
 	<main class="chat-window">
 		<header class="chat-window-header">
-			<button class="toggle-left-sidebar" id="toggle-left-sidebar" aria-label="Открыть/закрыть левый сайдбар"
-				@click="toggleLeftSidebar">
+			<button class="toggle-left-sidebar" aria-label="Открыть/закрыть левый сайдбар" @click="toggleLeftSidebar">
 				<i class="fas fa-comments"></i>
 			</button>
-			<h2>{{ currentRoom.name || 'Нет выбранной комнаты' }}</h2>
-			<button class="toggle-right-sidebar" id="toggle-right-sidebar" aria-label="Открыть/закрыть правый сайдбар"
-				@click="toggleRightSidebar" :disabled="!currentRoom.id">
+			<h2>{{ chatStore.currentRoom?.name || 'Нет выбранной комнаты' }}</h2>
+			<button class="toggle-right-sidebar" aria-label="Открыть/закрыть правый сайдбар" @click="toggleRightSidebar"
+				:disabled="!chatStore.currentRoom?.id">
 				<i class="fas fa-info-circle"></i>
 			</button>
 		</header>
-		<section v-if="!currentRoom.id && !isLoading" class="placeholder">
-			<p>Выберите комнату, чтобы начать общение.</p>
-		</section>
-		<Loader :isLoading="isLoading" />
-		<div v-if="currentRoom.id && !isLoading" style="height: calc(100vh - 167px);">
+		<div v-if="chatStore.currentRoom?.id && !isLoading" style="height: calc(100vh - 167px);">
 			<section class="chat-window-body" id="chat-messages" style="height: 100%;">
 				<Message v-for="(msg, index) in messages" :key="index" :message="msg" />
 			</section>
-			<section class="chat-window-inputs">
 				<MessageComposer @send-message="handleSendMessage" />
-			</section>
+			
 		</div>
+		<section v-else-if="!isLoading" class="placeholder">
+			<p>Выберите комнату, чтобы начать общение.</p>
+		</section>
+		<Loader :isLoading="isLoading" />
 	</main>
-	<RightSidebar v-if="currentRoom.id && !isLoading" :class="{ active: isRightSidebarActive }"
-		@close="closeRightSidebar" :roomInfo="currentRoom" :users="connectedUsers" />
+	<RightSidebar v-if="chatStore.currentRoom?.id && !isLoading" :class="{ active: isRightSidebarActive }"
+		@close="closeRightSidebar" :roomInfo="chatStore.currentRoom" :users="chatStore.connectedUsers" />
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue';
+import { useChatStore } from '@/stores/chat'; // Импортируем хранилище
 import Loader from '@/components/Loader/index.vue';
 import LeftSidebar from '@/components/LeftSidebar/index.vue';
 import RightSidebar from '@/components/RightSidebar/index.vue';
-import { ref, onMounted } from 'vue';
 import Message from '@/components/Message/index.vue';
 import MessageComposer from '@/components/MessageComposer/index.vue';
 import RoomsService from '@/API/RoomsService';
@@ -42,25 +41,26 @@ import UsersService from '@/API/UsersService';
 import { WebSocketService } from '@/services/WebSocketService';
 import CSRFService from '@/API/CSRFService';
 
-const isLoading = ref(false); // Состояние загрузки
+// Инициализация хранилища
+const chatStore = useChatStore();
+
+// Состояния
+const isLoading = ref(false);
 const messages = ref([]);
 const isLeftSidebarActive = ref(false);
 const isRightSidebarActive = ref(false);
-const currentRoom = ref({}); // Для хранения текущей комнаты
-const rooms = ref([]); // Для хранения списка комнат
-const connectedUsers = ref([]);
+const rooms = ref([]);
 const wsService = ref(null);
 
+// Загрузка данных пользователей
 const fetchUserData = async (userUids) => {
 	try {
 		await CSRFService.getCSRF();
 		const response = await UsersService.get_users_by_uids(userUids);
 		if (response.data.status === 'ok') {
-			return response.data.users; // Возвращаем массив пользователей
-		} else {
-			console.error('Неверный формат ответа:', response.data);
-			return [];
+			return response.data.users;
 		}
+		return [];
 	} catch (error) {
 		console.error('Ошибка загрузки данных пользователей:', error);
 		return [];
@@ -73,8 +73,6 @@ const loadRooms = async () => {
 		const response = await RoomsService.get_rooms();
 		if (response.data.status === 'ok' && response.data.rooms) {
 			rooms.value = response.data.rooms;
-		} else {
-			console.error('Неверный формат ответа:', response.data);
 		}
 	} catch (error) {
 		console.error('Ошибка загрузки комнат:', error);
@@ -83,13 +81,12 @@ const loadRooms = async () => {
 
 // Подключение к WebSocket
 const connectToWebSocket = (roomId) => {
-	const token = localStorage.getItem('access_token'); // Получаем токен из localStorage
+	const token = localStorage.getItem('access_token');
 	if (!token) {
 		console.error('Токен не найден');
 		return;
 	}
 
-	// Создаем WebSocket соединение с передачей токена через Sec-WebSocket-Protocol
 	wsService.value = new WebSocketService(roomId, token);
 	const socket = wsService.value.connect();
 
@@ -102,9 +99,8 @@ const connectToWebSocket = (roomId) => {
 		if (data.type === 'message') {
 			messages.value.push(data.message);
 		} else if (data.type === 'user_list') {
-			const userUids = data.users; // Список user_uid
-			const usersData = await fetchUserData(userUids); // Запрашиваем данные о пользователях
-			connectedUsers.value = usersData; // Обновляем массив подключенных пользователей
+			const usersData = await fetchUserData(data.users);
+			chatStore.setConnectedUsers(usersData); // Сохраняем пользователей в хранилище
 		}
 	};
 
@@ -123,6 +119,7 @@ const disconnectFromWebSocket = () => {
 		wsService.value = null; // Очищаем ссылку на сервис
 	}
 };
+
 // Функция для сохранения UID комнаты
 const saveCurrentRoom = (roomUid) => {
 	localStorage.setItem('currentRoomUid', roomUid);
@@ -136,34 +133,23 @@ const loadCurrentRoom = () => {
 // Функция для переключения комнаты
 const switchRoom = async (room) => {
 	if (wsService.value) {
-		disconnectFromWebSocket(); // Закрываем предыдущее соединение
+		wsService.value.disconnect();
 	}
 
 	// Очистка данных
 	messages.value = [];
-	connectedUsers.value = [];
-	currentRoom.value = {};
-	isLoading.value = true; // Включаем индикатор загрузки
+	chatStore.clearCurrentRoom();
+	isLoading.value = true;
 
 	try {
-		// Загрузка данных о комнате
 		const roomData = await RoomsService.get_room(room.uid);
-		currentRoom.value = roomData.data.room;
-
-		// Сохраняем UID комнаты
-		saveCurrentRoom(room.uid);
-
-		// Подключение к WebSocket
+		chatStore.setCurrentRoom(roomData.data.room); // Сохраняем комнату в хранилище
 		connectToWebSocket(room.uid);
-
-		// Отключаем индикатор загрузки
 		isLoading.value = false;
-
-		// Показываем правый сайдбар
 		isRightSidebarActive.value = true;
 	} catch (error) {
 		console.error('Ошибка загрузки данных комнаты:', error);
-		isLoading.value = false; // Отключаем индикатор загрузки в случае ошибки
+		isLoading.value = false;
 	}
 };
 
@@ -192,12 +178,11 @@ const closeRightSidebar = () => {
 	isRightSidebarActive.value = false;
 };
 
-// Вызов функции загрузки комнат при монтировании компонента
+// Загрузка данных при монтировании
 onMounted(async () => {
 	loadRooms();
-	const savedRoomUid = loadCurrentRoom();
-	if (savedRoomUid) {
-		const savedRoom = rooms.value.find((room) => room.uid === savedRoomUid);
+	if (chatStore.currentRoom) {
+		const savedRoom = rooms.value.find((room) => room.uid === chatStore.currentRoom.uid);
 		if (savedRoom) {
 			await switchRoom(savedRoom);
 		}

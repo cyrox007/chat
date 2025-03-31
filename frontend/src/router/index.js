@@ -21,8 +21,8 @@ const router = createRouter({
 				requestAuth: true
 			}
 		},
-		/* {
-			path: '/profile',
+		 {
+			path: '/profile/:uid',
 			name: 'profile',
 			component: () => import('../views/ProfileView.vue'),
 			meta: {
@@ -30,7 +30,7 @@ const router = createRouter({
 				requestAuth: true
 			}
 		},
-		{
+		/*{
 			path: '/messages',
 			name: 'messages',
 			component: () => import('../views/MessagesView.vue'),

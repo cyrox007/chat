@@ -1,5 +1,5 @@
 <template>
-    <div class="message-composer">
+    <section class="chat-window-inputs">
         <div class="input-container">
             <!-- Эмодзи -->
             <button class="emoji-button" @click="toggleEmojiPicker">
@@ -39,7 +39,7 @@
 
         <!-- Индикатор записи голоса -->
         <div v-if="isRecording" class="recording-indicator">Запись идет...</div>
-    </div>
+    </section>
 </template>
 
 <script setup>
@@ -120,7 +120,7 @@ const sendMessage = (content = null, type = 'text') => {
 </script>
 
 <style scoped>
-.message-composer {
+.chat-window-inputs {
     display: flex;
     flex-direction: column;
     padding: 10px;
