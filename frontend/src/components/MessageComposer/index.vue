@@ -64,11 +64,19 @@
 		</div>
 		<!-- Скрытый элемент для выбора файлов -->
 		<input type="file" ref="fileInput" @change="handleFileUpload" multiple style="display: none;" />
+
+		<!-- Панель выбора эмодзи -->
+		<div v-if="isEmojiPickerVisible" class="emoji-picker-container">
+			<Picker :data="emojiIndex" set="twitter" @select="insertEmoji" />
+		</div>
 	</div>
 </template>
 
 <script setup>
 import { ref, defineEmits, onUnmounted } from 'vue';
+import data from "emoji-mart-vue-fast/data/all.json";
+import "emoji-mart-vue-fast/css/emoji-mart.css";
+import { Picker, EmojiIndex } from "emoji-mart-vue-fast/src";
 
 // Состояния
 const messageInput = ref('');
@@ -86,7 +94,8 @@ const isAudioRecorded = ref(false); // Флаг для отображения п
 const emit = defineEmits(['send-message']);
 
 // Эмодзи
-const emojis = ['😊', '😂', '❤️', '👍', '🎉', '🤔', '😎', '😢', '🔥', '🚀'];
+/* const emojis = ['😊', '😂', '❤️', '👍', '🎉', '🤔', '😎', '😢', '🔥', '🚀']; */
+const emojiIndex = new EmojiIndex(data);
 
 // Функция для проверки, является ли файл изображением
 const isImage = (file) => {
@@ -207,8 +216,8 @@ const toggleEmojiPicker = () => {
 
 // Вставка эмодзи в текстовое поле
 const insertEmoji = (emoji) => {
-	messageInput.value += emoji;
-	isEmojiPickerVisible.value = false;
+	messageInput.value += emoji.native || emoji;
+	isEmojiPickerVisible.value = false; // Закрываем панель после выбора эмодзи
 };
 
 // Подготовка сообщения для отправки
@@ -240,6 +249,7 @@ onUnmounted(() => {
 
 <style scoped>
 .chat-window-inputs {
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	padding: 10px;
@@ -411,5 +421,21 @@ onUnmounted(() => {
 	height: 100%;
 	background-color: var(--primary-color);
 	transition: width 0.1s ease;
+}
+
+/* Панель выбора эмодзи */
+.emoji-picker-container {
+	position: absolute;
+	bottom: 75px; /* Выравнивание относительно поля ввода */
+	
+	left: 0;
+	right: 0;
+	width: 338px;
+	/* max-height: 300px; */ /* Максимальная высота */
+	overflow-y: auto; /* Вертикальная прокрутка */
+	background-color: var(--bg-light);
+	border: 1px solid var(--primary-color);
+	border-radius: 10px;
+	z-index: 1000; /* Убедитесь, что панель отображается поверх других элементов */
 }
 </style>
