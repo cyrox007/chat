@@ -16,31 +16,22 @@
 			</div>
 		</div>
 
-		<!-- Отображение записанного голосового сообщения -->
-		<div class="audio-preview" v-if="recordedAudio">
-			<audio controls :src="audioUrl"></audio>
-			<button class="remove-audio" @click="clearAudio">
-				<i class="fas fa-times"></i>
+		<!-- Индикатор записи голоса и кнопка записи -->
+		<div v-if="isRecording" class="recording-area">
+			<div class="recording-indicator">
+				Запись идет...
+				<div class="audio-level-bar">
+					<div class="audio-level-fill" :style="{ width: `${audioLevel * 100}%` }"></div>
+				</div>
+			</div>
+			<button class="record-button" @pointerdown="startRecording" @mouseup="stopRecording"
+				@mouseleave="stopRecording">
+				<i class="fas fa-microphone"></i>
 			</button>
 		</div>
 
-		<!-- Индикатор записи голоса -->
-		<div v-if="isRecording" class="recording-indicator">
-			Запись идет...
-			<div class="audio-level-bar">
-				<div class="audio-level-fill" :style="{ width: `${audioLevel * 100}%` }"></div>
-			</div>
-		</div>
-
-		<!-- Список эмодзи -->
-		<div class="emoji-picker" v-if="isEmojiPickerVisible">
-			<div v-for="(emoji, index) in emojis" :key="index" class="emoji-item" @click="insertEmoji(emoji)">
-				{{ emoji }}
-			</div>
-		</div>
-
-		<!-- Поле ввода текста или плеер -->
-		<div class="input-container" v-if="!isAudioRecorded">
+		<!-- Поле ввода текста -->
+		<div class="input-container" v-if="!isRecording && !isAudioRecorded">
 			<input type="text" v-model="messageInput" placeholder="Введите сообщение" @keydown.enter="prepareMessage" />
 			<button class="emoji-button" @click="toggleEmojiPicker">
 				<i class="fas fa-smile"></i>
@@ -49,7 +40,7 @@
 				<i class="fas fa-paperclip"></i>
 			</button>
 			<button class="record-button" @pointerdown="startRecording" @mouseup="stopRecording"
-				@mouseleave="stopRecording" v-if="messageInput.trim() === '' && !isRecording">
+				@mouseleave="stopRecording" v-if="messageInput.trim() === ''">
 				<i class="fas fa-microphone"></i>
 			</button>
 			<button class="send-button" @click="prepareMessage" v-else>
@@ -58,14 +49,16 @@
 		</div>
 
 		<!-- Плеер с кнопкой отправки -->
-		<div class="audio-preview" v-else>
+		<div class="audio-preview" v-else-if="isAudioRecorded">
 			<audio controls :src="audioUrl"></audio>
-			<button class="remove-audio" @click="clearAudio">
-				<i class="fas fa-times"></i>
-			</button>
-			<button class="send-button" @click="prepareMessage">
-				<i class="fas fa-paper-plane"></i>
-			</button>
+			<div class="controls">
+				<button class="remove-audio" @click="clearAudio">
+					<i class="fas fa-times"></i>
+				</button>
+				<button class="send-button" @click="prepareMessage">
+					<i class="fas fa-paper-plane"></i>
+				</button>
+			</div>
 		</div>
 	</div>
 </template>
@@ -174,7 +167,7 @@ const stopRecording = () => {
 	if (mediaRecorder.value && isRecording.value) {
 		mediaRecorder.value.stop();
 		isRecording.value = false;
-		isAudioRecorded.value = true; // Показываем плеер
+		isAudioRecorded.value = true; // Показываем плеер только после завершения записи
 
 		window.removeEventListener('mouseup', stopRecording);
 		window.removeEventListener('mouseleave', stopRecording);
@@ -200,6 +193,7 @@ const updateAudioLevel = () => {
 const clearAudio = () => {
 	recordedAudio.value = null;
 	audioUrl.value = null;
+	isAudioRecorded.value = false;
 };
 
 // Переключение видимости пикера эмодзи
@@ -227,10 +221,17 @@ const prepareMessage = () => {
 	messageInput.value = '';
 	selectedFiles.value = [];
 	clearAudio();
+	isAudioRecorded.value = false; // Сбрасываем флаг после отправки
 
 	// Эмитируем событие для отправки данных
 	emit('send-message', messageData);
 };
+
+onUnmounted(() => {
+	if (audioContext.value) {
+		audioContext.value.close();
+	}
+});
 </script>
 
 <style scoped>
@@ -276,14 +277,32 @@ const prepareMessage = () => {
 
 /* Блок для отображения записанного аудио */
 .audio-preview {
-	margin-bottom: 10px;
-	display: flex;
-	align-items: center;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center; /* Выравнивание по вертикали */
+    justify-content: space-between; /* Распределяет элементы по краям */
 }
 
+/* Плеер */
 .audio-preview audio {
-	width: 100%;
-	margin-right: 10px;
+    flex: 1; /* Занимает все доступное пространство */
+    max-width: 100%; /* Предотвращает переполнение */
+}
+
+/* Контейнер для кнопок */
+.audio-preview .controls {
+    display: flex;
+    align-items: center;
+}
+
+/* Стили кнопок */
+.audio-preview button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    color: var(--primary-color);
+    margin-left: 5px; /* Отступ между кнопками */
 }
 
 .remove-audio {
@@ -317,6 +336,7 @@ const prepareMessage = () => {
 	border: 1px solid var(--primary-color);
 	border-radius: 20px;
 	font-size: 16px;
+	height: 40px; /* Установим фиксированную высоту */
 }
 
 .input-container button {
@@ -340,26 +360,46 @@ const prepareMessage = () => {
 	transform: translateY(-50%);
 }
 
-.record-button,
-.send-button {
+.input-container .record-button,
+.input-container .send-button {
+	position: absolute;
 	right: 10px;
 	top: 50%;
 	transform: translateY(-50%);
 }
 
+/* Область записи (индикатор + кнопка) */
+.recording-area {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 40px; /* Соответствует высоте текстового поля */
+}
+
 /* Индикатор записи голоса */
 .recording-indicator {
-	margin-top: 5px;
-	font-size: 0.9em;
-	color: #888;
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
+
+/* Кнопка записи */
+.record-button {
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-size: 20px;
+	color: var(--primary-color);
+	margin-left: 10px; /* Отступ между индикатором и кнопкой */
+}
+
 /* Анимация уровня громкости */
 .audio-level-bar {
 	width: 100%;
 	height: 10px;
 	background-color: #ddd;
 	border-radius: 5px;
-	margin-top: 5px;
 	overflow: hidden;
 }
 
