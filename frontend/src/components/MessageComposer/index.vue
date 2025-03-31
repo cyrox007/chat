@@ -39,8 +39,10 @@
 			<button class="attach-button" @click="selectFile">
 				<i class="fas fa-paperclip"></i>
 			</button>
+			<!-- Кнопка записи или отправки -->
 			<button class="record-button" @pointerdown="startRecording" @mouseup="stopRecording"
-				@mouseleave="stopRecording" v-if="messageInput.trim() === ''">
+				@mouseleave="stopRecording"
+				v-if="messageInput.trim() === '' && selectedFiles.length === 0 && !isRecording">
 				<i class="fas fa-microphone"></i>
 			</button>
 			<button class="send-button" @click="prepareMessage" v-else>
@@ -60,6 +62,8 @@
 				</button>
 			</div>
 		</div>
+		<!-- Скрытый элемент для выбора файлов -->
+		<input type="file" ref="fileInput" @change="handleFileUpload" multiple style="display: none;" />
 	</div>
 </template>
 
