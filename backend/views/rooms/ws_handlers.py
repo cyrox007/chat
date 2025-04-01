@@ -101,7 +101,7 @@ async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user,
         try:
             while True:
                 # Используем receive_json для получения данных от клиента
-                data = await websocket.receive_json()
+                data: dict = await websocket.receive_json()
 
                 # Проверяем, что данные содержат необходимые поля
                 content = data.get("content") or data.get("audio")  # Поддержка content или audio
@@ -109,7 +109,8 @@ async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user,
                 if not content:
                     logger.warning("Получено пустое сообщение")
                     continue
-
+                
+                tempId = data.get('tempId', '')
                 # Формируем данные для сохранения в базу
                 message_data = {
                     "content": content,
@@ -123,6 +124,7 @@ async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user,
                 new_message = Message.create_message(db_session, message_data)
                 logger.debug(f"Сообщение сохранено в базе данных: {new_message}")
 
+                new_message['tempId'] = tempId
                 # Рассылаем сообщение всем участникам комнаты
                 await manager.broadcast(room_uid, new_message)
                 logger.info(f"Сообщение отправлено в комнату {room_uid}: {new_message}")

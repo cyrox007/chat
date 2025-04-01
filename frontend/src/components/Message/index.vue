@@ -38,6 +38,13 @@
 			<!-- Неизвестный тип контента -->
 			<div v-else>Неизвестный тип сообщения</div>
 		</div>
+
+		<!-- Индикатор статуса -->
+		<div v-if="safeMessage.status" class="message-status">
+			<i v-if="safeMessage.status === 'sending'" class="fas fa-spinner fa-spin status-icon sending"></i>
+			<i v-else-if="safeMessage.status === 'sent'" class="fas fa-check status-icon sent"></i>
+			<i v-else-if="safeMessage.status === 'error'" class="fas fa-exclamation-circle status-icon error"></i>
+		</div>
 	</div>
 
 	<!-- Индикатор загрузки -->
@@ -75,11 +82,13 @@ const safeMessage = computed(() => {
 			avatar: props.message.sender?.avatar || '/images/default-avatar.png',
 		},
 		created_at: props.message.created_at || new Date().toISOString(),
+		status: props.message.status || 'sent', // Статус: отправлено по умолчанию
 	};
 });
 
 // Форматируем дату для отображения
 const formattedTimestamp = computed(() => {
+	if (!safeMessage.value) return '';
 	const date = new Date(safeMessage.value.created_at);
 	return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
 });

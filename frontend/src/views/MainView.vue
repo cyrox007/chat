@@ -16,8 +16,8 @@
 			<section class="chat-window-body" id="chat-messages">
 				<Message 
 					v-for="(msg, index) in messages" 
-					:key="msg.uid" 
-					:message="msg" 
+					:key="msg.uid || msg.tempId"
+					:message="msg"
 				/>
 			</section>
 			<MessageComposer @send-message="handleSendMessage" />
@@ -34,6 +34,7 @@
 <script setup>
 import { ref, onMounted, computed, onUnmounted } from 'vue';
 import { useStore } from 'vuex';
+import { v4 as uuidv4 } from 'uuid';
 import { useChatStore } from '@/stores/chat'; // Импортируем хранилище
 import DOMPurify from 'dompurify';
 import Loader from '@/components/Loader/index.vue';
@@ -122,29 +123,58 @@ const handleSendMessage = async (messageData) => {
 	const sanitizedMessage = sanitizeMessage(messageData);
 
 	const messagePayload = {
-		content: sanitizedMessage.content || '', // Только content
-		type: determineContentType(sanitizedMessage), // Тип сообщения
-		sender_uid: currentUser.value.uid,
-		timestamp: new Date().toISOString(),
-		avatar: currentUser.value.avatar,
-		username: currentUser.value.username,
-		files: sanitizedMessage.files || [],
-		audio: sanitizedMessage.audio || null,
+		tempId: uuidv4(), // Временный ID для отслеживания на фронтенде
+		content: sanitizedMessage.content || '', // Текст или ссылка на медиа
+		content_type: determineContentType(sanitizedMessage), // Тип контента
+		sender: {
+			uid: currentUser.value.uid,
+			name: currentUser.value.username,
+			avatar: currentUser.value.avatar,
+		},
+		created_at: new Date().toISOString(), // Время создания
+		status: 'sending', // Статус: "отправляется"
 	};
 
 	try {
-		if (!wsService.value || !wsService.value.send) {
+		console.log(messagePayload);
+		
+		/* if (!wsService.value || !wsService.value.send) {
 			console.error('WebSocket не подключен или метод send не определён');
 			return;
 		}
 
-		wsService.value.send(JSON.stringify(messagePayload));
+		// Отправляем сообщение через WebSocket
+		wsService.value.send(messagePayload);
 
+		// Добавляем сообщение в массив
 		messages.value.push({
 			...messagePayload,
 		});
+
+		// Подписываемся на ответ от сервера
+		wsService.value.onMessage((serverMessage) => {
+			if (serverMessage.type === 'message' && serverMessage.tempId) {
+				// Находим сообщение по tempId
+				const messageIndex = messages.value.findIndex(msg => msg.tempId === serverMessage.tempId);
+				if (messageIndex !== -1) {
+					// Обновляем сообщение данными с сервера
+					messages.value[messageIndex] = {
+						...messages.value[messageIndex],
+						uid: serverMessage.uid, // Окончательный ID с сервера
+						status: 'sent', // Статус: "отправлено"
+					};
+				}
+			}
+		}); */
+
 	} catch (error) {
 		console.error('Ошибка отправки сообщения:', error);
+
+		// Обновляем статус в случае ошибки
+		const messageIndex = messages.value.findIndex(msg => msg.tempId === messagePayload.tempId);
+		if (messageIndex !== -1) {
+			messages.value[messageIndex].status = 'error'; // Статус: "ошибка"
+		}
 	}
 };
 
@@ -159,29 +189,27 @@ const connectToWebSocket = (roomId) => {
 	wsService.value = new WebSocketService(roomId, token);
 	const socket = wsService.value.connect();
 
-	socket.onopen = () => {
-		console.log('Подключено к WebSocket');
-	};
+	// Подписываемся на входящие сообщения
+	wsService.value.onMessage(async (data) => {
+		console.log("Полученные данные от сервера:", data);
 
-	socket.onmessage = async (event) => {
-		const data = JSON.parse(event.data);
 		if (data.type === 'message') {
-			messages.value.push(data.message);
+			// Добавляем новое сообщение в конец массива
+			messages.value.push(data); // push добавляет в конец массива
 		} else if (data.type === 'user_list') {
 			const usersData = await fetchUserData(data.users);
 			chatStore.setConnectedUsers(usersData); // Сохраняем пользователей в хранилище
 		} else if (data.type === 'initial_data') {
-			messages.value.push(...data.messages);
+			// Проверяем структуру данных
+			if (!Array.isArray(data.messages)) {
+				console.error('Некорректные данные initial_data:', data.messages);
+				return;
+			}
+
+			// Добавляем начальные данные в начало массива
+			messages.value.unshift(...data.messages.reverse());
 		}
-	};
-
-	socket.onclose = () => {
-		console.log('Соединение закрыто');
-	};
-
-	socket.onerror = (error) => {
-		console.error('Ошибка WebSocket:', error);
-	};
+	});
 };
 
 const disconnectFromWebSocket = () => {
@@ -250,7 +278,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-	if (wsService.value) disconnectFromWebSocket();
+	if (wsService.value) wsService.value.disconnect();
 });
 </script>
 
