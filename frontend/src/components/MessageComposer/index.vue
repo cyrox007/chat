@@ -74,9 +74,11 @@
 
 <script setup>
 import { ref, defineEmits, onUnmounted } from 'vue';
+import { useChatStore } from '@/stores/chat';
 import data from "emoji-mart-vue-fast/data/all.json";
 import "emoji-mart-vue-fast/css/emoji-mart.css";
 import { Picker, EmojiIndex } from "emoji-mart-vue-fast/src";
+const chatStore = useChatStore();
 
 // Состояния
 const messageInput = ref('');
@@ -223,11 +225,11 @@ const insertEmoji = (emoji) => {
 // Подготовка сообщения для отправки
 const prepareMessage = () => {
 	if (!messageInput.value.trim() && !recordedAudio.value && selectedFiles.value.length === 0) return;
-
 	const messageData = {
 		text: messageInput.value.trim(),
 		files: selectedFiles.value,
 		audio: recordedAudio.value ? audioUrl.value : null,
+		sender_uid: chatStore.currentUser?.uid, // Добавляем UID отправителя
 	};
 
 	// Очищаем поля после подготовки
@@ -235,7 +237,6 @@ const prepareMessage = () => {
 	selectedFiles.value = [];
 	clearAudio();
 	isAudioRecorded.value = false; // Сбрасываем флаг после отправки
-
 	// Эмитируем событие для отправки данных
 	emit('send-message', messageData);
 };

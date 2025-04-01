@@ -14,7 +14,11 @@
 		</header>
 		<div v-if="chatStore.currentRoom?.id && !isLoading" class="chat-container">
 			<section class="chat-window-body" id="chat-messages">
-				<Message v-for="(msg, index) in messages" :key="index" :message="msg" />
+				<Message 
+					v-for="(msg, index) in messages" 
+					:key="msg.uid" 
+					:message="msg" 
+				/>
 			</section>
 			<MessageComposer @send-message="handleSendMessage" />
 		</div>
@@ -28,8 +32,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed, onUnmounted } from 'vue';
+import { useStore } from 'vuex';
 import { useChatStore } from '@/stores/chat'; // Импортируем хранилище
+import DOMPurify from 'dompurify';
 import Loader from '@/components/Loader/index.vue';
 import LeftSidebar from '@/components/LeftSidebar/index.vue';
 import RightSidebar from '@/components/RightSidebar/index.vue';
@@ -42,6 +48,16 @@ import CSRFService from '@/API/CSRFService';
 
 // Инициализация хранилища
 const chatStore = useChatStore();
+const store = useStore();
+
+// Получаем данные текущего пользователя из хранилища
+const currentUser = computed(() => {
+	return store.getters.getUser || {
+		uid: null,
+		username: 'Неизвестный пользователь',
+		avatar: '/images/default-avatar.png',
+	};
+});
 
 // Состояния
 const isLoading = ref(false);
@@ -78,6 +94,60 @@ const loadRooms = async () => {
 	}
 };
 
+const determineContentType = (messageData) => {
+	if (messageData.audio) return 'audio';
+	if (messageData.files.length > 0) return 'file';
+	if (/[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(messageData.text)) return 'sticker';
+	return 'text';
+};
+
+const sanitizeMessage = (messageData) => {
+	// Очищаем текстовое поле
+	const sanitizedText = DOMPurify.sanitize(messageData.text);
+
+	// Очищаем имена файлов
+	const sanitizedFiles = messageData.files.map(file => ({
+		name: DOMPurify.sanitize(file.name),
+	}));
+
+	// Возвращаем очищенные данные
+	return {
+		content: sanitizedText,
+		files: sanitizedFiles,
+		audio: messageData.audio || null,
+	};
+};
+
+const handleSendMessage = async (messageData) => {
+	const sanitizedMessage = sanitizeMessage(messageData);
+
+	const messagePayload = {
+		content: sanitizedMessage.content || '', // Только content
+		type: determineContentType(sanitizedMessage), // Тип сообщения
+		sender_uid: currentUser.value.uid,
+		timestamp: new Date().toISOString(),
+		avatar: currentUser.value.avatar,
+		username: currentUser.value.username,
+		files: sanitizedMessage.files || [],
+		audio: sanitizedMessage.audio || null,
+	};
+
+	try {
+		if (!wsService.value || !wsService.value.send) {
+			console.error('WebSocket не подключен или метод send не определён');
+			return;
+		}
+
+		wsService.value.send(JSON.stringify(messagePayload));
+
+		messages.value.push({
+			...messagePayload,
+		});
+	} catch (error) {
+		console.error('Ошибка отправки сообщения:', error);
+	}
+};
+
 // Подключение к WebSocket
 const connectToWebSocket = (roomId) => {
 	const token = localStorage.getItem('access_token');
@@ -100,6 +170,8 @@ const connectToWebSocket = (roomId) => {
 		} else if (data.type === 'user_list') {
 			const usersData = await fetchUserData(data.users);
 			chatStore.setConnectedUsers(usersData); // Сохраняем пользователей в хранилище
+		} else if (data.type === 'initial_data') {
+			messages.value.push(...data.messages);
 		}
 	};
 
@@ -116,24 +188,13 @@ const disconnectFromWebSocket = () => {
 	if (wsService.value) {
 		wsService.value.disconnect();
 		wsService.value = null; // Очищаем ссылку на сервис
+		messages.value = null; // Отчищаем массив сообщений
 	}
-};
-
-// Функция для сохранения UID комнаты
-const saveCurrentRoom = (roomUid) => {
-	localStorage.setItem('currentRoomUid', roomUid);
-};
-
-// Функция для загрузки UID комнаты
-const loadCurrentRoom = () => {
-	return localStorage.getItem('currentRoomUid');
 };
 
 // Функция для переключения комнаты
 const switchRoom = async (room) => {
-	if (wsService.value) {
-		wsService.value.disconnect();
-	}
+	if (wsService.value) disconnectFromWebSocket();
 
 	// Очистка данных
 	messages.value = [];
@@ -187,14 +248,17 @@ onMounted(async () => {
 		}
 	}
 });
+
+onUnmounted(() => {
+	if (wsService.value) disconnectFromWebSocket();
+});
 </script>
 
 <style scoped>
 .chat-window {
 	display: flex;
 	flex-direction: column;
-	height: 100%; 
-	/* Занимает всю доступную высоту */
+	height: 100%; /* Занимает всю доступную высоту */
 }
 
 .chat-window-header {
@@ -232,6 +296,7 @@ onMounted(async () => {
 	background-color: var(--bg-light);
 	border-top: 1px solid var(--primary-color);
 }
+
 .placeholder {
 	flex: 1;
 	height: 100%;

@@ -56,9 +56,9 @@ manager = ConnectionManager()
 @get_session
 async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user, db_session=None):
     logger.info("Обработка WebSocket соединения...")
-    room_uid = UUID(room_uid)
-    user_uid = UUID(user["user_uid"])
     try:
+        room_uid = UUID(room_uid)
+        user_uid = UUID(user["user_uid"])
         room = Room.get_room_by_uid(db_session, room_uid)
         if not room:
             logger.warning(f"Комната не найдена: {room_uid}")
@@ -73,13 +73,38 @@ async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user,
             user_list = [str(user_uid) for _, user_uid in manager.active_connections[room_uid]]
             await websocket.send_json({"type": "user_list", "users": user_list})
 
+        last_messages = Message.get_last_messages(db_session, room_uid, limit=5)
+        formatted_messages = [
+            {
+                "type": "message",
+                "uid": str(msg.uid),
+                "content": msg.text,
+                "content_type": msg.content_type,
+                "sender": {
+                    "uid": str(msg.author_uid),
+                    "name": msg.author.username if msg.author else "Unknown",  # Имя пользователя
+                    "avatar": msg.author.avatar if msg.author else None  # Аватар пользователя
+                },
+                "room_uid": str(msg.room_uid),
+                "created_at": msg.created_at.isoformat()
+            }
+            for msg in last_messages
+        ]
+
+        # Отправляем новому пользователю текущий список участников и последние сообщения
+        await websocket.send_json({
+            "type": "initial_data",
+            "users": user_list,
+            "messages": formatted_messages
+        })
+
         try:
             while True:
                 # Используем receive_json для получения данных от клиента
                 data = await websocket.receive_json()
 
                 # Проверяем, что данные содержат необходимые поля
-                content = data.get("content")
+                content = data.get("content") or data.get("audio")  # Поддержка content или audio
                 content_type = data.get("content_type", "text")  # По умолчанию тип текст
                 if not content:
                     logger.warning("Получено пустое сообщение")
@@ -96,19 +121,11 @@ async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user,
 
                 # Сохраняем сообщение в базу данных
                 new_message = Message.create_message(db_session, message_data)
-                logger.debug(f"Сообщение сохранено в базе данных: {new_message.uid}")
+                logger.debug(f"Сообщение сохранено в базе данных: {new_message}")
 
                 # Рассылаем сообщение всем участникам комнаты
-                await manager.broadcast(room_uid, {
-                    "type": "message",
-                    "uid": str(new_message.uid),
-                    "content": new_message.text,
-                    "content_type": new_message.content_type,
-                    "sender_uid": str(new_message.author_uid),
-                    "room_uid": str(new_message.room_uid),
-                    "created_at": new_message.created_at.isoformat()
-                })
-                logger.info(f"Сообщение отправлено в комнату {room_uid}: {new_message.text}")
+                await manager.broadcast(room_uid, new_message)
+                logger.info(f"Сообщение отправлено в комнату {room_uid}: {new_message}")
 
         except WebSocketDisconnect:
             logger.info("WebSocket отключен")

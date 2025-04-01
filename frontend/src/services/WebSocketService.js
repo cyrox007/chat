@@ -10,6 +10,14 @@ export class WebSocketService {
         return this.socket;
     }
 
+    send(message) {
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(message);
+        } else {
+            console.error('WebSocket не готов для отправки сообщений');
+        }
+    }
+
     disconnect() {
         if (this.socket) {
             this.socket.close();

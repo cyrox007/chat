@@ -1,5 +1,5 @@
 // src/composables/useWebSocket.js
-import { ref } from 'vue';
+/* import { ref } from 'vue';
 import { WebSocketService } from '@/services/WebSocketService';
 
 export function useWebSocket(roomId) {
@@ -32,4 +32,4 @@ export function useWebSocket(roomId) {
     };
 
     return { messages, connectedUsers, connect, disconnect };
-}
+} */

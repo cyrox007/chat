@@ -1,60 +1,56 @@
 import axios from "axios";
 
 const $api = axios.create({
-    withCredentials: true, // Включаем отправку кук
-    baseURL: 'http://localhost:9001', // Базовый URL вашего API
+	withCredentials: true, // Включаем отправку кук
+	baseURL: 'http://localhost:9001', // Базовый URL вашего API
 });
 
 // Перехватчик запросов: добавляем токен в заголовки
 $api.interceptors.request.use((config) => {
-    const accessToken = localStorage.getItem('access_token');
-    if (accessToken) {
-        config.headers.Authorization = `Bearer ${accessToken}`;
-    }
-    return config;
+	const accessToken = localStorage.getItem('access_token');
+	if (accessToken) {
+		config.headers.Authorization = `Bearer ${accessToken}`;
+	}
+	return config;
 }, (error) => {
-    return Promise.reject(error);
+	return Promise.reject(error);
 });
 
 // Перехватчик ответов: обработка ошибок 401
 $api.interceptors.response.use(
-    (response) => {
-        return response; // Просто возвращаем успешный ответ
-    },
-    async (error) => {
-        const originalRequest = error.config;
+	(response) => response,
+	async (error) => {
+		const originalRequest = error.config;
 
-        // Проверяем, что это ошибка 401 и запрос еще не был повторен
-        if (error.response?.status === 401 && originalRequest && !originalRequest._isRetry) {
-            originalRequest._isRetry = true; // Помечаем запрос как повторяемый
+		// Обработка ошибки 401 (токен истёк)
+		if (error.response?.status === 401 && !originalRequest._isRetry) {
+			originalRequest._isRetry = true;
 
-            try {
-                // Запрос на обновление токенов
-                const refreshResponse = await axios.get(`${$api.defaults.baseURL}/refresh`, {
-                    withCredentials: true, // Отправляем куки
-                });
+			try {
+				const refreshResponse = await axios.get(`${$api.defaults.baseURL}/refresh`, {
+					withCredentials: true,
+				});
 
-                // Сохраняем новый access_token в localStorage
-                const { access_token } = refreshResponse.data;
-                // console.log(access_token);
-                
-                localStorage.setItem('access_token', access_token);
+				const { access_token } = refreshResponse.data;
+				localStorage.setItem('access_token', access_token);
 
-                // Добавляем новый токен в заголовки оригинального запроса
-                originalRequest.headers.Authorization = `Bearer ${access_token}`;
+				originalRequest.headers.Authorization = `Bearer ${access_token}`;
+				return $api(originalRequest);
+			} catch (refreshError) {
+				localStorage.clear();
+				window.location.href = '/login';
+			}
+		}
 
-                // Повторяем оригинальный запрос
-                return $api(originalRequest);
-            } catch (refreshError) {
-                // Если обновление токена не удалось, очищаем данные и перенаправляем на страницу входа
-                localStorage.clear();
-                window.location.href = "/login";
-            }
-        }
+		// Обработка других ошибок
+		if (error.response?.status === 403) {
+			alert('Доступ запрещён.');
+		} else if (error.response?.status === 500) {
+			alert('Внутренняя ошибка сервера.');
+		}
 
-        // Для других ошибок просто пробрасываем их дальше
-        return Promise.reject(error);
-    }
+		return Promise.reject(error);
+	}
 );
 
 export default $api;

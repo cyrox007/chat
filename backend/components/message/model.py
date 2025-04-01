@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Boolean
+from typing import List
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Boolean, desc, asc
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Session, relationship, joinedload
 from datetime import datetime
 from uuid import uuid4
 from database import Database
@@ -36,7 +37,29 @@ class Message(Database.Base):
         return f"<Message(uid={self.uid}, type={self.content_type}, room={self.room_uid})>"
     
     @staticmethod
-    def create_message(db_session, message_data: dict):
+    def format_message(msg):
+        """
+        Форматирует объект Message в словарь для отправки клиенту.
+
+        :param msg: Объект Message
+        :return: Словарь с данными сообщения
+        """
+        return {
+            "type": "message",
+            "uid": str(msg.uid),
+            "content": msg.text,
+            "content_type": msg.content_type,
+            "sender": {
+                "uid": str(msg.author_uid),
+                "name": msg.author.username if msg.author else "Unknown",  # Имя пользователя
+                "avatar": msg.author.avatar if msg.author else None  # Аватар пользователя
+            },
+            "room_uid": str(msg.room_uid),
+            "created_at": msg.created_at.isoformat()
+        }
+
+    @staticmethod
+    def create_message(db_session: Session, message_data: dict):
         """
         Создает новое сообщение и сохраняет его в базу данных.
 
@@ -59,11 +82,38 @@ class Message(Database.Base):
             db_session.commit()
             db_session.refresh(new_message)
 
-            return new_message
+            # Возвращаем сообщение в нужном формате
+            return Message.format_message(new_message)
         except Exception as e:
             # Логируем ошибку и откатываем транзакцию
             logger.error(f"Error creating message: {e}")
             db_session.rollback()
+            raise
+
+    @staticmethod
+    def get_last_messages(db_session: Session, room_uid: UUID, limit: int = 5) -> List["Message"]:
+        """
+        Возвращает последние сообщения для указанной комнаты.
+
+        :param db_session: SQLAlchemy сессия
+        :param room_uid: UUID комнаты
+        :param limit: Количество сообщений для возврата
+        :return: Список объектов Message
+        """
+        try:
+            # Выполняем запрос к базе данных
+            last_messages = (
+                db_session.query(Message)
+                .options(joinedload(Message.author))  # Загружаем связанные данные о пользователе
+                .filter(Message.room_uid == str(room_uid))
+                .order_by(desc(Message.created_at))  # Сортировка по времени создания (по убыванию)
+                .limit(limit)
+                .all()
+            )
+            return last_messages
+        except Exception as e:
+            # Логируем ошибку
+            logger.error(f"Error fetching last messages: {e}")
             raise
 
 class PrivateMessage(Database.Base):
