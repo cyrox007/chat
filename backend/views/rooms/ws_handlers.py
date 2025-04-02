@@ -94,7 +94,6 @@ async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user,
         # Отправляем новому пользователю текущий список участников и последние сообщения
         await websocket.send_json({
             "type": "initial_data",
-            "users": user_list,
             "messages": formatted_messages
         })
 
