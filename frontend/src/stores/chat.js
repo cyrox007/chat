@@ -1,26 +1,34 @@
-import { defineStore } from 'pinia';
-
-export const useChatStore = defineStore('chat', {
-	state: () => ({
+export default {
+	namespaced: true, // Включаем пространства имен
+	state: {
 		currentRoom: null, // Текущая комната
 		connectedUsers: [], // Подключенные пользователи
-		currentUser: null, // Текущий пользователь
-	}),
-	actions: {
-		setCurrentRoom(room) {
-			this.currentRoom = room;
+	},
+	getters: {
+		getCurrentRoom: (state) => state.currentRoom,
+		getConnectedUsers: (state) => state.connectedUsers,
+	},
+	mutations: {
+		setCurrentRoom(state, room) {
+			state.currentRoom = room;
 		},
-		clearCurrentRoom() {
-			this.currentRoom = null;
+		clearCurrentRoom(state) {
+			state.currentRoom = null;
 		},
-		setConnectedUsers(users) {
-			this.connectedUsers = users;
-		},
-		setCurrentUser(user) {
-			this.currentUser = user;
-		},
-		clearCurrentUser() {
-			this.currentUser = null;
+		setConnectedUsers(state, users) {
+			state.connectedUsers = users;
 		},
 	},
-});
+	actions: {
+		updateCurrentRoom({ commit }, room) {
+			commit('setCurrentRoom', room);
+		},
+		clearChatState({ commit }) {
+			commit('clearCurrentRoom');
+			commit('setConnectedUsers', []);
+		},
+		updateConnectedUsers({ commit }, users) {
+			commit('setConnectedUsers', users);
+		},
+	},
+};

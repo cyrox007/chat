@@ -26,8 +26,15 @@ onMounted(async () => {
 	if (localStorage.getItem('access_token')) {
 		// Проверяем, есть ли данные пользователя в хранилище
 		if (!store.getters.getUser) {
-			// Если данных нет, перезагружаем страницу или выполняем другие действия
-			console.warn('Данные пользователя отсутствуют. Перезагрузите страницу.');
+			try {
+				// Загружаем данные пользователя с сервера
+				await store.dispatch('user/fetchUserData');
+			} catch (error) {
+				console.error('Ошибка загрузки данных пользователя:', error);
+				// Если загрузка не удалась, очищаем состояние авторизации
+				store.commit('user/clearUser');
+				localStorage.removeItem('access_token');
+			}
 		}
 	}
 	checkServerAvailability();

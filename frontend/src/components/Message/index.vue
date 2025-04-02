@@ -53,10 +53,10 @@
 
 <script setup>
 import { defineProps, computed } from 'vue';
-import { useChatStore } from '@/stores/chat'; // Импортируем хранилище
+import { useStore } from 'vuex';
 
 // Инициализируем хранилище
-const chatStore = useChatStore();
+const store = useStore();
 
 // Определяем пропсы
 const props = defineProps({
@@ -64,6 +64,14 @@ const props = defineProps({
 		type: Object,
 		required: true,
 	},
+});
+
+const currentUser = computed(() => {
+    return store.getters['user/getUser'] || {
+        uid: null,
+        username: 'Неизвестный пользователь',
+        avatar: '/images/default-avatar.png',
+    };
 });
 
 // Создаём безопасный объект сообщения с значениями по умолчанию
@@ -100,7 +108,7 @@ const messageType = computed(() => {
 	}
 
 	// Проверяем, является ли отправитель текущим пользователем
-	const isSender = safeMessage.value.sender.uid === chatStore.currentUser?.uid;
+	const isSender = safeMessage.value.sender.uid === currentUser.value.uid;
 
 	// Возвращаем комбинированный тип сообщения
 	return isSender ? `sender ${safeMessage.value.content_type}` : `other-user ${safeMessage.value.content_type}`;

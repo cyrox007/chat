@@ -64,7 +64,6 @@ const validateInput = (value) => {
 // Обработчик входа
 const handleLogin = async () => {
 	try {
-		// Валидируем и очищаем ввод
 		const sanitizedIdentifier = validateInput(identifier.value);
 
 		const response = await AuthService.login({

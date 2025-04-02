@@ -1,4 +1,5 @@
 import axios from "axios";
+import store from "@/stores";
 
 const $api = axios.create({
 	withCredentials: true, // Включаем отправку кук
@@ -16,7 +17,7 @@ $api.interceptors.request.use((config) => {
 	return Promise.reject(error);
 });
 
-// Перехватчик ответов: обработка ошибок 401
+// Перехватчик ответов: обработка ошибок
 $api.interceptors.response.use(
 	(response) => response,
 	async (error) => {
@@ -27,6 +28,7 @@ $api.interceptors.response.use(
 			originalRequest._isRetry = true;
 
 			try {
+				// Обновляем токен
 				const refreshResponse = await axios.get(`${$api.defaults.baseURL}/refresh`, {
 					withCredentials: true,
 				});
@@ -34,10 +36,15 @@ $api.interceptors.response.use(
 				const { access_token } = refreshResponse.data;
 				localStorage.setItem('access_token', access_token);
 
+				// Устанавливаем новый токен в заголовки
 				originalRequest.headers.Authorization = `Bearer ${access_token}`;
+
+				// Повторяем исходный запрос
 				return $api(originalRequest);
 			} catch (refreshError) {
+				// Если обновление токена не удалось, очищаем состояние и перенаправляем на страницу входа
 				localStorage.clear();
+				store.commit('user/clearUser');
 				window.location.href = '/login';
 			}
 		}

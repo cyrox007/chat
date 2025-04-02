@@ -32,10 +32,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, onUnmounted } from 'vue';
+import { ref, reactive, onMounted, computed, onUnmounted } from 'vue';
 import { useStore } from 'vuex';
 import { v4 as uuidv4 } from 'uuid';
-import { useChatStore } from '@/stores/chat'; // Импортируем хранилище
 import DOMPurify from 'dompurify';
 import Loader from '@/components/Loader/index.vue';
 import LeftSidebar from '@/components/LeftSidebar/index.vue';
@@ -48,8 +47,18 @@ import { WebSocketService } from '@/services/WebSocketService';
 import CSRFService from '@/API/CSRFService';
 
 // Инициализация хранилища
-const chatStore = useChatStore();
 const store = useStore();
+
+// Получаем состояние чата из Vuex
+const chatStore = reactive({
+	currentRoom: computed(() => store.getters['chat/getCurrentRoom']),
+	connectedUsers: computed(() => store.getters['chat/getConnectedUsers']),
+});
+
+// Функции для изменения состояния
+const setCurrentRoom = (room) => store.dispatch('chat/updateCurrentRoom', room);
+const clearCurrentRoom = () => store.commit('chat/clearCurrentRoom');
+const setConnectedUsers = (users) => store.dispatch('chat/updateConnectedUsers', users);
 
 // Получаем данные текущего пользователя из хранилища
 const currentUser = computed(() => {
@@ -198,7 +207,7 @@ const connectToWebSocket = (roomId) => {
 			messages.value.push(data); // push добавляет в конец массива
 		} else if (data.type === 'user_list') {
 			const usersData = await fetchUserData(data.users);
-			chatStore.setConnectedUsers(usersData); // Сохраняем пользователей в хранилище
+			setConnectedUsers(usersData); // Сохраняем пользователей в хранилище
 		} else if (data.type === 'initial_data') {
 			// Проверяем структуру данных
 			if (!Array.isArray(data.messages)) {
@@ -223,15 +232,13 @@ const disconnectFromWebSocket = () => {
 // Функция для переключения комнаты
 const switchRoom = async (room) => {
 	if (wsService.value) disconnectFromWebSocket();
-
-	// Очистка данных
 	messages.value = [];
-	chatStore.clearCurrentRoom();
+	clearCurrentRoom(); // Очистка текущей комнаты
 	isLoading.value = true;
 
 	try {
 		const roomData = await RoomsService.get_room(room.uid);
-		chatStore.setCurrentRoom(roomData.data.room); // Сохраняем комнату в хранилище
+		setCurrentRoom(roomData.data.room); // Устанавливаем новую комнату
 		connectToWebSocket(room.uid);
 		isLoading.value = false;
 		isRightSidebarActive.value = true;

@@ -73,12 +73,21 @@
 </template>
 
 <script setup>
-import { ref, defineEmits, onUnmounted } from 'vue';
-import { useChatStore } from '@/stores/chat';
+import { ref, computed, defineEmits, onUnmounted } from 'vue';
+import { useStore } from 'vuex';
 import data from "emoji-mart-vue-fast/data/all.json";
 import "emoji-mart-vue-fast/css/emoji-mart.css";
 import { Picker, EmojiIndex } from "emoji-mart-vue-fast/src";
-const chatStore = useChatStore();
+
+const store = useStore();
+
+const currentUser = computed(() => {
+    return store.getters['user/getUser'] || {
+        uid: null,
+        username: 'Неизвестный пользователь',
+        avatar: '/images/default-avatar.png',
+    };
+});
 
 // Состояния
 const messageInput = ref('');
@@ -229,7 +238,7 @@ const prepareMessage = () => {
 		text: messageInput.value.trim(),
 		files: selectedFiles.value,
 		audio: recordedAudio.value ? audioUrl.value : null,
-		sender_uid: chatStore.currentUser?.uid, // Добавляем UID отправителя
+		sender_uid: currentUser.value.uid, // Добавляем UID отправителя
 	};
 
 	// Очищаем поля после подготовки
