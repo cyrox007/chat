@@ -1,5 +1,3 @@
-import AuthService from "@/API/AuthService";
-
 export default {
 	state: {
 		auth: Boolean(localStorage.getItem('auth')) || false,

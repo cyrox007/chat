@@ -44,7 +44,7 @@ $api.interceptors.response.use(
 			} catch (refreshError) {
 				// Если обновление токена не удалось, очищаем состояние и перенаправляем на страницу входа
 				localStorage.clear();
-				store.commit('user/clearUser');
+				store.commit('clearUser');
 				window.location.href = '/login';
 			}
 		}

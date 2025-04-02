@@ -130,60 +130,31 @@ const sanitizeMessage = (messageData) => {
 
 const handleSendMessage = async (messageData) => {
 	const sanitizedMessage = sanitizeMessage(messageData);
-
 	const messagePayload = {
-		tempId: uuidv4(), // Временный ID для отслеживания на фронтенде
-		content: sanitizedMessage.content || '', // Текст или ссылка на медиа
-		content_type: determineContentType(sanitizedMessage), // Тип контента
+		tempId: uuidv4(),
+		content: sanitizedMessage.content || '',
+		content_type: determineContentType(sanitizedMessage),
 		sender: {
 			uid: currentUser.value.uid,
 			name: currentUser.value.username,
 			avatar: currentUser.value.avatar,
 		},
-		created_at: new Date().toISOString(), // Время создания
-		status: 'sending', // Статус: "отправляется"
+		created_at: new Date().toISOString(),
+		status: 'sending',
 	};
 
 	try {
 		console.log(messagePayload);
-		
-		/* if (!wsService.value || !wsService.value.send) {
+
+		// Отправляем сообщение через WebSocket
+		if (!wsService.value || !wsService.value.send) {
 			console.error('WebSocket не подключен или метод send не определён');
 			return;
 		}
-
-		// Отправляем сообщение через WebSocket
+		messages.value.push(messagePayload);
 		wsService.value.send(messagePayload);
-
-		// Добавляем сообщение в массив
-		messages.value.push({
-			...messagePayload,
-		});
-
-		// Подписываемся на ответ от сервера
-		wsService.value.onMessage((serverMessage) => {
-			if (serverMessage.type === 'message' && serverMessage.tempId) {
-				// Находим сообщение по tempId
-				const messageIndex = messages.value.findIndex(msg => msg.tempId === serverMessage.tempId);
-				if (messageIndex !== -1) {
-					// Обновляем сообщение данными с сервера
-					messages.value[messageIndex] = {
-						...messages.value[messageIndex],
-						uid: serverMessage.uid, // Окончательный ID с сервера
-						status: 'sent', // Статус: "отправлено"
-					};
-				}
-			}
-		}); */
-
 	} catch (error) {
 		console.error('Ошибка отправки сообщения:', error);
-
-		// Обновляем статус в случае ошибки
-		const messageIndex = messages.value.findIndex(msg => msg.tempId === messagePayload.tempId);
-		if (messageIndex !== -1) {
-			messages.value[messageIndex].status = 'error'; // Статус: "ошибка"
-		}
 	}
 };
 
@@ -203,9 +174,24 @@ const connectToWebSocket = (roomId) => {
 		console.log("Полученные данные от сервера:", data);
 
 		if (data.type === 'message') {
-			// Добавляем новое сообщение в конец массива
-			messages.value.push(data); // push добавляет в конец массива
+			// Проверяем, является ли сообщение нашим (по UID отправителя)
+			if (data.sender?.uid === currentUser.value.uid) {
+				// Находим сообщение по tempId (если оно есть)
+				const messageIndex = messages.value.findIndex(msg => msg.tempId === data.tempId);
+				if (messageIndex !== -1) {
+					// Обновляем сообщение данными с сервера
+					messages.value[messageIndex] = {
+						...messages.value[messageIndex],
+						uid: data.uid, // Окончательный ID с сервера
+						status: 'sent', // Статус: "отправлено"
+					};
+				}
+			} else {
+				// Если сообщение от другого пользователя, добавляем его в массив
+				messages.value.push(data);
+			}
 		} else if (data.type === 'user_list') {
+			// Обработка списка пользователей
 			const usersData = await fetchUserData(data.users);
 			setConnectedUsers(usersData); // Сохраняем пользователей в хранилище
 		} else if (data.type === 'initial_data') {
@@ -231,6 +217,7 @@ const disconnectFromWebSocket = () => {
 
 // Функция для переключения комнаты
 const switchRoom = async (room) => {
+	
 	if (wsService.value) disconnectFromWebSocket();
 	messages.value = [];
 	clearCurrentRoom(); // Очистка текущей комнаты
@@ -263,7 +250,7 @@ const closeLeftSidebar = () => {
 
 // Функция для переключения правого сайдбара
 const toggleRightSidebar = () => {
-	if (currentRoom.id) {
+	if (chatStore.currentRoom.id) {
 		isRightSidebarActive.value = !isRightSidebarActive.value;
 	}
 };
