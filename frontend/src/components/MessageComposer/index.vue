@@ -63,7 +63,7 @@
 			</div>
 		</div>
 		<!-- Скрытый элемент для выбора файлов -->
-		<input type="file" ref="fileInput" @change="handleFileUpload" multiple style="display: none;" />
+		<input type="file" ref="fileInput" @change="handleFileUpload" multiple style="display: none;" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx" />
 
 		<!-- Панель выбора эмодзи -->
 		<div v-if="isEmojiPickerVisible" class="emoji-picker-container">
@@ -105,8 +105,47 @@ const isAudioRecorded = ref(false); // Флаг для отображения п
 const emit = defineEmits(['send-message']);
 
 // Эмодзи
-/* const emojis = ['😊', '😂', '❤️', '👍', '🎉', '🤔', '😎', '😢', '🔥', '🚀']; */
 const emojiIndex = new EmojiIndex(data);
+
+// Проверка типа файла
+const allowedMimeTypes = {
+	images: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+	videos: ['video/mp4', 'video/webm', 'video/ogg'],
+	audio: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm'],
+	documents: [
+		'application/pdf',
+		'application/msword',
+		'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+		'application/vnd.ms-excel',
+		'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+	],
+};
+
+const isValidFileType = (file, allowedTypes) => {
+	return allowedTypes.some((type) => file.type.startsWith(type));
+};
+
+const isFileSizeValid = (file) => {
+	const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+	return file.size <= MAX_FILE_SIZE;
+};
+
+// Сжатие изображений
+const compressImage = async (file) => {
+    const options = {
+        maxSizeMB: 1, // Максимальный размер после сжатия (в МБ)
+        maxWidthOrHeight: 1024, // Максимальное разрешение
+        useWebWorker: true,
+        fileType: 'image/webp', // Конвертируем в WebP
+    };
+    try {
+        const compressedFile = await imageCompression(file, options);
+        return new File([compressedFile], file.name, { type: 'image/webp' });
+    } catch (error) {
+        console.error('Ошибка сжатия изображения:', error);
+        return null;
+    }
+};
 
 // Функция для проверки, является ли файл изображением
 const isImage = (file) => {
@@ -124,9 +163,30 @@ const selectFile = () => {
 };
 
 // Обработка загруженных файлов
-const handleFileUpload = (event) => {
-	const files = Array.from(event.target.files);
-	selectedFiles.value = [...selectedFiles.value, ...files];
+const handleFileUpload = async (event) => {
+	const files = Array.from(event.target.files).filter((file) => {
+		if (!isValidFileType(file, [...allowedMimeTypes.images, ...allowedMimeTypes.videos, ...allowedMimeTypes.audio, ...allowedMimeTypes.documents])) {
+			console.warn(`Файл ${file.name} имеет недопустимый тип.`);
+			return false;
+		}
+		if (!isFileSizeValid(file)) {
+			console.warn(`Файл ${file.name} слишком большой.`);
+			return false;
+		}
+		return true;
+	});
+
+	// Сжимаем изображения
+	const processedFiles = await Promise.all(
+		files.map(async (file) => {
+			if (allowedMimeTypes.images.includes(file.type)) {
+				return await compressImage(file);
+			}
+			return file;
+		})
+	);
+
+	selectedFiles.value = [...selectedFiles.value, ...processedFiles.filter((file) => file)];
 };
 
 // Удаление файла из списка
@@ -232,11 +292,25 @@ const insertEmoji = (emoji) => {
 };
 
 // Подготовка сообщения для отправки
-const prepareMessage = () => {
+const prepareMessage = async () => {
 	if (!messageInput.value.trim() && !recordedAudio.value && selectedFiles.value.length === 0) return;
+
+	// Преобразуем файлы в Base64
+	const filesBase64 = await Promise.all(
+		selectedFiles.value.map(async (file) => {
+			return new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(reader.result); // reader.result содержит Base64
+				reader.onerror = (error) => reject(error);
+				reader.readAsDataURL(file); // Преобразуем файл в Base64
+			});
+		})
+	);
+
+	// Формируем данные сообщения
 	const messageData = {
 		text: messageInput.value.trim(),
-		files: selectedFiles.value,
+		files: filesBase64, // Файлы в Base64
 		audio: recordedAudio.value ? audioUrl.value : null,
 		sender_uid: currentUser.value.uid, // Добавляем UID отправителя
 	};
@@ -246,6 +320,7 @@ const prepareMessage = () => {
 	selectedFiles.value = [];
 	clearAudio();
 	isAudioRecorded.value = false; // Сбрасываем флаг после отправки
+
 	// Эмитируем событие для отправки данных
 	emit('send-message', messageData);
 };

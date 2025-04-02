@@ -115,15 +115,10 @@ const sanitizeMessage = (messageData) => {
 	// Очищаем текстовое поле
 	const sanitizedText = DOMPurify.sanitize(messageData.text);
 
-	// Очищаем имена файлов
-	const sanitizedFiles = messageData.files.map(file => ({
-		name: DOMPurify.sanitize(file.name),
-	}));
-
 	// Возвращаем очищенные данные
 	return {
 		content: sanitizedText,
-		files: sanitizedFiles,
+		files: messageData.files, // Файлы уже в Base64
 		audio: messageData.audio || null,
 	};
 };
@@ -139,6 +134,8 @@ const handleSendMessage = async (messageData) => {
 			name: currentUser.value.username,
 			avatar: currentUser.value.avatar,
 		},
+		files: sanitizedMessage.files, // Добавляем файлы в Base64
+		audio: sanitizedMessage.audio || null,
 		created_at: new Date().toISOString(),
 		status: 'sending',
 	};
