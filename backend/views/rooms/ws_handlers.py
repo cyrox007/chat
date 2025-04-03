@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import mimetypes
 import os
 from pathlib import Path
 from uuid import UUID
@@ -11,6 +12,8 @@ from components.room.model import Room
 from components.message.model import Message
 from components.decorators.db import get_session
 from utils.logger import setup_logger  # Импортируем централизованный логгер
+
+from settings import config
 
 # Создаем логгер для этого модуля
 logger = setup_logger(__name__)
@@ -89,6 +92,7 @@ def format_messages(messages):
             "uid": str(msg.uid),
             "content": msg.text,
             "content_type": msg.content_type,
+            "media_metadata": msg.media_metadata,
             "sender": {
                 "uid": str(msg.author_uid),
                 "name": msg.author.username if msg.author else "Unknown",
@@ -109,9 +113,9 @@ async def process_incoming_messages(websocket: WebSocket, room_uid: UUID, user_u
             # Обработка разных типов контента
             if content_type == "text":
                 await handle_text_message(data, room_uid, user_uid, db_session)
-            elif content_type == "file":
+            elif content_type == "file" or content_type == 'image':
                 await handle_file_message(data, room_uid, user_uid, db_session)
-            elif content_type == "audio":
+            elif content_type == "voice":
                 await handle_audio_message(data, room_uid, user_uid, db_session)
             else:
                 logger.warning(f"Неизвестный тип контента: {content_type}")
@@ -135,68 +139,186 @@ async def handle_text_message(data:dict, room_uid: UUID, user_uid: UUID, db_sess
     }
 
     new_message = Message.create_message(db_session, message_data)
-    new_message['tempId'] = data.get('tempId')
+    new_message['frontId'] = data.get('frontId')
     await manager.broadcast(room_uid, new_message)
     logger.info(f"Текстовое сообщение отправлено в комнату {room_uid}: {new_message}")
 
 async def handle_file_message(data: dict, room_uid: UUID, user_uid: UUID, db_session):
-    files = data.get("files", [])
+    files = data.get("media_metadata", {}).get("files", [])
     if not files:
         logger.warning("Получено пустое файловое сообщение")
         return
+    
+    # Проверка количества файлов
+    if len(files) > config.MAX_FILES_LIMIT:
+        error_message = {
+            "type": "error",
+            "message": f"Too many files. Maximum allowed is {config.MAX_FILES_LIMIT}.",
+            "details": {
+                "received_files_count": len(files),
+                "max_allowed_files": config.MAX_FILES_LIMIT,
+            },
+        }
+        await manager.broadcast(room_uid, error_message)
+        return
 
     saved_files = []
+    errors = []
+
     for file_data in files:
-        # Извлекаем MIME-тип и кодировку из Base64
-        mime_type, encoded_data = file_data.split(',', 1)
-        extension = mime_type.split(';')[0].split('/')[1]  # Извлекаем расширение файла
-        file_name = f"{uuid.uuid4()}.{extension}"
-        file_path = Path("uploads") / file_name
-        os.makedirs("uploads", exist_ok=True)
-
-        # Декодируем и сохраняем файл
-        with open(file_path, "wb") as f:
+        try:
+            # Извлекаем MIME-тип и кодировку из Base64
+            try:
+                mime_type, encoded_data = file_data["url"].split(',', 1)
+            except ValueError:
+                logger.error(f"Некорректный формат данных для файла '{file_data.get('name')}'")
+                errors.append({
+                    "file_name": file_data.get("name"),
+                    "error": "Invalid file format",
+                })
+                continue
             file_content = base64.b64decode(encoded_data)
-            f.write(file_content)
 
-        saved_files.append(str(file_path))
+            # Проверка размера файла
+            if len(file_content) > config.MAX_FILE_SIZE:
+                logger.warning(f"Файл слишком большой: {len(file_content)} байт")
+                errors.append({
+                    "file_name": file_data.get("name"),
+                    "error": "File too large",
+                    "max_allowed_size": config.MAX_FILE_SIZE,
+                })
+                continue
+
+            # Определение типа файла
+            file_type = mime_type.split(';')[0].split('/')[0]  # 'image', 'video', 'audio', 'application'
+            # Определяем расширение файла
+            extension = mimetypes.guess_extension(mime_type.split(';')[0]) or "bin"
+            if extension.startswith('.'):
+                extension = extension[1:]
+
+            # Создаем папку для типа файла
+            folder_name = {
+                "image": "images",
+                "video": "videos",
+                "audio": "audio",
+                "application": "documents",
+            }.get(file_type, "other")
+
+            upload_dir = Path("uploads") / folder_name
+            os.makedirs(upload_dir, exist_ok=True)
+
+            # Генерируем уникальное имя файла
+            file_name = f"{uuid.uuid4()}.{extension}"
+            file_path = upload_dir / file_name
+
+            # Сохраняем файл
+            with open(file_path, "wb") as f:
+                f.write(file_content)
+
+            # Формируем URL для доступа к файлу
+            saved_files.append(f"{config.BASE_URL}/{folder_name}/{file_name}")
+
+        except Exception as e:
+            logger.error(f"Ошибка при обработке файла '{file_data.get('name')}': {e}")
+            errors.append({
+                "file_name": file_data.get("name"),
+                "error": str(e),
+            })
+
+    # Если ни один файл не был сохранён, отправляем ошибку клиенту
+    if not saved_files:
+        error_message = {
+            "type": "error",
+            "message": "All files failed to process.",
+            "details": errors,
+        }
+        await manager.broadcast(room_uid, error_message)
+        return
 
     # Создаём данные для сообщения
     message_data = {
-        "content": data.get("text", ""),  # Текст сообщения (если есть)
+        "content": data.get("content", ""),  # Преобразуем в JSON-строку
         "content_type": "file",
         "sender_uid": str(user_uid),
         "room_uid": str(room_uid),
-        "media_metadata": {  # Метаданные для файлов
+        "media_metadata": {
             "files": saved_files,
         },
     }
 
     # Создаём сообщение в базе данных
     new_message = Message.create_message(db_session, message_data)
-    new_message['tempId'] = data.get('tempId')
+    new_message['frontId'] = data.get('frontId')
 
     # Рассылаем сообщение участникам комнаты
     await manager.broadcast(room_uid, new_message)
     logger.info(f"Файловое сообщение отправлено в комнату {room_uid}: {new_message}")
 
-async def handle_audio_message(data, room_uid: UUID, user_uid: UUID, db_session):
-    audio_url = data.get("audio")
+    # Если были ошибки, отправляем уведомление о частичной обработке
+    if errors:
+        partial_error_message = {
+            "type": "partial_error",
+            "message": "Some files failed to process.",
+            "details": {
+                "success": saved_files,
+                "errors": errors,
+            },
+        }
+        await manager.broadcast(room_uid, partial_error_message)
+
+async def handle_audio_message(data: dict, room_uid: UUID, user_uid: UUID, db_session):
+    audio_url: str = data.get("media_metadata", {}).get("voice")
     if not audio_url:
         logger.warning("Получено пустое аудио сообщение")
         return
 
-    message_data = {
-        "content": audio_url,
-        "content_type": "audio",
-        "sender_uid": str(user_uid),
-        "room_uid": str(room_uid),
-        "timestamp": datetime.utcnow().isoformat(),
-    }
+    try:
+        # Извлекаем MIME-тип и кодировку из Base64
+        mime_type, encoded_data = audio_url.split(',', 1)
+        file_content = base64.b64decode(encoded_data)
 
-    new_message = Message.create_message(db_session, message_data)
-    await manager.broadcast(room_uid, new_message)
-    logger.info(f"Аудио сообщение отправлено в комнату {room_uid}: {new_message}")
+        # Проверка размера файла
+        if len(file_content) > config.MAX_FILE_SIZE:
+            logger.warning(f"Аудиофайл слишком большой: {len(file_content)} байт")
+            return
+
+        # Определение расширения файла
+        extension = mime_type.split(';')[0].split('/')[1]
+
+        # Создаем папку для аудио
+        upload_dir = Path("uploads/audio")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        # Генерируем уникальное имя файла
+        file_name = f"{uuid.uuid4()}.{extension}"
+        file_path = upload_dir / file_name
+
+        # Сохраняем файл
+        with open(file_path, "wb") as f:
+            f.write(file_content)
+
+        # Формируем URL для доступа к файлу
+        saved_audio_url = f"{config.BASE_URL}/audio/{file_name}"
+
+        # Создаём данные для сообщения
+        message_data = {
+            "content": saved_audio_url,
+            "content_type": "audio",
+            "sender_uid": str(user_uid),
+            "room_uid": str(room_uid),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+        # Создаём сообщение в базе данных
+        new_message = Message.create_message(db_session, message_data)
+        new_message['frontId'] = data.get('frontId')
+
+        # Рассылаем сообщение участникам комнаты
+        await manager.broadcast(room_uid, new_message)
+        logger.info(f"Аудио сообщение отправлено в комнату {room_uid}: {new_message}")
+
+    except Exception as e:
+        logger.error(f"Ошибка при обработке аудио: {e}")
 
 @get_session
 async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user, db_session=None):

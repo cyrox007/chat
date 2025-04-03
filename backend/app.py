@@ -26,6 +26,7 @@ def create_app() -> FastAPI:
 
     # Подключаем статические файлы
     app.mount("/static", StaticFiles(directory="static"), name="static")
+    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
     csrf_middleware(app)
     error_handling_middleware(app)

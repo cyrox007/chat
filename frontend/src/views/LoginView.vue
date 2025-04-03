@@ -16,6 +16,9 @@
 				<button type="submit" class="btn-primary">Войти</button>
 				<p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 			</form>
+			<!-- <span>
+				Еще не зарегестрированы? <a :href="router.push({name: 'registration'})">Регистрация</a>
+			</span> -->
 		</div>
 	</div>
 </template>
@@ -26,6 +29,7 @@ import { useStore } from 'vuex';
 import CSRFService from '@/API/CSRFService';
 import AuthService from '@/API/AuthService';
 import DOMPurify from 'dompurify'; // Для защиты от XSS
+import router from '@/router';
 
 // Реактивные переменные
 const identifier = ref('');

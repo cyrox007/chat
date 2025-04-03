@@ -12,7 +12,7 @@ export class WebSocketService {
 			return this.socket;
 		}
 
-		this.socket = new WebSocket(`ws://localhost:9001/ws/${this.token}/rooms/${this.roomId}`);
+		this.socket = new WebSocket(`ws://localhost:9000/ws/${this.token}/rooms/${this.roomId}`);
 
 		// Обработка открытия соединения
 		this.socket.onopen = () => {

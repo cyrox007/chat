@@ -47,8 +47,9 @@ class Message(Database.Base):
         return {
             "type": "message",
             "uid": str(msg.uid),
-            "content": msg.text,
+            "content": msg.text,  # Текст сообщения
             "content_type": msg.content_type,
+            "media_metadata": msg.media_metadata,  # Метаданные для медиа
             "sender": {
                 "uid": str(msg.author_uid),
                 "name": msg.author.username if msg.author else "Unknown",  # Имя пользователя
@@ -71,7 +72,8 @@ class Message(Database.Base):
             # Создаем новый объект Message
             new_message = Message(
                 content_type=message_data.get("content_type", "text"),
-                text=message_data.get("content"),
+                text=message_data.get("content"),  # Текст сообщения
+                media_metadata=message_data.get("media_metadata"),  # Метаданные для медиа
                 room_uid=message_data.get("room_uid"),
                 author_uid=message_data.get("sender_uid"),
                 created_at=datetime.utcnow()

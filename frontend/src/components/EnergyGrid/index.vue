@@ -25,7 +25,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, defineProps } from 'vue';
 
 // Принимаем рейтинг как пропс
 const props = defineProps({

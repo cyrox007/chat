@@ -3,7 +3,7 @@ import store from "@/stores";
 
 const $api = axios.create({
 	withCredentials: true, // Включаем отправку кук
-	baseURL: 'http://localhost:9001', // Базовый URL вашего API
+	baseURL: 'http://localhost:9000', // Базовый URL вашего API
 });
 
 // Перехватчик запросов: добавляем токен в заголовки

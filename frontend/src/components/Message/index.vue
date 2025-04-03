@@ -35,6 +35,27 @@
 				</audio>
 			</div>
 
+			<!-- Файлы -->
+			<div v-else-if="safeMessage.content_type === 'file'" class="message-files">
+				<!-- Проверка на null или отсутствие files -->
+				<div
+					v-if="safeMessage.media_metadata && safeMessage.media_metadata.files && safeMessage.media_metadata.files.length > 0">
+					<div v-for="(file, index) in safeMessage.media_metadata.files" :key="index" class="file-item">
+						<span v-if="isImage(file)" class="file-thumbnail">
+							<img :src="file" alt="Thumbnail" />
+						</span>
+						<span v-else class="file-icon">
+							<i :class="getFileIcon(file)"></i> <!-- Значок для файлов -->
+						</span>
+						<a :href="file" target="_blank" class="file-link">{{ getFileName(file) }}</a>
+					</div>
+				</div>
+				<!-- Если media_metadata отсутствует или files пустой -->
+				<div v-else class="no-files-message">
+					<i class="fas fa-exclamation-circle"></i> Нет доступных файлов
+				</div>
+			</div>
+
 			<!-- Неизвестный тип контента -->
 			<div v-else>Неизвестный тип сообщения</div>
 		</div>
@@ -67,12 +88,40 @@ const props = defineProps({
 });
 
 const currentUser = computed(() => {
-    return store.getters['user/getUser'] || {
+    return store.getters.getUser || {
         uid: null,
         username: 'Неизвестный пользователь',
         avatar: '/images/default-avatar.png',
     };
 });
+
+// Проверка, является ли файл изображением
+const isImage = (fileUrl) => {
+	return fileUrl.match(/\.(jpeg|jpg|png|gif|webp)$/i);
+};
+
+// Извлечение имени файла из URL
+const getFileName = (fileUrl) => {
+	return fileUrl.split('/').pop();
+}
+
+const getFileIcon = (fileUrl) => {
+	// Проверяем расширение файла
+	const extension = fileUrl.split('.').pop().toLowerCase();
+
+	// Возвращаем соответствующий класс или путь к иконке
+	if (extension === 'pdf') {
+		return 'fas fa-file-pdf'; // Иконка PDF
+	} else if (['doc', 'docx'].includes(extension)) {
+		return 'fas fa-file-word'; // Иконка Word
+	} else if (['xls', 'xlsx'].includes(extension)) {
+		return 'fas fa-file-excel'; // Иконка Excel
+	} else if (['zip', 'rar', '7z'].includes(extension)) {
+		return 'fas fa-file-archive'; // Иконка архива
+	} else {
+		return 'fas fa-file'; // Иконка по умолчанию
+	}
+};
 
 // Создаём безопасный объект сообщения с значениями по умолчанию
 const safeMessage = computed(() => {
@@ -80,10 +129,17 @@ const safeMessage = computed(() => {
 		return null; // Возвращаем null, если сообщение не определено
 	}
 
+	const mediaMetadata = props.message.media_metadata || {};
+	const files = Array.isArray(mediaMetadata.files) ? mediaMetadata.files : [];
+
 	return {
 		uid: props.message.uid || null,
+		frontId: props.message.tempId,
 		content: props.message.content || '', // Текст или ссылка на медиа
 		content_type: props.message.content_type || 'text', // Тип контента
+		media_metadata: {
+			files: files, // Убедимся, что это всегда массив
+		},
 		sender: {
 			uid: props.message.sender?.uid || null,
 			name: props.message.sender?.name || 'Неизвестный пользователь',
@@ -106,7 +162,7 @@ const messageType = computed(() => {
 	if (!safeMessage.value) {
 		return 'loading'; // Если сообщение еще не загружено
 	}
-
+	
 	// Проверяем, является ли отправитель текущим пользователем
 	const isSender = safeMessage.value.sender.uid === currentUser.value.uid;
 

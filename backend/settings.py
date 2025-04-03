@@ -36,6 +36,12 @@ class Config:
     def database_url(self, async_mode=False):
         driver = "postgresql+asyncpg" if async_mode else "postgresql"
         return f"{driver}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
+    # Файловое хранилище
+    UPLOADS_BASE_URL: str = "http://localhost:9001/static/uploads/"
+    # Максимальный размер файла (по умолчанию 10 МБ)
+    MAX_FILE_SIZE: int = int(os.getenv("MAX_FILE_SIZE", 10 * 1024 * 1024))
+    MAX_FILES_LIMIT = 10  # Максимальное количество файлов
     
 config = Config()
 

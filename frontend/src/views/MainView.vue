@@ -62,11 +62,12 @@ const setConnectedUsers = (users) => store.dispatch('chat/updateConnectedUsers',
 
 // Получаем данные текущего пользователя из хранилища
 const currentUser = computed(() => {
-	return store.getters.getUser || {
+	const user = store.getters.getUser || {
 		uid: null,
 		username: 'Неизвестный пользователь',
 		avatar: '/images/default-avatar.png',
 	};
+	return user;
 });
 
 // Состояния
@@ -104,38 +105,24 @@ const loadRooms = async () => {
 	}
 };
 
-const determineContentType = (messageData) => {
-	if (messageData.audio) return 'audio';
-	if (messageData.files.length > 0) return 'file';
-	if (/[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(messageData.text)) return 'sticker';
-	return 'text';
-};
-
 const sanitizeMessage = (messageData) => {
 	// Очищаем текстовое поле
-	const sanitizedText = DOMPurify.sanitize(messageData.text);
-
 	// Возвращаем очищенные данные
-	return {
-		content: sanitizedText,
-		files: messageData.files, // Файлы уже в Base64
-		audio: messageData.audio || null,
-	};
+	return DOMPurify.sanitize(messageData)
 };
 
 const handleSendMessage = async (messageData) => {
-	const sanitizedMessage = sanitizeMessage(messageData);
+	const sanitizedContent = sanitizeMessage(messageData.content);
 	const messagePayload = {
-		tempId: uuidv4(),
-		content: sanitizedMessage.content || '',
-		content_type: determineContentType(sanitizedMessage),
+		frontId: uuidv4(),
+		content: sanitizedContent || '',
+		content_type: messageData.content_type,
+		media_metadata: messageData.media_metadata,
 		sender: {
 			uid: currentUser.value.uid,
 			name: currentUser.value.username,
 			avatar: currentUser.value.avatar,
 		},
-		files: sanitizedMessage.files, // Добавляем файлы в Base64
-		audio: sanitizedMessage.audio || null,
 		created_at: new Date().toISOString(),
 		status: 'sending',
 	};
@@ -174,7 +161,7 @@ const connectToWebSocket = (roomId) => {
 			// Проверяем, является ли сообщение нашим (по UID отправителя)
 			if (data.sender?.uid === currentUser.value.uid) {
 				// Находим сообщение по tempId (если оно есть)
-				const messageIndex = messages.value.findIndex(msg => msg.tempId === data.tempId);
+				const messageIndex = messages.value.findIndex(msg => msg.frontId === data.frontId);
 				if (messageIndex !== -1) {
 					// Обновляем сообщение данными с сервера
 					messages.value[messageIndex] = {
@@ -290,6 +277,7 @@ onUnmounted(() => {
 }
 
 .chat-container {
+	height: calc(100vh - 60px);
 	display: flex;
 	flex-direction: column;
 	flex: 1;

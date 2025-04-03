@@ -13,6 +13,15 @@ const router = createRouter({
             }
         },
 		{
+            path: '/registration',
+            name: 'registration',
+            component: () => import('../views/RegistrationView.vue'),
+            meta: {
+                title: "Регистрация",
+                requestGuest: true // Разрешить доступ только неавторизованным пользователям
+            }
+        },
+		{
 			path: '/',
 			name: 'chats',
 			component: () => import('../views/MainView.vue'),

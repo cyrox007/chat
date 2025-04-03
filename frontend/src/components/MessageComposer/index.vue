@@ -7,7 +7,7 @@
 					<img :src="getThumbnail(file)" alt="Thumbnail" />
 				</span>
 				<span v-else class="file-icon">
-					<i class="fas fa-file"></i>
+					<i :class="getFileIcon(file.type)"></i>
 				</span>
 				<span class="file-name">{{ file.name }}</span>
 				<button class="remove-file" @click="removeFile(index)">
@@ -16,22 +16,21 @@
 			</div>
 		</div>
 
-		<!-- Индикатор записи голоса и кнопка записи -->
-		<div v-if="isRecording" class="recording-area">
+		<!-- Индикатор записи голоса или видео -->
+		<div v-if="isRecording || isVideoRecording" class="recording-area">
 			<div class="recording-indicator">
-				Запись идет...
-				<div class="audio-level-bar">
+				{{ isRecording ? 'Запись голоса...' : 'Запись видео...' }}
+				<div class="audio-level-bar" v-if="isRecording">
 					<div class="audio-level-fill" :style="{ width: `${audioLevel * 100}%` }"></div>
 				</div>
 			</div>
-			<button class="record-button" @pointerdown="startRecording" @mouseup="stopRecording"
-				@mouseleave="stopRecording">
-				<i class="fas fa-microphone"></i>
+			<button class="stop-record-button" @click="stopRecordingOrVideo">
+				<i class="fas fa-stop"></i>
 			</button>
 		</div>
 
 		<!-- Поле ввода текста -->
-		<div class="input-container" v-if="!isRecording && !isAudioRecorded">
+		<div class="input-container" v-if="!isRecording && !isAudioRecorded && !isVideoRecording">
 			<input type="text" v-model="messageInput" placeholder="Введите сообщение" @keydown.enter="prepareMessage" />
 			<button class="emoji-button" @click="toggleEmojiPicker">
 				<i class="fas fa-smile"></i>
@@ -39,11 +38,12 @@
 			<button class="attach-button" @click="selectFile">
 				<i class="fas fa-paperclip"></i>
 			</button>
-			<!-- Кнопка записи или отправки -->
-			<button class="record-button" @pointerdown="startRecording" @mouseup="stopRecording"
-				@mouseleave="stopRecording"
-				v-if="messageInput.trim() === '' && selectedFiles.length === 0 && !isRecording">
-				<i class="fas fa-microphone"></i>
+			<!-- Кнопка записи голоса/видео или отправки -->
+			<button class="record-button" @click="toggleRecordingType"
+				@mousedown="startRecording"
+				@mouseup="stopRecordingOrVideo"
+				v-if="messageInput.trim() === '' && selectedFiles.length === 0">
+				<i :class="isRecordingTypeVoice ? 'fas fa-microphone' : 'fas fa-video'"></i>
 			</button>
 			<button class="send-button" @click="prepareMessage" v-else>
 				<i class="fas fa-paper-plane"></i>
@@ -51,10 +51,10 @@
 		</div>
 
 		<!-- Плеер с кнопкой отправки -->
-		<div class="audio-preview" v-else-if="isAudioRecorded">
-			<audio controls :src="audioUrl"></audio>
+		<div class="audio-preview" v-if="isAudioRecorded">
+			<audio controls :src="voiceUrl"></audio>
 			<div class="controls">
-				<button class="remove-audio" @click="clearAudio">
+				<button class="remove-audio" @click="clearVoice">
 					<i class="fas fa-times"></i>
 				</button>
 				<button class="send-button" @click="prepareMessage">
@@ -62,8 +62,10 @@
 				</button>
 			</div>
 		</div>
+
 		<!-- Скрытый элемент для выбора файлов -->
-		<input type="file" ref="fileInput" @change="handleFileUpload" multiple style="display: none;" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx" />
+		<input type="file" ref="fileInput" @change="handleFileUpload" multiple style="display: none;"
+			accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx" />
 
 		<!-- Панель выбора эмодзи -->
 		<div v-if="isEmojiPickerVisible" class="emoji-picker-container">
@@ -78,36 +80,28 @@ import { useStore } from 'vuex';
 import data from "emoji-mart-vue-fast/data/all.json";
 import "emoji-mart-vue-fast/css/emoji-mart.css";
 import { Picker, EmojiIndex } from "emoji-mart-vue-fast/src";
-
-const store = useStore();
-
-const currentUser = computed(() => {
-    return store.getters['user/getUser'] || {
-        uid: null,
-        username: 'Неизвестный пользователь',
-        avatar: '/images/default-avatar.png',
-    };
-});
+import imageCompression from 'browser-image-compression';
 
 // Состояния
 const messageInput = ref('');
 const isRecording = ref(false);
-const recordedAudio = ref(null);
+const isVideoRecording = ref(false);
+const recordedVoice = ref(null);
 const mediaRecorder = ref(null);
 const selectedFiles = ref([]);
 const isEmojiPickerVisible = ref(false);
-const audioUrl = ref(null);
+const voiceUrl = ref(null);
 const audioContext = ref(null);
 const analyser = ref(null);
-const audioLevel = ref(0); // Уровень громкости
-const isAudioRecorded = ref(false); // Флаг для отображения плеера
-
+const audioLevel = ref(0);
+const isAudioRecorded = ref(false);
 const emit = defineEmits(['send-message']);
-
-// Эмодзи
 const emojiIndex = new EmojiIndex(data);
 
-// Проверка типа файла
+// Флаг для переключения между записью голоса и видео
+const isRecordingTypeVoice = ref(true);
+
+// Разрешенные типы файлов
 const allowedMimeTypes = {
 	images: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
 	videos: ['video/mp4', 'video/webm', 'video/ogg'],
@@ -121,10 +115,12 @@ const allowedMimeTypes = {
 	],
 };
 
+// Проверка типа файла
 const isValidFileType = (file, allowedTypes) => {
 	return allowedTypes.some((type) => file.type.startsWith(type));
 };
 
+// Проверка размера файла
 const isFileSizeValid = (file) => {
 	const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 	return file.size <= MAX_FILE_SIZE;
@@ -132,32 +128,41 @@ const isFileSizeValid = (file) => {
 
 // Сжатие изображений
 const compressImage = async (file) => {
-    const options = {
-        maxSizeMB: 1, // Максимальный размер после сжатия (в МБ)
-        maxWidthOrHeight: 1024, // Максимальное разрешение
-        useWebWorker: true,
-        fileType: 'image/webp', // Конвертируем в WebP
-    };
-    try {
-        const compressedFile = await imageCompression(file, options);
-        return new File([compressedFile], file.name, { type: 'image/webp' });
-    } catch (error) {
-        console.error('Ошибка сжатия изображения:', error);
-        return null;
-    }
+	const options = {
+		maxSizeMB: 1,
+		maxWidthOrHeight: 1024,
+		useWebWorker: true,
+		fileType: 'image/webp',
+	};
+	try {
+		const compressedFile = await imageCompression(file, options);
+		return new File([compressedFile], file.name, { type: 'image/webp' });
+	} catch (error) {
+		console.error('Ошибка сжатия изображения:', error);
+		return null;
+	}
 };
 
-// Функция для проверки, является ли файл изображением
+// Получение иконки для файла
+const getFileIcon = (fileType) => {
+	if (fileType.startsWith('image')) return 'fas fa-file-image';
+	if (fileType.startsWith('video')) return 'fas fa-file-video';
+	if (fileType.startsWith('audio')) return 'fas fa-file-audio';
+	if (fileType.startsWith('application/pdf')) return 'fas fa-file-pdf';
+	return 'fas fa-file';
+};
+
+// Проверка, является ли файл изображением
 const isImage = (file) => {
 	return file.type.startsWith('image/');
 };
 
-// Функция для получения миниатюры изображения
+// Получение миниатюры изображения
 const getThumbnail = (file) => {
 	return URL.createObjectURL(file);
 };
 
-// Функция для выбора файла
+// Выбор файла
 const selectFile = () => {
 	document.querySelector('input[type="file"]').click();
 };
@@ -194,49 +199,41 @@ const removeFile = (index) => {
 	selectedFiles.value.splice(index, 1);
 };
 
-// Функция для начала записи голоса
+// Переключение типа записи (голос/видео)
+const toggleRecordingType = () => {
+	isRecordingTypeVoice.value = !isRecordingTypeVoice.value;
+};
+
+// Запуск записи голоса
 const startRecording = async () => {
-	console.log("Запись началась");
 	if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
 		try {
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-			// Создаем AudioContext и подключаем анализатор
 			audioContext.value = new (window.AudioContext || window.webkitAudioContext)();
 			analyser.value = audioContext.value.createAnalyser();
 			analyser.value.fftSize = 256;
-
 			const source = audioContext.value.createMediaStreamSource(stream);
 			source.connect(analyser.value);
 
-			// Запускаем запись
 			mediaRecorder.value = new MediaRecorder(stream);
-			recordedAudio.value = [];
-
+			recordedVoice.value = [];
 			mediaRecorder.value.ondataavailable = (event) => {
 				if (event.data.size > 0) {
-					recordedAudio.value.push(event.data);
+					recordedVoice.value.push(event.data);
 				}
 			};
-
 			mediaRecorder.value.onstop = () => {
 				stream.getTracks().forEach(track => track.stop());
-				if (recordedAudio.value.length > 0) {
-					const audioBlob = new Blob(recordedAudio.value, { type: 'audio/webm' });
-					audioUrl.value = URL.createObjectURL(audioBlob);
-					console.log("Аудио записано:", audioUrl.value);
+				if (recordedVoice.value.length > 0) {
+					const voiceBlob = new Blob(recordedVoice.value, { type: 'audio/webm' });
+					voiceUrl.value = URL.createObjectURL(voiceBlob);
+					isAudioRecorded.value = true;
 				}
-				audioContext.value.close(); // Останавливаем AudioContext
+				audioContext.value.close();
 			};
-
-			mediaRecorder.value.start(100); // Интервал сбора данных
+			mediaRecorder.value.start(100);
 			isRecording.value = true;
-
-			// Запускаем анимацию уровня громкости
 			updateAudioLevel();
-
-			window.addEventListener('mouseup', stopRecording);
-			window.addEventListener('mouseleave', stopRecording);
 		} catch (error) {
 			console.error('Ошибка доступа к микрофону:', error);
 		}
@@ -245,27 +242,26 @@ const startRecording = async () => {
 	}
 };
 
-// Функция для остановки записи голоса
-const stopRecording = () => {
-	console.log("Запись остановлена");
-	if (mediaRecorder.value && isRecording.value) {
+// Остановка записи
+const stopRecordingOrVideo = () => {
+	if (isRecording.value) {
 		mediaRecorder.value.stop();
 		isRecording.value = false;
-		isAudioRecorded.value = true; // Показываем плеер только после завершения записи
-
-		window.removeEventListener('mouseup', stopRecording);
-		window.removeEventListener('mouseleave', stopRecording);
+	}
+	if (isVideoRecording.value) {
+		// Логика остановки записи видео
+		isVideoRecording.value = false;
 	}
 };
 
+// Обновление уровня громкости
 const updateAudioLevel = () => {
 	if (!analyser.value) return;
-
 	const dataArray = new Uint8Array(analyser.value.frequencyBinCount);
 	const update = () => {
 		if (isRecording.value) {
 			analyser.value.getByteFrequencyData(dataArray);
-			const level = Math.max(...dataArray) / 255; // Нормализуем уровень громкости (0–1)
+			const level = Math.max(...dataArray) / 255;
 			audioLevel.value = level;
 			requestAnimationFrame(update);
 		}
@@ -273,10 +269,10 @@ const updateAudioLevel = () => {
 	update();
 };
 
-// Очистка записанного аудио
-const clearAudio = () => {
-	recordedAudio.value = null;
-	audioUrl.value = null;
+// Очистка записанного голоса
+const clearVoice = () => {
+	recordedVoice.value = null;
+	voiceUrl.value = null;
 	isAudioRecorded.value = false;
 };
 
@@ -288,41 +284,94 @@ const toggleEmojiPicker = () => {
 // Вставка эмодзи в текстовое поле
 const insertEmoji = (emoji) => {
 	messageInput.value += emoji.native || emoji;
-	isEmojiPickerVisible.value = false; // Закрываем панель после выбора эмодзи
+	isEmojiPickerVisible.value = false;
+};
+
+// Определение типа контента
+const determineContentType = ({ text, files, voice }) => {
+	if (voice) {
+		return 'voice'; // Голосовое сообщение
+	}
+	if (files && files.length > 0) {
+		// Если есть файлы, определяем их тип
+		const firstFile = files[0];
+		if (firstFile.type.startsWith('image/')) {
+			return 'image';
+		} else if (firstFile.type.startsWith('video/')) {
+			return 'video';
+		} else if (firstFile.type.startsWith('audio/')) {
+			return 'audio';
+		} else {
+			return 'file'; // Документ или другой тип файла
+		}
+	}
+	if (text && text.trim() !== '') {
+		return 'text'; // Текстовое сообщение
+	}
+	return 'unknown'; // Неизвестный тип
 };
 
 // Подготовка сообщения для отправки
 const prepareMessage = async () => {
-	if (!messageInput.value.trim() && !recordedAudio.value && selectedFiles.value.length === 0) return;
+	if (!messageInput.value.trim() && !recordedVoice.value && selectedFiles.value.length === 0) return;
 
 	// Преобразуем файлы в Base64
 	const filesBase64 = await Promise.all(
 		selectedFiles.value.map(async (file) => {
 			return new Promise((resolve, reject) => {
 				const reader = new FileReader();
-				reader.onload = () => resolve(reader.result); // reader.result содержит Base64
+				reader.onload = () => resolve(reader.result);
 				reader.onerror = (error) => reject(error);
-				reader.readAsDataURL(file); // Преобразуем файл в Base64
+				reader.readAsDataURL(file);
 			});
 		})
 	);
 
+	// Преобразуем голосовое сообщение в Base64
+	let voiceBase64 = null;
+	if (recordedVoice.value) {
+		voiceBase64 = await new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(reader.result);
+			reader.onerror = (error) => reject(error);
+			reader.readAsDataURL(new Blob(recordedVoice.value, { type: 'audio/webm' }));
+		});
+	}
+	
 	// Формируем данные сообщения
-	const messageData = {
-		text: messageInput.value.trim(),
-		files: filesBase64, // Файлы в Base64
-		audio: recordedAudio.value ? audioUrl.value : null,
-		sender_uid: currentUser.value.uid, // Добавляем UID отправителя
+	const messagePayload = {
+		content: messageInput.value.trim() || '',
+		content_type: determineContentType({
+			text: messageInput.value.trim(),
+			files: selectedFiles.value,
+			voice: recordedVoice.value,
+		}),
+		media_metadata: {
+			files: filesBase64.map((base64, index) => ({
+				url: base64,
+				name: selectedFiles.value[index].name,
+				type: selectedFiles.value[index].type,
+				size: selectedFiles.value[index].size,
+			})),
+			voice: voiceBase64, // Голосовое сообщение в Base64
+			video_voice: null, // Будущий функционал для видео-сообщений
+		},
+		/* sender: {
+			uid: currentUser.value.uid,
+			name: currentUser.value.username,
+			avatar: currentUser.value.avatar,
+		}, */
+		/* created_at: new Date().toISOString(), */
+		/* status: 'sending', */
 	};
 
-	// Очищаем поля после подготовки
+	// Очищаем поля после отправки
 	messageInput.value = '';
 	selectedFiles.value = [];
-	clearAudio();
-	isAudioRecorded.value = false; // Сбрасываем флаг после отправки
+	clearVoice();
 
 	// Эмитируем событие для отправки данных
-	emit('send-message', messageData);
+	emit('send-message', messagePayload);
 };
 
 onUnmounted(() => {
@@ -376,32 +425,32 @@ onUnmounted(() => {
 
 /* Блок для отображения записанного аудио */
 .audio-preview {
-    margin-bottom: 10px;
-    display: flex;
-    align-items: center; /* Выравнивание по вертикали */
-    justify-content: space-between; /* Распределяет элементы по краям */
+	margin-bottom: 10px;
+	display: flex;
+	align-items: center; /* Выравнивание по вертикали */
+	justify-content: space-between; /* Распределяет элементы по краям */
 }
 
 /* Плеер */
 .audio-preview audio {
-    flex: 1; /* Занимает все доступное пространство */
-    max-width: 100%; /* Предотвращает переполнение */
+	flex: 1; /* Занимает все доступное пространство */
+	max-width: 100%; /* Предотвращает переполнение */
 }
 
 /* Контейнер для кнопок */
 .audio-preview .controls {
-    display: flex;
-    align-items: center;
+	display: flex;
+	align-items: center;
 }
 
 /* Стили кнопок */
 .audio-preview button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 20px;
-    color: var(--primary-color);
-    margin-left: 5px; /* Отступ между кнопками */
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-size: 20px;
+	color: var(--primary-color);
+	margin-left: 5px; /* Отступ между кнопками */
 }
 
 .remove-audio {
@@ -490,7 +539,8 @@ onUnmounted(() => {
 	cursor: pointer;
 	font-size: 20px;
 	color: var(--primary-color);
-	margin-left: 10px; /* Отступ между индикатором и кнопкой */
+	margin-left: 10px;
+	/* Отступ между индикатором и кнопкой */
 }
 
 /* Анимация уровня громкости */
@@ -512,7 +562,7 @@ onUnmounted(() => {
 .emoji-picker-container {
 	position: absolute;
 	bottom: 75px; /* Выравнивание относительно поля ввода */
-	
+
 	left: 0;
 	right: 0;
 	width: 338px;
