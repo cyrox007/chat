@@ -1,38 +1,43 @@
 <template>
-	<LeftSidebar :class="{ active: isLeftSidebarActive }" @close="closeLeftSidebar" :rooms="rooms"
-		@switch-room="switchRoom" />
 	<main class="chat-window">
-		<header class="chat-window-header">
-			<button class="toggle-left-sidebar" aria-label="Открыть/закрыть левый сайдбар" @click="toggleLeftSidebar">
-				<i class="fas fa-comments"></i>
-			</button>
-			<h2>{{ chatStore.currentRoom?.name || 'Нет выбранной комнаты' }}</h2>
-			<button class="toggle-right-sidebar" aria-label="Открыть/закрыть правый сайдбар" @click="toggleRightSidebar"
-				:disabled="!chatStore.currentRoom?.id">
-				<i class="fas fa-info-circle"></i>
-			</button>
-		</header>
-		<div v-if="chatStore.currentRoom?.id && !isLoading" class="chat-container">
-			<section class="chat-window-body" id="chat-messages">
-				<Message 
-					v-for="(msg, index) in messages" 
-					:key="msg.uid || msg.tempId"
-					:message="msg"
-				/>
+		<LeftSidebar :class="{ active: isLeftSidebarActive }" @close="closeLeftSidebar" :rooms="rooms"
+			@switch-room="switchRoom" />
+		
+		<div class="chat-content">
+			<header class="chat-window-header">
+				<button class="toggle-left-sidebar" aria-label="Открыть/закрыть левый сайдбар" @click="toggleLeftSidebar">
+					<i class="fas fa-comments"></i>
+				</button>
+				<h2>{{ chatStore.currentRoom?.name || 'Нет выбранной комнаты' }}</h2>
+				<button class="toggle-right-sidebar" aria-label="Открыть/закрыть правый сайдбар" @click="toggleRightSidebar"
+					:disabled="!chatStore.currentRoom?.id">
+					<i class="fas fa-info-circle"></i>
+				</button>
+			</header>
+			<div v-if="chatStore.currentRoom?.id && !isLoading" class="chat-container">
+				<section id="chat-messages" ref="chatMessages" class="chat-window-body" >
+					<Message 
+						v-for="(msg, index) in messages" 
+						:key="msg.uid || msg.tempId"
+						:message="msg"
+					/>
+				</section>
+				<MessageComposer @send-message="handleSendMessage" />
+			</div>
+			<section v-else-if="!isLoading" class="placeholder">
+				<p>Выберите комнату, чтобы начать общение.</p>
 			</section>
-			<MessageComposer @send-message="handleSendMessage" />
 		</div>
-		<section v-else-if="!isLoading" class="placeholder">
-			<p>Выберите комнату, чтобы начать общение.</p>
-		</section>
+		
 		<Loader :isLoading="isLoading" />
+		<RightSidebar v-if="chatStore.currentRoom?.id && !isLoading" :class="{ active: isRightSidebarActive }"
+			@close="closeRightSidebar" :roomInfo="chatStore.currentRoom" :users="chatStore.connectedUsers" />
 	</main>
-	<RightSidebar v-if="chatStore.currentRoom?.id && !isLoading" :class="{ active: isRightSidebarActive }"
-		@close="closeRightSidebar" :roomInfo="chatStore.currentRoom" :users="chatStore.connectedUsers" />
+	
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, onUnmounted } from 'vue';
+import { ref, reactive, onMounted, computed, onUnmounted, watch } from 'vue';
 import { useStore } from 'vuex';
 import { v4 as uuidv4 } from 'uuid';
 import DOMPurify from 'dompurify';
@@ -187,6 +192,7 @@ const connectToWebSocket = (roomId) => {
 
 			// Добавляем начальные данные в начало массива
 			messages.value.unshift(...data.messages.reverse());
+			scrollToBottom();
 		}
 	});
 };
@@ -244,6 +250,13 @@ const closeRightSidebar = () => {
 	isRightSidebarActive.value = false;
 };
 
+const scrollToBottom = () => {
+	const chatMessages = document.getElementById('chat-messages');
+	if (chatMessages) {
+		chatMessages.scrollTop = chatMessages.scrollHeight;
+	}
+};
+
 // Загрузка данных при монтировании
 onMounted(async () => {
 	loadRooms();
@@ -258,47 +271,71 @@ onMounted(async () => {
 onUnmounted(() => {
 	if (wsService.value) wsService.value.disconnect();
 });
+
+watch(messages, () => {
+	scrollToBottom();
+}, { deep: true });
 </script>
 
 <style scoped>
 .chat-window {
+	height: calc(100vh - (41px + 5px));
+	
+	width: 100%;
+	flex: 0 0 100%;
+	display: flex;
+	flex-direction: row;
+	flex-wrap: nowrap;
+}
+.chat-content {
 	display: flex;
 	flex-direction: column;
-	height: 100%; /* Занимает всю доступную высоту */
+	width: 100%;
 }
-
 .chat-window-header {
+	max-height: 40px;
+	height: 40px;
+	padding: 10px;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 10px;
 	background-color: var(--primary-color);
 	border-bottom: 1px solid var(--primary-color);
+	color: #fff;
+}
+
+.chat-window-header button {
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: #fff;
+}
+
+.chat-window-header button:disabled {
+	cursor:auto;
+	opacity: 0.8;
 }
 
 .chat-container {
-	height: calc(100vh - 60px);
+	flex: 1 1 100%;
+
 	display: flex;
 	flex-direction: column;
-	flex: 1;
-	/* Занимает всё оставшееся пространство */
+	
 	overflow: hidden;
-	/* Предотвращает прокрутку всего контейнера */
 }
 
 .chat-window-body {
+	min-height: 100px;
 	flex: 1;
-	/* Занимает всё доступное пространство */
-	overflow-y: auto;
-	/* Добавляет прокрутку только для окна сообщений */
+	overflow-y: auto; 
 	padding: 10px;
 	background-color: #f0f0f0;
 }
 
 /* Стили для компонента ввода данных */
 .message-composer {
-	flex-shrink: 0;
-	/* Предотвращает сжатие компонента */
+	flex-shrink: 0; /* Предотвращает сжатие компонента */
 	padding: 10px;
 	background-color: var(--bg-light);
 	border-top: 1px solid var(--primary-color);
@@ -307,6 +344,7 @@ onUnmounted(() => {
 .placeholder {
 	flex: 1;
 	height: 100%;
+	width: 100%;
 	background: var(--bg-light);
 	display: flex;
 	align-items: center;

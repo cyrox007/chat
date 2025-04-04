@@ -52,13 +52,16 @@ onMounted(async () => {
 			</div>
 		</transition>
 
-		<div class="row chat-wrapper">
+		<div class="row mt-1">
 			<RouterView />
 		</div>
 	</div>
 </template>
 
 <style scoped>
+/* .chat-wrapper {
+	padding: 0 10px;
+} */
 .error-notification {
 	background-color: rgba(255, 99, 71, 0.9); /* Светло-красный цвет */
 	color: white;

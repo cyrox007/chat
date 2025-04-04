@@ -355,14 +355,7 @@ const prepareMessage = async () => {
 			})),
 			voice: voiceBase64, // Голосовое сообщение в Base64
 			video_voice: null, // Будущий функционал для видео-сообщений
-		},
-		/* sender: {
-			uid: currentUser.value.uid,
-			name: currentUser.value.username,
-			avatar: currentUser.value.avatar,
-		}, */
-		/* created_at: new Date().toISOString(), */
-		/* status: 'sending', */
+		}
 	};
 
 	// Очищаем поля после отправки
@@ -572,5 +565,12 @@ onUnmounted(() => {
 	border: 1px solid var(--primary-color);
 	border-radius: 10px;
 	z-index: 1000; /* Убедитесь, что панель отображается поверх других элементов */
+}
+.file-preview .file-item .file-name {
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow: hidden;
+	white-space: nowrap;
+    max-width: 150px; /* Ограничиваем максимальную ширину */
 }
 </style>
