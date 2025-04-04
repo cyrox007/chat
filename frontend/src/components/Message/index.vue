@@ -11,32 +11,43 @@
 
 		<!-- Тело сообщения -->
 		<div class="message-body">
-			<!-- Текст -->
-			<div v-if="safeMessage.content_type === 'text'">{{ safeMessage.content }}</div>
-
-			<!-- Изображение -->
-			<div v-else-if="safeMessage.content_type === 'image'">
-				<img :src="safeMessage.content" alt="Изображение" class="message-image" />
+			
+			<div v-if="safeMessage.content_type === 'text'">
+				<!-- Текст -->
+				{{ safeMessage.content }}
 			</div>
 
-			<!-- Видео -->
+			
+			<div v-else-if="safeMessage.content_type === 'image'" class="image_list">
+				<!-- Изображение -->
+				<div class="image_item" v-for="(image, index) in safeMessage.media_metadata.files" :key="index">
+					<img :src="image.url" alt="Изображение" class="message-image" />
+				</div>
+
+				<span v-show="safeMessage.content">{{ safeMessage.content }}</span>
+			</div>
+
+			
 			<div v-else-if="safeMessage.content_type === 'video'">
+				<!-- Видео -->
 				<video controls class="message-video">
 					<source :src="safeMessage.content" type="video/mp4">
 					Ваш браузер не поддерживает видео.
 				</video>
 			</div>
 
-			<!-- Аудио -->
+			
 			<div v-else-if="safeMessage.content_type === 'audio'">
+				<!-- Аудио -->
 				<audio controls class="message-audio">
 					<source :src="safeMessage.content" type="audio/mpeg">
 					Ваш браузер не поддерживает аудио.
 				</audio>
 			</div>
 
-			<!-- Файлы -->
+			
 			<div v-else-if="safeMessage.content_type === 'file'" class="message-files">
+				<!-- Файлы -->
 				<!-- Проверка на null или отсутствие files -->
 				<div
 					v-if="safeMessage.media_metadata && safeMessage.media_metadata.files && safeMessage.media_metadata.files.length > 0">
@@ -45,9 +56,9 @@
 							<img :src="file" alt="Thumbnail" />
 						</span>
 						<span v-else class="file-icon">
-							<i :class="getFileIcon(file)"></i> <!-- Значок для файлов -->
+							<i :class="getFileIcon(file.name)"></i> <!-- Значок для файлов -->
 						</span>
-						<a :href="file" target="_blank" class="file-link">{{ getFileName(file) }}</a>
+						<a :href="file" target="_blank" class="file-link">{{ file.name }}</a>
 					</div>
 				</div>
 				<!-- Если media_metadata отсутствует или files пустой -->
@@ -97,7 +108,16 @@ const currentUser = computed(() => {
 
 // Проверка, является ли файл изображением
 const isImage = (fileUrl) => {
-	return fileUrl.match(/\.(jpeg|jpg|png|gif|webp)$/i);
+	if (!fileUrl) return false;
+
+	// Проверяем, является ли строка Base64
+	const base64Pattern = /^data:image\/(jpeg|jpg|png|gif|webp);base64,/;
+	if (base64Pattern.test(fileUrl)) {
+		return true;
+	}
+
+	// Проверяем, является ли строка URL с расширением изображения
+	return /\.(jpeg|jpg|png|gif|webp)$/i.test(fileUrl);
 };
 
 // Извлечение имени файла из URL

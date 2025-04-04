@@ -10,6 +10,7 @@ from pydantic import BaseModel, EmailStr, Field, validator
 from typing import Annotated, List
 
 # Локальные модули
+from services.auth_service import authenticate_user, generate_tokens
 from components.decorators.db import get_session
 from components.device.model import UserDevice
 from components.user.model import User
@@ -138,21 +139,15 @@ async def login(request: Request, db_session=None):
             raise HTTPException(status_code=400, detail=f"Missing fields: {', '.join(missing_fields)}")
 
         identifier = data["identifier"]
-        user = User.get_user_by_credentials(db_session, identifier)
-        if not user or not verify_password(data["password"], user.hashed_password):
-            logger.warning(f"Неверные учетные данные для пользователя: {identifier}")
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+        user = authenticate_user(db_session, data["identifier"], data["password"])
 
-        jti = str(uuid.uuid4())
-        user_uid = str(user.uid)
-        access_token = create_access_token({"user_uid": user_uid})
-        refresh_token = create_refresh_token({"user_uid": user_uid})
+        tokens = generate_tokens(str(user.uid))
 
         client_metadata = extract_client_metadata(request)
         UserDevice.create(
             db_session=db_session,
-            user_uid=user_uid,
-            token=refresh_token,
+            user_uid=str(user.uid),
+            token=tokens['refresh'],
             ip_address=client_metadata["ip_address"],
             user_agent=client_metadata["user_agent"],
             device_info=client_metadata["device_info"],
@@ -161,10 +156,10 @@ async def login(request: Request, db_session=None):
         response = JSONResponse(
             content={
                 "status": "ok",
-                "access_token": access_token,
+                "access_token": tokens["access"],
                 "token_type": "bearer",
                 "user": {
-					"uid": user_uid,
+					"uid": str(user.uid),
 					"username": user.username,
 					"email": user.email,
 					"phone": user.phone,
@@ -189,7 +184,7 @@ async def login(request: Request, db_session=None):
         )
         response.set_cookie(
             key="refresh_token",
-            value=refresh_token,
+            value=tokens["refresh"],
             httponly=True,
             secure=True,
             samesite="lax",

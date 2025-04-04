@@ -1,4 +1,4 @@
-import asyncio
+# System
 import base64
 import mimetypes
 import os
@@ -6,60 +6,29 @@ from pathlib import Path
 from uuid import UUID
 from datetime import datetime
 import uuid
+
+# Other
 from fastapi import WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
+
+# Custom
 from components.room.model import Room
 from components.message.model import Message
 from components.decorators.db import get_session
-from utils.logger import setup_logger  # Импортируем централизованный логгер
-
+from utils.logger import setup_logger
+from utils.file_handler import save_file
 from settings import config
+from socket_manager.manager import ConnectionManager
 
 # Создаем логгер для этого модуля
 logger = setup_logger(__name__)
 
-# Менеджер для хранения активных соединений
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections = {}
-
-    async def connect(self, websocket, room_uid: UUID, user_uid: UUID):
-        if room_uid not in self.active_connections:
-            self.active_connections[room_uid] = []
-        self.active_connections[room_uid].append((websocket, user_uid))
-        logger.info(f"Пользователь {user_uid} подключен к комнате {room_uid}")
-
-        # Уведомляем всех участников о новом пользователе
-        await self.broadcast_user_list(room_uid)
-
-    def disconnect(self, websocket, room_uid: UUID):
-        if room_uid in self.active_connections:
-            self.active_connections[room_uid] = [
-                conn for conn in self.active_connections[room_uid] if conn[0] != websocket
-            ]
-            if not self.active_connections[room_uid]:
-                del self.active_connections[room_uid]
-            logger.info(f"Пользователь отключен от комнаты {room_uid}")
-
-        # Уведомляем всех участников об изменении списка пользователей
-        asyncio.create_task(self.broadcast_user_list(room_uid))
-
-    async def broadcast_user_list(self, room_uid: UUID):
-        if room_uid in self.active_connections:
-            user_list = [str(user_uid) for _, user_uid in self.active_connections[room_uid]]
-            message = {"type": "user_list", "users": user_list}
-            await self.broadcast(room_uid, message)
-
-    async def broadcast(self, room_uid: UUID, message: dict):
-        if room_uid in self.active_connections:
-            for connection, _ in self.active_connections[room_uid]:
-                try:
-                    await connection.send_json(message)
-                except Exception as e:
-                    logger.error(f"Ошибка при отправке сообщения: {e}")
-
+# Init ws manager
 manager = ConnectionManager()
 
+# Ограничение длянниы имени файла
+MAX_FILENAME_LENGTH = 255
+
+# Инициализация подключения к комнате
 async def initialize_websocket(websocket: WebSocket, db_session, room_uid: UUID, user_uid: UUID):
     # Проверка существования комнаты
     room = Room.get_room_by_uid(db_session, room_uid)
@@ -75,11 +44,6 @@ async def initialize_websocket(websocket: WebSocket, db_session, room_uid: UUID,
     await send_initial_data(websocket, db_session, room_uid, user_uid)
 
 async def send_initial_data(websocket: WebSocket, db_session, room_uid: UUID, user_uid: UUID):
-    # Отправляем текущий список участников
-    """ if room_uid in manager.active_connections:
-        user_list = [str(user_uid) for _, user_uid in manager.active_connections[room_uid]] """
-        
-
     # Отправляем последние сообщения
     last_messages = Message.get_last_messages(db_session, room_uid, limit=5)
     formatted_messages = format_messages(last_messages)
@@ -113,7 +77,7 @@ async def process_incoming_messages(websocket: WebSocket, room_uid: UUID, user_u
             # Обработка разных типов контента
             if content_type == "text":
                 await handle_text_message(data, room_uid, user_uid, db_session)
-            elif content_type == "file" or content_type == 'image':
+            elif content_type == "file" or content_type == 'image' or content_type == 'video':
                 await handle_file_message(data, room_uid, user_uid, db_session)
             elif content_type == "voice":
                 await handle_audio_message(data, room_uid, user_uid, db_session)
@@ -148,7 +112,7 @@ async def handle_file_message(data: dict, room_uid: UUID, user_uid: UUID, db_ses
     if not files:
         logger.warning("Получено пустое файловое сообщение")
         return
-    
+
     # Проверка количества файлов
     if len(files) > config.MAX_FILES_LIMIT:
         error_message = {
@@ -167,59 +131,35 @@ async def handle_file_message(data: dict, room_uid: UUID, user_uid: UUID, db_ses
 
     for file_data in files:
         try:
-            # Извлекаем MIME-тип и кодировку из Base64
-            try:
-                mime_type, encoded_data = file_data["url"].split(',', 1)
-            except ValueError:
-                logger.error(f"Некорректный формат данных для файла '{file_data.get('name')}'")
-                errors.append({
-                    "file_name": file_data.get("name"),
-                    "error": "Invalid file format",
-                })
-                continue
-            file_content = base64.b64decode(encoded_data)
+            # Извлекаем данные о файле
+            file_url = file_data.get("url")
+            file_type = file_data.get("type")  # Тип файла (image, video, audio, etc.)
+            file_name = file_data.get("name")  # Оригинальное имя файла
+            file_size = file_data.get("size")  # Размер файла
 
-            # Проверка размера файла
-            if len(file_content) > config.MAX_FILE_SIZE:
-                logger.warning(f"Файл слишком большой: {len(file_content)} байт")
-                errors.append({
-                    "file_name": file_data.get("name"),
-                    "error": "File too large",
-                    "max_allowed_size": config.MAX_FILE_SIZE,
-                })
-                continue
+            # Проверяем, что все необходимые поля присутствуют
+            if not all([file_url, file_type, file_name, file_size]):
+                raise ValueError("Missing required file data")
 
-            # Определение типа файла
-            file_type = mime_type.split(';')[0].split('/')[0]  # 'image', 'video', 'audio', 'application'
-            # Определяем расширение файла
-            extension = mimetypes.guess_extension(mime_type.split(';')[0]) or "bin"
-            if extension.startswith('.'):
-                extension = extension[1:]
-
-            # Создаем папку для типа файла
-            folder_name = {
-                "image": "images",
-                "video": "videos",
-                "audio": "audio",
-                "application": "documents",
-            }.get(file_type, "other")
-
-            upload_dir = Path("uploads") / folder_name
-            os.makedirs(upload_dir, exist_ok=True)
-
-            # Генерируем уникальное имя файла
-            file_name = f"{uuid.uuid4()}.{extension}"
-            file_path = upload_dir / file_name
-
-            # Сохраняем файл
-            with open(file_path, "wb") as f:
-                f.write(file_content)
-
-            # Формируем URL для доступа к файлу
-            saved_files.append(f"{config.BASE_URL}/{folder_name}/{file_name}")
+            # Сохраняем файл через утилиту
+            file_metadata = {
+                "url": file_url,
+                "type": file_type,  # Используем нормализованный тип
+                "name": file_name,
+                "size": file_size,
+            }
+            
+            saved_file_url = save_file(file_metadata)
+            saved_files.append({
+                "url": saved_file_url,
+                "type": file_type,  # Сохраняем нормализованный тип
+                "name": file_name,
+                "size": file_size,
+            })
 
         except Exception as e:
-            logger.error(f"Ошибка при обработке файла '{file_data.get('name')}': {e}")
+            # Логируем ошибку и добавляем её в список
+            logger.error(f"Ошибка при обработке файла '{file_data.get('name')}': {str(e)}")
             errors.append({
                 "file_name": file_data.get("name"),
                 "error": str(e),
@@ -238,7 +178,7 @@ async def handle_file_message(data: dict, room_uid: UUID, user_uid: UUID, db_ses
     # Создаём данные для сообщения
     message_data = {
         "content": data.get("content", ""),  # Преобразуем в JSON-строку
-        "content_type": "file",
+        "content_type": data.get('content_type', 'other'),  # Используем тип первого файла
         "sender_uid": str(user_uid),
         "room_uid": str(room_uid),
         "media_metadata": {
@@ -251,7 +191,7 @@ async def handle_file_message(data: dict, room_uid: UUID, user_uid: UUID, db_ses
     new_message['frontId'] = data.get('frontId')
 
     # Рассылаем сообщение участникам комнаты
-    await manager.broadcast(room_uid, new_message)
+    await manager.broadcast(room_uid, new_message) 
     logger.info(f"Файловое сообщение отправлено в комнату {room_uid}: {new_message}")
 
     # Если были ошибки, отправляем уведомление о частичной обработке
