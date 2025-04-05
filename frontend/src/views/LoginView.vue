@@ -16,9 +16,10 @@
 				<button type="submit" class="btn-primary">Войти</button>
 				<p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 			</form>
-			<!-- <span>
-				Еще не зарегестрированы? <a :href="router.push({name: 'registration'})">Регистрация</a>
-			</span> -->
+			<span>
+				Еще не зарегистрированы?
+				<a href="#" @click.prevent="goToRegistration">Регистрация</a>
+			</span>
 		</div>
 	</div>
 </template>
@@ -93,6 +94,9 @@ const handleLogin = async () => {
 		errorMessage.value = error.response?.data?.message || 'Ошибка входа';
 	}
 };
+const goToRegistration = () => {
+	router.push({ name: 'registration' }); // Убедитесь, что маршрут с именем 'registration' существует
+};
 </script>
 
 <style scoped>
@@ -101,6 +105,7 @@ const handleLogin = async () => {
 	display: flex;
 	justify-content: center;
 	align-items: center;
+	height: calc(100vh - 5px);
 	/* height: 100vh;
 	background: var(--bg-gradient); */
 	margin: 0 auto;
@@ -155,14 +160,26 @@ input[type="password"]:focus {
 	border-radius: 4px;
 	cursor: pointer;
 	width: 100%;
+	transition: background 0.3s ease;
 }
 
-/* .btn-primary:hover {
-    background: darken(var(--primary-color), 10%);
-} */
+button:hover {
+	background: var(--primary-color-hover);
+}
 
 .error {
 	color: red;
 	margin-top: 10px;
+}
+
+span {
+	display: block;
+	text-align: center;
+	margin-top: 15px;
+}
+
+a {
+	color: var(--primary-color);
+	text-decoration: none;
 }
 </style>
