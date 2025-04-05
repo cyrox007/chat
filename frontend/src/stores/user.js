@@ -24,6 +24,9 @@ export default {
 		},
 	},
 	actions: {
+		fetchUserData() {
+			
+		},
 		initializeUser({ commit }) {
 			const auth = Boolean(localStorage.getItem('auth'));
 			const user = JSON.parse(localStorage.getItem('user'));

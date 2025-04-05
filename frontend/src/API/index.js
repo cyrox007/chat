@@ -18,7 +18,7 @@ $api.interceptors.request.use((config) => {
 });
 
 // Перехватчик ответов: обработка ошибок
-$api.interceptors.response.use(
+/* $api.interceptors.response.use(
 	(response) => response,
 	async (error) => {
 		const originalRequest = error.config;
@@ -58,6 +58,39 @@ $api.interceptors.response.use(
 
 		return Promise.reject(error);
 	}
-);
+); */
+
+$api.interceptors.response.use((config)=>{
+    return config;
+}, async (error) => {
+    const originalRequest = error.config;
+    if (error.response.status === 401 && error.config && !error.config._isRetry) {
+        originalRequest._isRetry = true;
+        try {
+			// Обновляем токен
+            const refreshResponse = await axios.get(`${$api.defaults.baseURL}/refresh`, {
+				withCredentials: true,
+			});
+            const { access_token } = refreshResponse.data;
+
+			localStorage.setItem('access_token', access_token);
+
+			// Устанавливаем новый токен в заголовки
+			originalRequest.headers.Authorization = `Bearer ${access_token}`;
+			
+            return $api.request(originalRequest);
+
+        } catch (e) {
+            localStorage.clear();
+            store.commit('clearUser');
+            window.location.href = '/login';
+        }
+    }
+    
+    if (error.response.status === 400) {
+        console.error(error);
+    }
+    throw error;
+})
 
 export default $api;

@@ -77,6 +77,7 @@ const handleLogin = async () => {
 
 		// Сохраняем токен в localStorage
 		localStorage.setItem('access_token', response.data.access_token);
+		localStorage.setItem('user', JSON.stringify(response.data.user));
 
 		// Сохраняем данные пользователя в хранилище
 		store.commit('setUser', response.data.user);

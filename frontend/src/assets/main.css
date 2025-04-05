@@ -1,72 +1,99 @@
 @charset "UTF-8";
 
 :root {
-  --bg-light: #f8f9fa;
-  --bg-gradient: linear-gradient(135deg, #e0eafc, #cfdef3);
-  --text-light: #212529;
-  --sidebar-bg-light: rgba(255, 255, 255, 0.9);
-  --primary-color: #007bff;
-  --sender-bg: rgba(209, 231, 221, 0.9);
-  --other-user-bg: rgba(248, 215, 218, 0.9);
-  --mention-bg: rgba(255, 243, 205, 0.9);
-  --mention-border: #856404;
-  --bg-dark: #343a40;
-  --bg-dark-gradient: linear-gradient(135deg, #495057, #343a40);
-  --text-dark: #ffffff;
-  --sidebar-bg-dark: rgba(50, 50, 50, 0.9);
+	--bg-light: #f8f9fa;
+	--bg-gradient: linear-gradient(135deg, #e0eafc, #cfdef3);
+	--text-light: #212529;
+	--sidebar-bg-light: rgba(255, 255, 255, 0.9);
+	--primary-color: #007bff;
+	--sender-bg: rgba(209, 231, 221, 0.9);
+	--other-user-bg: rgba(248, 215, 218, 0.9);
+	--mention-bg: rgba(255, 243, 205, 0.9);
+	--mention-border: #856404;
+	--bg-dark: #343a40;
+	--bg-dark-gradient: linear-gradient(135deg, #495057, #343a40);
+	--text-dark: #ffffff;
+	--sidebar-bg-dark: rgba(50, 50, 50, 0.9);
+
+	--profile-bg-light: #f0f4fc; /* Цвет фона профиля */
+	--profile-avatar-border: #007bff; /* Бордюр вокруг аватара */
+	--profile-edit-btn: #007bff; /* Цвет кнопки редактирования */
+	--profile-edit-btn-hover: #0056b3; /* Цвет кнопки редактирования при наведении */
+	--profile-details-color: #6c757d; /* Цвет второстепенных деталей */
 }
 
+/* @media (prefers-color-scheme: dark) {
+	:root {
+		--bg-light: #212529;
+		--text-light: #ffffff;
+		--profile-bg-light: #343a40;
+		--profile-avatar-border: #007bff;
+		--profile-edit-btn: #007bff;
+		--profile-edit-btn-hover: #0056b3;
+		--profile-details-color: #adb5bd;
+	}
+} */
+
 * {
-  padding: 0;
-  margin: 0;
-  box-sizing: border-box;
+	padding: 0;
+	margin: 0;
+	box-sizing: border-box;
 }
 
 body {
-  font-family: Arial, sans-serif;
-  margin: 0;
-  padding: 0;
-  background: var(--bg-gradient);
-  color: var(--text-light);
-  transition: background 0.3s, color 0.3s;
-  background-image: url(./images/bg.png);
-  background-position: auto;
-  background-size: cover;
+	font-family: Arial, sans-serif;
+	margin: 0;
+	padding: 0;
+	background: var(--bg-gradient);
+	color: var(--text-light);
+	transition: background 0.3s, color 0.3s;
+	background-image: url(./images/bg.png);
+	background-position: auto;
+	background-size: cover;
 }
 
 * {
-  scrollbar-width: thin; /* Firefox */
-  scrollbar-color: var(--primary-color) var(--bg-light); /* Firefox */
+	scrollbar-width: thin;
+	/* Firefox */
+	scrollbar-color: var(--primary-color) var(--bg-light);
+	/* Firefox */
 }
+
 *::-webkit-scrollbar {
-  width: 4px; /* Ширина скроллбара */
+	width: 4px;
+	/* Ширина скроллбара */
 }
+
 *::-webkit-scrollbar-track {
-  background: var(--bg-light); /* Цвет фона трека */
+	background: var(--bg-light);
+	/* Цвет фона трека */
 }
+
 *::-webkit-scrollbar-thumb {
-  background-color: var(--primary-color); /* Цвет ползунка */
-  border-radius: 5px; /* Закругление углов ползунка */
+	background-color: var(--primary-color);
+	/* Цвет ползунка */
+	border-radius: 5px;
+	/* Закругление углов ползунка */
 }
 
 .container {
-  width: 100%;
-  max-width: 1680px;
-  padding-right: 15px;
-  padding-left: 15px;
-  margin-right: auto;
-  margin-left: auto;
+	width: 100%;
+	max-width: 1680px;
+	padding-right: 15px;
+	padding-left: 15px;
+	margin-right: auto;
+	margin-left: auto;
 }
 
 .row {
-  display: flex;
-  flex-wrap: wrap;
-  margin-right: -15px;
-  margin-left: -15px;
+	display: flex;
+	flex-wrap: wrap;
+	margin-right: -15px;
+	margin-left: -15px;
 }
 
 .mt-1 {
-  margin-top: 5px;
+	margin-top: 5px;
 }
 
 /* .chat-container {

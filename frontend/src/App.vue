@@ -25,10 +25,11 @@ const checkServerAvailability = async () => {
 onMounted(async () => {
 	if (localStorage.getItem('access_token')) {
 		// Проверяем, есть ли данные пользователя в хранилище
-		if (!store.getters.getUser) {
+		if (!store.getters.getUser && localStorage.getItem('user')) {
 			try {
 				// Загружаем данные пользователя с сервера
-				await store.dispatch('user/fetchUserData');
+				//await store.dispatch('fetchUserData');
+				store.commit('setUser', JSON.parse(localStorage.getItem('user')));
 			} catch (error) {
 				console.error('Ошибка загрузки данных пользователя:', error);
 				// Если загрузка не удалась, очищаем состояние авторизации

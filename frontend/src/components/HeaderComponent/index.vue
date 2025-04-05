@@ -1,85 +1,112 @@
 <template>
-    <header class="row app-header" v-show="!isNoAuthenticated">
-        <div class="app-menu">
-            <ul>
-                <li v-for="item in navigation" :key="item.name">
-                    <RouterLink v-if="item.path !== '/users/logout'" :to="item.path">
-                        <i :class="`fas ${item.icon}`"></i>
-                        <span class="menu-text">{{ item.label }}</span>
-                    </RouterLink>
-                    <a v-else href="#" @click.prevent="handleLogout">
-                        <i :class="`fas ${item.icon}`"></i>
-                        <span class="menu-text">{{ item.label }}</span>
-                    </a>
-                </li>
-            </ul>
-        </div>
-    </header>
+	<header class="row app-header" v-show="!isNoAuthenticated">
+		<div class="app-menu">
+			<ul>
+				<li v-for="item in navigation" :key="item.name">
+					<router-link v-if="item.path !== '/users/logout'"
+						:to="item.params ? { path: item.path, params: item.params } : { path: item.path }"
+						@click.native="handleMenuClick(item)">
+						<i :class="`fas ${item.icon}`"></i>
+						<span class="menu-text">{{ item.label }}</span>
+					</router-link>
+					<a v-else href="#" @click.prevent="handleLogout">
+						<i :class="`fas ${item.icon}`"></i>
+						<span class="menu-text">{{ item.label }}</span>
+					</a>
+				</li>
+			</ul>
+		</div>
+	</header>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import AuthService from '@/API/AuthService';
+import { useStore } from 'vuex';
 
 const route = useRoute();
 const router = useRouter();
+const store = useStore();
 
 const isNoAuthenticated = computed(() => route.meta.requestGuest);
 
-const navigation = ref([
-    {
-        path: '/',
-        name: 'chats',
-        label: 'Чаты',
-        icon: 'fa-comments',
-    },
-    {
-        path: '/profile',
-        name: 'profile',
-        label: 'Профиль',
-        icon: 'fa-user-circle',
-    },
-    {
-        path: '/messages',
-        label: 'Сообщения',
-        icon: 'fa-envelope',
-    },
-    {
-        path: '/settings',
-        label: 'Настройки',
-        icon: 'fa-cog',
-    },
-    {
-        path: '/admin',
-        label: 'Админка',
-        icon: 'fa-user-shield',
-    },
-    {
-        path: '/users/logout',
-        label: 'Выход',
-        icon: 'fa-sign-out-alt',
-    },
-]);
+const currentUser = computed(() => {
+	return store.getters.getUser || { uid: null }
+})
+
+const isAdmin = computed(() => {
+    const user = store.getters.getUser;
+    return user?.global_role === 'admin' || user?.global_role === 'superadministrator';
+});
+
+const navigation = computed(() => {
+	const baseNavigation = [
+		{
+			path: '/',
+			name: 'chats',
+			label: 'Чаты',
+			icon: 'fa-comments',
+		},
+		{
+			path: `/profile/${currentUser.value.uid}`,
+			name: 'profile',
+			label: 'Профиль',
+			icon: 'fa-user-circle',
+		},
+		{
+			path: '/messages',
+			label: 'Сообщения',
+			icon: 'fa-envelope',
+		},
+		{
+			path: '/settings',
+			label: 'Настройки',
+			icon: 'fa-cog',
+		},
+		{
+			path: '/users/logout',
+			label: 'Выход',
+			icon: 'fa-sign-out-alt',
+		},
+	];
+
+	if (isAdmin.value) {
+		baseNavigation.splice(4, 0, {
+			path: '/admin',
+			label: 'Админка',
+			icon: 'fa-user-shield',
+		});
+	}
+
+	return baseNavigation;
+});
+
+const handleMenuClick = (item) => {
+	if (item.path === '/profile') {
+		// Принудительно обновляем данные профиля
+		console.log('Перезагрузка данных профиля...');
+	}
+};
 
 const handleLogout = async () => {
-    try {
-        // Отправляем запрос на сервер для выхода
-        const response = await AuthService.logout();
+	try {
+		// Отправляем запрос на сервер для выхода
+		const response = await AuthService.logout();
 
-        // Проверяем статус ответа
-        if (response.data.status === 'ok') {
-            // Очищаем localStorage
-            localStorage.clear();
+		// Проверяем статус ответа
+		if (response.data.status === 'ok') {
+			// Очищаем localStorage
+			localStorage.clear();
 
-            // Перенаправляем на страницу входа
-            router.push('/login');
-        } else {
-            console.error('Unexpected server response:', response);
-        }
-    } catch (error) {
-        console.error('Logout failed:', error);
-    }
+			// Перенаправляем на страницу входа
+			router.push('/login');
+		} else {
+			console.error('Unexpected server response:', response);
+		}
+	} catch (error) {
+		console.error('Logout failed:', error);
+	}
 };
 </script>
 
