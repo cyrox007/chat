@@ -279,7 +279,7 @@ watch(messages, () => {
 
 <style scoped>
 .chat-window {
-	height: calc(100vh - (41px + 5px));
+	height: calc(100vh - (54px + 5px));
 	
 	width: 100%;
 	flex: 0 0 100%;

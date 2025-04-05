@@ -18,48 +18,6 @@ $api.interceptors.request.use((config) => {
 });
 
 // Перехватчик ответов: обработка ошибок
-/* $api.interceptors.response.use(
-	(response) => response,
-	async (error) => {
-		const originalRequest = error.config;
-
-		// Обработка ошибки 401 (токен истёк)
-		if (error.response?.status === 401 && !originalRequest._isRetry) {
-			originalRequest._isRetry = true;
-
-			try {
-				// Обновляем токен
-				const refreshResponse = await axios.get(`${$api.defaults.baseURL}/refresh`, {
-					withCredentials: true,
-				});
-
-				const { access_token } = refreshResponse.data;
-				localStorage.setItem('access_token', access_token);
-
-				// Устанавливаем новый токен в заголовки
-				originalRequest.headers.Authorization = `Bearer ${access_token}`;
-
-				// Повторяем исходный запрос
-				return $api(originalRequest);
-			} catch (refreshError) {
-				// Если обновление токена не удалось, очищаем состояние и перенаправляем на страницу входа
-				localStorage.clear();
-				store.commit('clearUser');
-				window.location.href = '/login';
-			}
-		}
-
-		// Обработка других ошибок
-		if (error.response?.status === 403) {
-			alert('Доступ запрещён.');
-		} else if (error.response?.status === 500) {
-			alert('Внутренняя ошибка сервера.');
-		}
-
-		return Promise.reject(error);
-	}
-); */
-
 $api.interceptors.response.use((config)=>{
     return config;
 }, async (error) => {
@@ -82,7 +40,7 @@ $api.interceptors.response.use((config)=>{
 
         } catch (e) {
             localStorage.clear();
-            store.commit('clearUser');
+            store.dispatch('clearUser');
             window.location.href = '/login';
         }
     }

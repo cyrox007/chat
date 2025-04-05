@@ -33,7 +33,7 @@ onMounted(async () => {
 			} catch (error) {
 				console.error('Ошибка загрузки данных пользователя:', error);
 				// Если загрузка не удалась, очищаем состояние авторизации
-				store.commit('user/clearUser');
+				store.dispatch('clearUser');
 				localStorage.removeItem('access_token');
 			}
 		}
@@ -53,7 +53,7 @@ onMounted(async () => {
 			</div>
 		</transition>
 
-		<div class="row mt-1">
+		<div class="mt-1">
 			<RouterView />
 		</div>
 	</div>

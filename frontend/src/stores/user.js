@@ -15,17 +15,15 @@ export default {
 		setUser(state, userData) {
 			state.user = userData;
 			localStorage.setItem('user', JSON.stringify(userData));
-		},
+		}
+	},
+	actions: {
 		clearUser(state) {
 			state.user = null;
 			state.auth = false;
 			localStorage.removeItem('auth');
 			localStorage.removeItem('user');
-		},
-	},
-	actions: {
-		fetchUserData() {
-			
+			localStorage.clear();
 		},
 		initializeUser({ commit }) {
 			const auth = Boolean(localStorage.getItem('auth'));
@@ -35,7 +33,7 @@ export default {
 				commit('setAuth', true);
 				commit('setUser', user);
 			} else {
-				commit('clearUser');
+				dispatchEvent('clearUser');
 			}
 		},
 	},
