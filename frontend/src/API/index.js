@@ -39,9 +39,9 @@ $api.interceptors.response.use((config)=>{
             return $api.request(originalRequest);
 
         } catch (e) {
-            localStorage.clear();
+            /* localStorage.clear();
             store.dispatch('clearUser');
-            window.location.href = '/login';
+            window.location.href = '/login'; */
         }
     }
     

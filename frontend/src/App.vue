@@ -9,7 +9,7 @@ const serverAvailable = ref(true);
 const showErrorNotification = ref(false);
 
 // Проверка доступности сервера
-const checkServerAvailability = async () => {
+/* const checkServerAvailability = async () => {
 	try {
 		await $api.get('/health');
 	} catch (error) {
@@ -20,7 +20,7 @@ const checkServerAvailability = async () => {
 			showErrorNotification.value = false;
 		}, 5000);
 	}
-};
+}; */
 
 onMounted(async () => {
 	if (localStorage.getItem('access_token')) {
@@ -38,7 +38,7 @@ onMounted(async () => {
 			}
 		}
 	}
-	checkServerAvailability();
+	/* checkServerAvailability(); */
 });
 </script>
 

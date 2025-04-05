@@ -128,14 +128,6 @@ onMounted(async () => {
 	// Загружаем данные пользователя
 	await loadUserData(profileUid);
 });
-
-// Наблюдаем за изменениями параметра uid
-watchEffect(() => {
-	const profileUid = route.params.uid;
-	if (profileUid) {
-		loadUserData(profileUid);
-	}
-});
 </script>
 
 <style scoped>
