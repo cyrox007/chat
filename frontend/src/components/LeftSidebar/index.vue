@@ -64,6 +64,12 @@ const selectRoom = (room) => {
 	}
 }
 
+@media screen and (max-width: 720px) {
+	.chat-sidebar-left {
+		height: calc(100% - (50px + 8px));
+	}
+}
+
 .close-sidebar {
 	cursor: pointer;
 	position: absolute;

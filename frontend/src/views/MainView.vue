@@ -286,6 +286,7 @@ watch(messages, () => {
 	display: flex;
 	flex-direction: row;
 	flex-wrap: nowrap;
+	overflow-x: hidden;
 }
 .chat-content {
 	display: flex;

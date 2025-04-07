@@ -110,12 +110,18 @@ onMounted(async () => {
 
 @media screen and (max-width: 991px) {
 	.chat-sidebar-right {
-		position: absolute;
+		position: fixed;
 		right: 0;
 		transform: translateX(120%);
 	}
 	.chat-sidebar-right.active {
 		transform: translateX(0%);
+	}
+}
+
+@media screen and (max-width: 991px) {
+	.chat-sidebar-right {
+		height: calc(100% - (50px + 8px));
 	}
 }
 

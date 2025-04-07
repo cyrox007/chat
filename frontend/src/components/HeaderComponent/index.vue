@@ -8,43 +8,45 @@
 			</a>
 		</div>
 
-		<!-- Навигационное меню -->
-		<nav class="app-menu">
-			<ul v-if="!isAuthenticated">
-				<li>
-					<router-link to="/login">Авторизация</router-link>
-				</li>
-				<li>
-					<router-link to="/registration">Регистрация</router-link>
-				</li>
-			</ul>
-		</nav>
-
 		<!-- Пользовательское меню (правая часть) -->
-		<div class="user-profile user-menu" v-if="currentUser.uid">
-			<div class="user-avatar" @click="toggleDropdown">
-				<img :src="currentUser.avatar" alt="Аватар пользователя" />
+		<nav style="display: flex;">
+			<!-- Навигационное меню -->
+			<div class="app-menu" v-if="!isAuthenticated">
+				<ul>
+					<li>
+						<router-link to="/login">Авторизация</router-link>
+					</li>
+					<li>
+						<router-link to="/registration">Регистрация</router-link>
+					</li>
+				</ul>
 			</div>
-			<ul v-show="isDropdownOpen">
-				<li v-for="(item, index) in navigation" :key="index">
-					<router-link v-if="item.path !== '/users/logout'"
-						:to="item.params ? { path: item.path, params: item.params } : { path: item.path }"
-						@click.native="handleMenuClick(item)">
-						<i :class="`fas ${item.icon}`"></i>
-						<span class="menu-text">{{ item.label }}</span>
-					</router-link>
-					<a v-else href="#" @click.prevent="handleLogout">
-						<i :class="`fas ${item.icon}`"></i>
-						<span class="menu-text">{{ item.label }}</span>
-					</a>
-				</li>
-			</ul>
-		</div>
-
-		<!-- Темная тема -->
-		<button class="theme-toggle-btn" @click="toggleTheme">
-			<i :class="currentTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon'"></i>
-		</button>
+			
+			<div class="user-profile user-menu" v-if="currentUser.uid">
+				<div class="user-avatar" @click="toggleDropdown">
+					<img :src="currentUser.avatar" alt="Аватар пользователя" />
+				</div>
+				<ul v-show="isDropdownOpen">
+					<li v-for="(item, index) in navigation" :key="index">
+						<router-link v-if="item.path !== '/users/logout'"
+							:to="item.params ? { path: item.path, params: item.params } : { path: item.path }"
+							@click.native="handleMenuClick(item)">
+							<i :class="`fas ${item.icon}`"></i>
+							<span class="menu-text">{{ item.label }}</span>
+						</router-link>
+						<a v-else href="#" @click.prevent="handleLogout">
+							<i :class="`fas ${item.icon}`"></i>
+							<span class="menu-text">{{ item.label }}</span>
+						</a>
+					</li>
+				</ul>
+			</div>
+			<!-- Темная тема -->
+			<button class="theme-toggle-btn" @click="toggleTheme">
+				<i :class="currentTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon'"></i>
+			</button>
+		</nav>
+		
 	</header>
 </template>
 
@@ -192,6 +194,7 @@ const applyTheme = (theme) => {
 	padding: 10px 20px;
 	background-color: var(--bg-light);
 	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	max-height: 50px;
 }
 
 .site-logo {
@@ -296,8 +299,8 @@ const applyTheme = (theme) => {
 /* Адаптация для мобильных устройств */
 @media (max-width: 768px) {
 	.app-header {
-		flex-direction: column;
-		align-items: flex-start;
+		/* flex-direction: column; */
+		/* align-items: flex-start; */
 		gap: 10px;
 	}
 
@@ -306,13 +309,13 @@ const applyTheme = (theme) => {
 	}
 
 	.app-menu ul {
-		flex-direction: column;
+		/* flex-direction: column; */
 		gap: 10px;
 	}
 
 	.user-menu ul {
 		right: unset;
-		left: 0;
+		right: 0;
 		width: 100%;
 	}
 }
