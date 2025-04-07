@@ -1,5 +1,6 @@
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
+from jwt import PyJWTError
 
 from components.device.model import UserDevice
 from components.decorators.db import get_session
@@ -21,7 +22,7 @@ async def refresh_tokens(request: Request, db_session=None):
         refresh_token = request.cookies.get("refresh_token")
         if not refresh_token:
             logger.warning("Refresh token отсутствует в куках.")
-            raise HTTPException(status_code=401, detail="Refresh token is missing")
+            raise HTTPException(status_code=403, detail="Refresh token is missing")
 
         logger.debug(f"Получен refresh_token: {refresh_token}")
 
@@ -32,11 +33,15 @@ async def refresh_tokens(request: Request, db_session=None):
 
         # Валидация refresh_token
         logger.info("Начало валидации refresh_token.")
-        user_uid = validate_refresh_token(refresh_token).get('user_uid')  # Предполагается, что эта функция возвращает user_uid
-        if not user_uid:
-            logger.warning("Не удалось получить user_uid из refresh_token.")
-            raise HTTPException(status_code=401, detail="Invalid refresh token")
-
+        try:
+            user_uid = validate_refresh_token(refresh_token).get('user_uid')
+            if not user_uid:
+                logger.warning("Не удалось получить user_uid из refresh_token.")
+                raise HTTPException(status_code=403, detail="Invalid refresh token")
+        except PyJWTError:
+            logger.warning("Ошибка валидации refresh_token.")
+            raise HTTPException(status_code=403, detail="Invalid refresh token")
+        
         logger.info(f"Refresh token успешно валидирован для пользователя: {user_uid}")
 
         # Генерация новых токенов
@@ -59,7 +64,28 @@ async def refresh_tokens(request: Request, db_session=None):
             )
         except ValueError as e:
             logger.error(f"Ошибка при обновлении токена в базе данных: {e}")
-            raise HTTPException(status_code=401, detail="Invalid refresh token")
+            
+            # Проверяем, существует ли новый токен
+            existing_record = db_session.query(UserDevice).filter_by(
+                token=new_refresh_token, 
+                is_active=True
+            ).first()
+            
+            if existing_record:
+                logger.info(f"Новый токен {new_refresh_token} уже существует. Возвращаем существующий токен.")
+                # Формируем ответ с уже существующим токеном
+                response = JSONResponse(content={"access_token": new_access_token})
+                response.set_cookie(
+                    key="refresh_token",
+                    value=new_refresh_token,
+                    httponly=True,
+                    secure=True,
+                    samesite="lax",
+                    max_age=30 * 86400
+                )
+                return response
+            else:
+                return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"status": "bed", "message": "Invalid or inactive refresh token"} )
 
         logger.info("Запись о токене успешно обновлена в базе данных.")
 

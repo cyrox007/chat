@@ -1,5 +1,6 @@
 :root {
 	--bg-light: #f8f9fa;
+	--background-image: url(./images/bg.png);
 	--bg-gradient: linear-gradient(135deg, #e0eafc, #cfdef3);
 	--text-light: #212529;
 	--sidebar-bg-light: rgba(255, 255, 255, 0.9);
@@ -24,6 +25,7 @@
 @media (prefers-color-scheme: dark) {
 	:root {
 		--bg-light: #212529;
+		/* --background-image: none; */
 		--text-light: #ffffff;
 		--profile-bg-light: #343a40;
 		--profile-details-color: #adb5bd;
@@ -35,9 +37,11 @@ body {
 	margin: 0;
 	padding: 0;
 	background: var(--bg-light);
+	background-image: var(--background-image);
 	color: var(--text-light);
 	transition: background 0.3s, color 0.3s;
-	box-sizing: border-box;
+	background-position: auto;
+	background-size: cover;
 }
 
 * {

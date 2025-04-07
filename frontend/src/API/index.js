@@ -18,37 +18,62 @@ $api.interceptors.request.use((config) => {
 });
 
 // Перехватчик ответов: обработка ошибок
-$api.interceptors.response.use((config)=>{
-    return config;
-}, async (error) => {
-    const originalRequest = error.config;
-    if (error.response.status === 401 && error.config && !error.config._isRetry) {
-        originalRequest._isRetry = true;
-        try {
-			// Обновляем токен
-            const refreshResponse = await axios.get(`${$api.defaults.baseURL}/refresh`, {
-				withCredentials: true,
-			});
-            const { access_token } = refreshResponse.data;
+$api.interceptors.response.use(
+	(config) => {
+		return config;
+	},
+	async (error) => {
+		const originalRequest = error.config;
 
-			localStorage.setItem('access_token', access_token);
+		// Обработка ошибки 401 Unauthorized
+		if (error.response?.status === 401 && !originalRequest._isRetry) {
+			originalRequest._isRetry = true;
+			try {
+				// Обновляем токен
+				const refreshResponse = await axios.get(`${$api.defaults.baseURL}/refresh`, {
+					withCredentials: true,
+				});
+				const { access_token } = refreshResponse.data;
 
-			// Устанавливаем новый токен в заголовки
-			originalRequest.headers.Authorization = `Bearer ${access_token}`;
-			
-            return $api.request(originalRequest);
+				// Сохраняем новый access_token
+				localStorage.setItem('access_token', access_token);
 
-        } catch (e) {
-            /* localStorage.clear();
-            store.dispatch('clearUser');
-            window.location.href = '/login'; */
-        }
-    }
-    
-    if (error.response.status === 400) {
-        console.error(error);
-    }
-    throw error;
-})
+				// Устанавливаем новый токен в заголовки
+				originalRequest.headers.Authorization = `Bearer ${access_token}`;
+
+				// Повторяем исходный запрос
+				return $api.request(originalRequest);
+			} catch (e) {
+				// Если обновление токена не удалось, очищаем данные и перенаправляем на страницу входа
+				localStorage.clear();
+				store.dispatch('clearUser');
+				window.location.href = '/login';
+			}
+		}
+
+		// Обработка ошибки 403 Forbidden
+		if (error.response?.status === 403) {
+			console.error('Доступ запрещен: токен недействителен или удален.');
+
+			// Очищаем данные аутентификации
+			localStorage.clear();
+			store.dispatch('clearUser');
+
+			// Перенаправляем пользователя на страницу входа
+			window.location.href = '/login';
+
+			// Прерываем выполнение
+			throw error;
+		}
+
+		// Обработка других ошибок
+		if (error.response?.status === 400) {
+			console.error('Ошибка валидации:', error);
+		}
+
+		// Пробрасываем ошибку дальше
+		throw error;
+	}
+);
 
 export default $api;

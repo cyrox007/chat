@@ -57,15 +57,21 @@ class UserDevice(Database.Base):
         """
         logger.info(f"Начало обновления токена: старый токен={old_token}, новый токен={new_token}")
         try:
-            # Используем SELECT FOR UPDATE для блокировки записи
+            # Ищем запись с old_token
             record = db_session.query(cls).filter_by(token=old_token, is_active=True).with_for_update().first()
             if not record:
                 logger.warning(f"Запись с токеном {old_token} не найдена или неактивна.")
-                raise ValueError("Invalid or inactive token")
+                raise ValueError("Token not found or inactive")
 
             logger.debug(f"Текущая запись перед обновлением: {record}")
 
-            # Обновление данных
+            # Проверяем, существует ли новый токен
+            existing_record = db_session.query(cls).filter_by(token=new_token, is_active=True).first()
+            if existing_record:
+                logger.info(f"Новый токен {new_token} уже существует. Пропускаем обновление.")
+                return existing_record
+
+            # Обновляем данные
             record.token = new_token
             record.ip_address = ip_address
             record.user_agent = user_agent
@@ -74,6 +80,7 @@ class UserDevice(Database.Base):
 
             logger.info(f"Токен успешно обновлен: {record}")
             return record
+
         except IntegrityError as e:
             db_session.rollback()
             logger.error(f"Конфликт при обновлении токена: {e}")
