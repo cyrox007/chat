@@ -2,7 +2,7 @@ import $api from ".";
 
 export default class AuthService {
 	static async registration(data) {
-		return $api.post('/auth/registration', data);
+		return $api.post('/users/registration', data);
 	}
 	static async login(data) {
 		return $api.post('/users/login', data);

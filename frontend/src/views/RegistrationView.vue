@@ -6,10 +6,18 @@
 			<!-- Шаг 1: Основные данные -->
 			<form v-if="step === 1" @submit.prevent="validateStep1">
 				<BaseInput id="username" label="Имя пользователя" placeholder="Введите имя пользователя"
-					v-model="formData.username" :error="usernameError" />
+					v-model="formData.username" :error="usernameError"
+					:validationRules="(value) => !value ? 'Поле обязательно' : ''"
+					:asyncValidation="checkUsernameUniqueness" />
 
-				<BaseInput id="email" label="Email" type="email" placeholder="Введите email" v-model="formData.email"
-					:error="emailError" />
+				<BaseInput 
+					id="email" 
+					label="Email" 
+					type="email" 
+					placeholder="Введите email" 
+					v-model="formData.email"
+					:error="emailError" :validationRules="(value) => !value ? 'Поле обязательно' : ''"
+					:asyncValidation="checkEmailUniqueness" />
 
 				<BaseInput id="password" label="Пароль" type="password" placeholder="Введите пароль"
 					v-model="formData.password" :error="passwordError" />
@@ -47,10 +55,11 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
 import AuthService from '@/API/AuthService';
+import CSRFService from '@/API/CSRFService';
 
 import BaseInput from "@/components/UI/BaseInput/index.vue";
 import BaseTextarea from "@/components/UI/BaseTextarea/index.vue";
@@ -224,6 +233,15 @@ const handleRegistration = async () => {
 const goBackToStep1 = () => {
 	step.value = 1;
 };
+
+// Запрос CSRF-токена при загрузке страницы
+onMounted(async () => {
+	try {
+		await CSRFService.getCSRF(); 
+	} catch (error) {
+		console.error('Failed to fetch CSRF token:', error);
+	}
+});
 </script>
 
 <style scoped>
@@ -250,33 +268,6 @@ const goBackToStep1 = () => {
 h1 {
 	text-align: center;
 	margin-bottom: 20px;
-}
-
-.form-group {
-	margin-bottom: 15px;
-}
-
-label {
-	display: block;
-	font-weight: bold;
-	margin-bottom: 5px;
-}
-
-input[type='text'],
-input[type='email'],
-input[type='password'] {
-	width: 100%;
-	padding: 8px;
-	border: 1px solid #ccc;
-	border-radius: 4px;
-}
-
-textarea {
-	width: 100%;
-	padding: 8px;
-	border: 1px solid #ccc;
-	border-radius: 4px;
-	resize: vertical;
 }
 
 button {
@@ -306,56 +297,13 @@ button {
 .btn-secondary:hover {
 	background: #bbb;
 }
-
-.error {
-	color: red;
-	margin-top: 10px;
-}
-
 span.link {
 	display: block;
 	text-align: center;
 	margin-top: 15px;
 }
-
-a {
+span.link a {
 	color: var(--primary-color);
-	text-decoration: none;
-}
-
-a:hover {
-	text-decoration: underline;
-}
-
-.avatar-preview {
-	width: 100px;
-	height: 100px;
-	object-fit: cover;
-	border-radius: 50%;
-	margin-top: 10px;
-	display: block;
-}
-
-.avatar-upload {
-	position: relative;
-}
-
-.custom-file-upload {
-	display: inline-block;
-	padding: 8px 16px;
-	background-color: #007bff;
-	color: white;
-	border-radius: 4px;
-	cursor: pointer;
-	font-size: 14px;
-	text-align: center;
-}
-
-.custom-file-upload:hover {
-	background-color: #0056b3;
-}
-
-#avatar-input {
-	display: none;
+  	text-decoration: none;
 }
 </style>
