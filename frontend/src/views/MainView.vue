@@ -20,6 +20,7 @@
 						v-for="(msg, index) in messages" 
 						:key="msg.uid || msg.tempId"
 						:message="msg"
+						:ref="index === messages.length - 1 ? 'lastMessage' : null"
 					/>
 				</section>
 				<MessageComposer @send-message="handleSendMessage" />
@@ -37,7 +38,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, onUnmounted, watch } from 'vue';
+import { ref, reactive, onMounted, computed, onUnmounted, watch, nextTick } from 'vue';
 import { useStore } from 'vuex';
 import { v4 as uuidv4 } from 'uuid';
 import DOMPurify from 'dompurify';
@@ -163,21 +164,21 @@ const connectToWebSocket = (roomId) => {
 		console.log("Полученные данные от сервера:", data);
 
 		if (data.type === 'message') {
-			// Проверяем, является ли сообщение нашим (по UID отправителя)
 			if (data.sender?.uid === currentUser.value.uid) {
-				// Находим сообщение по tempId (если оно есть)
+				// Обновляем наше сообщение
 				const messageIndex = messages.value.findIndex(msg => msg.frontId === data.frontId);
 				if (messageIndex !== -1) {
-					// Обновляем сообщение данными с сервера
 					messages.value[messageIndex] = {
 						...messages.value[messageIndex],
-						uid: data.uid, // Окончательный ID с сервера
-						status: 'sent', // Статус: "отправлено"
+						uid: data.uid,
+						status: 'sent',
 					};
 				}
 			} else {
-				// Если сообщение от другого пользователя, добавляем его в массив
+				// Добавляем сообщение от другого пользователя
 				messages.value.push(data);
+				await nextTick(); // Ждём обновления DOM
+            	scrollToBottom();
 			}
 		} else if (data.type === 'user_list') {
 			// Обработка списка пользователей
@@ -250,11 +251,50 @@ const closeRightSidebar = () => {
 	isRightSidebarActive.value = false;
 };
 
-const scrollToBottom = () => {
+const isScrolledToBottom = () => {
 	const chatMessages = document.getElementById('chat-messages');
-	if (chatMessages) {
-		chatMessages.scrollTop = chatMessages.scrollHeight;
-	}
+	if (!chatMessages) return false;
+
+	const scrollHeight = chatMessages.scrollHeight;
+	const scrollTop = chatMessages.scrollTop;
+	const clientHeight = chatMessages.clientHeight;
+
+	console.log('scrollHeight:', scrollHeight);
+	console.log('scrollTop:', scrollTop);
+	console.log('clientHeight:', clientHeight);
+
+	// Проверяем, находится ли скролл внизу
+	const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 5;
+	console.log('Is scrolled to bottom:', isAtBottom);
+
+	return isAtBottom;
+};
+
+const isLastMessageVisible = () => {
+	const chatMessages = document.getElementById('chat-messages');
+	const lastMessage = document.querySelector('.message:last-child'); // Или используйте ref
+
+	if (!chatMessages || !lastMessage) return false;
+
+	// Получаем позицию последнего сообщения относительно контейнера
+	const messageRect = lastMessage.getBoundingClientRect();
+	const containerRect = chatMessages.getBoundingClientRect();
+
+	// Проверяем, находится ли сообщение в видимой области контейнера
+	return (
+		messageRect.bottom <= containerRect.bottom + 50 && // Допуск 50px
+		messageRect.top >= containerRect.top
+	);
+};
+
+const scrollToBottom = async () => {
+    await nextTick(); // Ждём обновления DOM
+    const chatMessages = document.getElementById('chat-messages');
+    if (chatMessages) {
+        console.log('Scrolling to bottom...');
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        console.log('New scrollTop:', chatMessages.scrollTop);
+    }
 };
 
 // Загрузка данных при монтировании
@@ -272,7 +312,8 @@ onUnmounted(() => {
 	if (wsService.value) wsService.value.disconnect();
 });
 
-watch(messages, () => {
+watch(messages, async () => {
+	await nextTick();
 	scrollToBottom();
 }, { deep: true });
 </script>
@@ -329,7 +370,7 @@ watch(messages, () => {
 .chat-window-body {
 	min-height: 100px;
 	flex: 1;
-	overflow-y: auto; 
+	overflow-y: auto;
 	padding: 10px;
 	background-color: #f0f0f0;
 }
