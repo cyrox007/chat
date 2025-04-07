@@ -122,6 +122,8 @@ class User(Database.Base):
         gender: Gender = None,
         first_name: str = None,
         last_name: str = None,
+        bio=None,
+        date_of_birth=None,
         avatar: str = None  
     ):
         """
@@ -184,7 +186,9 @@ class User(Database.Base):
                 avatar=avatar,
                 gender=gender,
                 first_name=first_name,
-                last_name=last_name
+                last_name=last_name,
+                bio=bio,
+                date_of_birth=date_of_birth
             )
             db_session.add(new_user)
             db_session.commit()

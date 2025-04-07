@@ -1,10 +1,9 @@
 import base64
-import mimetypes
 import os
 from pathlib import Path
 import re
 import uuid
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 from utils.logger import setup_logger
 from settings import config
 
@@ -87,4 +86,50 @@ def save_file(file_data: dict) -> str:
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid file format")
     except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to process file: {str(e)}")
+    
+
+def save_uploaded_file(file: UploadFile) -> str:
+    """
+    Сохраняет файл, отправленный через multipart/form-data, и возвращает URL для доступа к нему.
+    :param file: Объект UploadFile из FastAPI.
+    :return: URL для доступа к файлу.
+    :raises HTTPException: В случае ошибки при обработке файла.
+    """
+    try:
+        # Проверка размера файла
+        if file.size > config.MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="File too large")
+
+        # Определяем MIME-тип и расширение
+        mime_type = file.content_type
+        extension = MIME_TO_EXTENSION.get(mime_type, ".bin")
+        logger.debug(f"mime_type: {mime_type}, extension: {extension}")
+
+        # Создаем папку для типа файла
+        folder_name = {
+            "image": "images",
+            "video": "videos",
+            "audio": "audio",
+            "application": "documents",
+        }.get(mime_type.split('/')[0], "other")
+        upload_dir = Path("uploads") / folder_name
+        os.makedirs(upload_dir, exist_ok=True)
+
+        # Генерируем уникальное имя файла
+        file_name = f"{uuid.uuid4()}{extension}"
+        file_path = upload_dir / file_name
+
+        # Сохраняем файл
+        with open(file_path, "wb") as f:
+            while chunk := file.file.read(1024 * 1024):  # Читаем файл по частям (1 МБ)
+                f.write(chunk)
+
+        # Формируем URL для доступа к файлу
+        if not config.BASE_URL.endswith('/'):
+            config.BASE_URL += '/'
+        return f"{config.BASE_URL}uploads/{folder_name}/{file_name}"
+
+    except Exception as e:
+        logger.exception("Ошибка при сохранении загруженного файла")
         raise HTTPException(status_code=400, detail=f"Failed to process file: {str(e)}")

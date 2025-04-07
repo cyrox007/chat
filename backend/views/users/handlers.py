@@ -4,7 +4,7 @@ import re
 import uuid
 
 # Внешние зависимости
-from fastapi import Depends, Request, HTTPException, status
+from fastapi import Depends, Request, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field, validator
 from typing import Annotated, List
@@ -19,6 +19,7 @@ from utils.jwt import create_access_token, create_refresh_token
 from utils.logger import setup_logger
 from utils.password import hash_password, verify_password
 from utils.user_agents import parse_user_agent
+from utils.file_handler import save_uploaded_file
 from components.auth.middleware import auth_middle, authorize_user
 
 
@@ -58,7 +59,7 @@ def extract_client_metadata(request: Request):
     }
 
 
-# Pydantic schema
+""" # Pydantic schema
 class UserRegistrationSchema(BaseModel):
     username: Annotated[str, Field(min_length=3, max_length=50)]
     email: EmailStr
@@ -81,47 +82,104 @@ class UserRegistrationSchema(BaseModel):
             )
 
         logger.info(f"Номер телефона успешно валидирован: {cleaned}")
-        return cleaned
+        return cleaned """
 
 
 # Handlers
 @get_session
-async def register(request: Request, db_session=None):
+async def register(
+    request: Request,
+    db_session=None
+):
     """
     Регистрация нового пользователя.
     """
     logger.info("Начало обработки запроса на регистрацию пользователя")
     try:
-        data = UserRegistrationSchema(**await parse_request_data(request))
-        logger.debug("Данные для регистрации успешно валидированы")
+        # Извлечение данных из формы
+        form_data = await request.form()
+        username = form_data.get("username")
+        email = form_data.get("email")
+        phone = form_data.get('phone')
+        password = form_data.get("password")
+        first_name = form_data.get("first_name", "")
+        last_name = form_data.get("last_name", "")
+        gender = form_data.get("gender", "non-binary")
+        bio = form_data.get("bio", "")  # Поле "О себе"
+        date_of_birth = form_data.get("date_of_birth", None)  # Поле даты рождения
+        avatar_file: UploadFile = form_data.get("avatar")  # Файл аватара
 
-        if User.get_user_by_credentials(db_session, data.username):
-            logger.warning(f"Пользователь с таким username уже существует: {data.username}")
+        # Валидация обязательных полей
+        if not username or not email or not password:
+            logger.warning("Отсутствуют обязательные поля")
+            raise HTTPException(status_code=400, detail="Missing required fields")
+
+        # Проверка уникальности имени пользователя
+        if User.get_user_by_credentials(db_session, username):
+            logger.warning(f"Пользователь с таким username уже существует: {username}")
             raise HTTPException(status_code=409, detail="User already exists")
 
-        hashed_password = hash_password(data.password)
+        # Хэширование пароля
+        hashed_password = hash_password(password)
+
+        # Сохранение аватара (если загружен)
+        avatar_url = None
+        if avatar_file and avatar_file.filename:
+            avatar_url = save_uploaded_file(avatar_file)  # Сохраняем файл и получаем URL
+
+        print(avatar_url)
+        # Создание пользователя
         new_user = User.create_user(
             db_session=db_session,
-            username=data.username,
-            email=data.email,
-            phone=data.phone,
+            username=username,
+            email=email,
+            phone=phone,
             password=hashed_password,
-            first_name=data.first_name,
-            last_name=data.last_name,
-            gender=data.gender,
+            first_name=first_name,
+            last_name=last_name,
+            gender=gender,
+            avatar=avatar_url,  # Сохраняем путь к аватару
+            bio=bio,
+            date_of_birth=date_of_birth
         )
 
         if not new_user:
             logger.error("Не удалось создать пользователя")
             raise HTTPException(status_code=500, detail="Failed to create user")
 
-        logger.info(f"Пользователь успешно зарегистрирован: {data.username}")
+        logger.info(f"Пользователь успешно зарегистрирован: {username}")
         return {"status": "ok", "message": "User registered successfully"}
 
     except Exception as e:
         logger.exception("Произошла ошибка при регистрации пользователя")
         raise HTTPException(status_code=500, detail="Internal server error")
+    
+@get_session
+async def check_username(request: Request, db_session=None):
+    data = await parse_request_data(request)
+    username = data.get("username")
+    if not username:
+        raise HTTPException(status_code=400, detail="Username is required")
+    is_unique = not User.get_user_by_credentials(db_session, username)
+    return {"isUnique": is_unique}
 
+@get_session
+async def check_email(request: Request, db_session=None):
+    data = await parse_request_data(request)
+    email = data.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    is_unique = not User.get_user_by_credentials(db_session, email)
+    return {"isUnique": is_unique}
+
+@get_session
+async def check_phone(request: Request, db_session=None):
+    data = await parse_request_data(request)
+    phone = data.get("phone")
+    if not phone:
+        raise HTTPException(status_code=400, detail="Phone is required")
+    is_unique = not User.get_user_by_credentials(db_session, phone)
+    return {"isUnique": is_unique}
 
 @get_session
 async def login(request: Request, db_session=None):
