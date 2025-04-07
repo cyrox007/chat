@@ -58,7 +58,7 @@
 						<span v-else class="file-icon">
 							<i :class="getFileIcon(file.name)"></i> <!-- Значок для файлов -->
 						</span>
-						<a :href="file" target="_blank" class="file-link">{{ file.name }}</a>
+						<a :href="file.url" target="_blank" class="file-link">{{ file.name }}</a>
 					</div>
 				</div>
 				<!-- Если media_metadata отсутствует или files пустой -->
@@ -199,6 +199,7 @@ const messageType = computed(() => {
 	padding: 10px;
 	border-radius: 10px;
 	margin: 5px 0;
+	box-shadow: 0 0 13px  rgba(219, 219, 219, 0.76);
 }
 
 .message.sender {
