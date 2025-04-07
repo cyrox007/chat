@@ -61,7 +61,13 @@
 				</div>
 				<div class="form-group">
 					<label for="avatar">Аватар:</label>
-					<input type="file" id="avatar" accept="image/*" @change="handleAvatarUpload" />
+					<div class="avatar-upload">
+						<label for="avatar-input" class="custom-file-upload">
+							<span>Выбрать файл</span>
+						</label>
+						<input type="file" id="avatar-input" accept="image/*" @change="handleAvatarUpload"
+							style="display: none;" />
+					</div>
 					<p v-if="avatarError" class="error">{{ avatarError }}</p>
 					<img v-if="previewAvatar" :src="previewAvatar" alt="Preview Avatar" class="avatar-preview" />
 				</div>
@@ -71,7 +77,7 @@
 			</form>
 
 			<!-- Ссылка на страницу авторизации -->
-			<span>
+			<span class="link">
 				Уже зарегистрированы?
 				<router-link :to="{ name: 'login' }">Войти</router-link>
 			</span>
@@ -136,7 +142,7 @@ const checkUsernameUniqueness = async () => {
 	if (!formData.value.username || formData.value.username === '') {
 		usernameError.value = "Поле имени пользователя не может быть пустым";
 	}
-	
+
 	try {
 		const response = await AuthService.checkUsername(formData.value.username);
 		if (!response.data.isUnique) {
@@ -258,7 +264,6 @@ const goBackToStep1 = () => {
 <style scoped>
 .registration-container {
 	height: calc(100vh - (54px + 5px));
-	
 	width: 100%;
 	flex: 0 0 100%;
 	display: flex;
@@ -342,7 +347,7 @@ button {
 	margin-top: 10px;
 }
 
-span {
+span.link {
 	display: block;
 	text-align: center;
 	margin-top: 15px;
@@ -356,12 +361,36 @@ a {
 a:hover {
 	text-decoration: underline;
 }
+
 .avatar-preview {
-    width: 100px;
-    height: 100px;
-    object-fit: cover;
-    border-radius: 50%;
-    margin-top: 10px;
-    display: block;
+	width: 100px;
+	height: 100px;
+	object-fit: cover;
+	border-radius: 50%;
+	margin-top: 10px;
+	display: block;
+}
+
+.avatar-upload {
+	position: relative;
+}
+
+.custom-file-upload {
+	display: inline-block;
+	padding: 8px 16px;
+	background-color: #007bff;
+	color: white;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 14px;
+	text-align: center;
+}
+
+.custom-file-upload:hover {
+	background-color: #0056b3;
+}
+
+#avatar-input {
+	display: none;
 }
 </style>
