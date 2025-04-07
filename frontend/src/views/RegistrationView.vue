@@ -5,75 +5,36 @@
 
 			<!-- Шаг 1: Основные данные -->
 			<form v-if="step === 1" @submit.prevent="validateStep1">
-				<div class="form-group">
-					<label for="username">Имя пользователя:</label>
-					<input type="text" id="username" v-model="formData.username" required
-						placeholder="Введите имя пользователя" @blur="checkUsernameUniqueness" />
-					<p v-if="usernameError" class="error">{{ usernameError }}</p>
-				</div>
-				<div class="form-group">
-					<label for="email">Email:</label>
-					<input type="email" id="email" v-model="formData.email" required placeholder="Введите email"
-						@blur="checkEmailUniqueness" />
-					<p v-if="emailError" class="error">{{ emailError }}</p>
-				</div>
-				<div class="form-group">
-					<label for="gender">Пол:</label>
-					<select id="gender" v-model="formData.gender">
-						<option value="">Не указано</option>
-						<option value="male">Мужской</option>
-						<option value="female">Женский</option>
-					</select>
-				</div>
-				<div class="form-group">
-					<label for="password">Пароль:</label>
-					<input type="password" id="password" v-model="formData.password" required
-						placeholder="Введите пароль" autocomplete="off" @copy.prevent @paste.prevent />
-					<p v-if="passwordError" class="error">{{ passwordError }}</p>
-				</div>
-				<div class="form-group">
-					<label for="confirmPassword">Подтвердите пароль:</label>
-					<input type="password" id="confirmPassword" v-model="formData.confirmPassword" required
-						placeholder="Подтвердите пароль" autocomplete="off" @copy.prevent @paste.prevent />
-					<p v-if="confirmPasswordError" class="error">{{ confirmPasswordError }}</p>
-				</div>
+				<BaseInput id="username" label="Имя пользователя" placeholder="Введите имя пользователя"
+					v-model="formData.username" :error="usernameError" />
+
+				<BaseInput id="email" label="Email" type="email" placeholder="Введите email" v-model="formData.email"
+					:error="emailError" />
+
+				<BaseInput id="password" label="Пароль" type="password" placeholder="Введите пароль"
+					v-model="formData.password" :error="passwordError" />
+
+				<BaseInput id="confirmPassword" label="Подтвердите пароль" type="password"
+					placeholder="Подтвердите пароль" v-model="formData.confirmPassword" :error="confirmPasswordError" />
+
 				<button type="submit" class="btn-primary">Продолжить</button>
-				<p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 			</form>
 
-			<!-- Шаг 2: Дополнительные данные -->
+			<!-- Шаг 2 -->
 			<form v-if="step === 2" @submit.prevent="handleRegistration">
-				<div class="form-group">
-					<label for="first_name">Имя:</label>
-					<input type="text" id="first_name" v-model="formData.first_name" placeholder="Введите имя" />
-				</div>
-				<div class="form-group">
-					<label for="last_name">Фамилия:</label>
-					<input type="text" id="last_name" v-model="formData.last_name" placeholder="Введите фамилию" />
-				</div>
-				<div class="form-group">
-					<label for="date_of_birth">Дата рождения:</label>
-					<input type="date" id="date_of_birth" v-model="formData.date_of_birth" />
-				</div>
-				<div class="form-group">
-					<label for="bio">Биография:</label>
-					<textarea id="bio" v-model="formData.bio" placeholder="Расскажите о себе"></textarea>
-				</div>
-				<div class="form-group">
-					<label for="avatar">Аватар:</label>
-					<div class="avatar-upload">
-						<label for="avatar-input" class="custom-file-upload">
-							<span>Выбрать файл</span>
-						</label>
-						<input type="file" id="avatar-input" accept="image/*" @change="handleAvatarUpload"
-							style="display: none;" />
-					</div>
-					<p v-if="avatarError" class="error">{{ avatarError }}</p>
-					<img v-if="previewAvatar" :src="previewAvatar" alt="Preview Avatar" class="avatar-preview" />
-				</div>
+				<BaseInput id="first_name" label="Имя" placeholder="Введите имя" v-model="formData.first_name" />
+
+				<BaseInput id="last_name" label="Фамилия" placeholder="Введите фамилию" v-model="formData.last_name" />
+
+				<BaseInput id="date_of_birth" label="Дата рождения" type="date" v-model="formData.date_of_birth" />
+
+				<BaseTextarea id="bio" label="Биография" placeholder="Расскажите о себе" v-model="formData.bio" />
+
+				<BaseFileUpload id="avatar" label="Аватар" placeholder="Выбрать файл" v-model="formData.avatar"
+					:error="avatarError" />
+
 				<button type="submit" class="btn-primary">Завершить регистрацию</button>
 				<button type="button" class="btn-secondary" @click="goBackToStep1">Назад</button>
-				<p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 			</form>
 
 			<!-- Ссылка на страницу авторизации -->
@@ -90,6 +51,10 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import AuthService from '@/API/AuthService';
+
+import BaseInput from "@/components/UI/BaseInput/index.vue";
+import BaseTextarea from "@/components/UI/BaseTextarea/index.vue";
+import BaseFileUpload from "@/components/UI/BaseFileUpload/index.vue";
 
 // Инициализация роутера
 const router = useRouter();
