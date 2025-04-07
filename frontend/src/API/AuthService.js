@@ -11,10 +11,10 @@ export default class AuthService {
 		return $api.get('/users/logout');
 	}
 	static async checkUsername(username) {
-		return $api.post('/auth/check-username', { username });
+		return $api.post('/users/check-username', { username });
 	}
 	static async checkEmail(email) {
-		return $api.post('/auth/check-email', { email });
+		return $api.post('/users/check-email', { email });
 	}
 	// Другие методы...
 }

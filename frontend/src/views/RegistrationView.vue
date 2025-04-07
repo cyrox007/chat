@@ -133,6 +133,10 @@ const validateStep1 = () => {
 
 // Проверка уникальности имени пользователя
 const checkUsernameUniqueness = async () => {
+	if (!formData.value.username || formData.value.username === '') {
+		usernameError.value = "Поле имени пользователя не может быть пустым";
+	}
+	
 	try {
 		const response = await AuthService.checkUsername(formData.value.username);
 		if (!response.data.isUnique) {
@@ -147,15 +151,32 @@ const checkUsernameUniqueness = async () => {
 
 // Проверка уникальности email
 const checkEmailUniqueness = async () => {
+	// Проверяем, что поле email не пустое и содержит допустимое значение
+	if (!formData.value.email || formData.value.email.trim() === '') {
+		emailError.value = 'Поле email не может быть пустым.';
+		return;
+	}
+
 	try {
+		// Отправляем запрос на сервер для проверки уникальности email
 		const response = await AuthService.checkEmail(formData.value.email);
+
+		// Если email уже используется, устанавливаем сообщение об ошибке
 		if (!response.data.isUnique) {
 			emailError.value = 'Email уже используется.';
 		} else {
-			emailError.value = '';
+			emailError.value = ''; // Очищаем ошибку, если email уникален
 		}
 	} catch (error) {
+		// Логируем ошибку и устанавливаем сообщение для пользователя
 		console.error('Ошибка проверки email:', error);
+
+		// Если сервер вернул статус 400, выводим сообщение о некорректных данных
+		if (error.response && error.response.status === 400) {
+			emailError.value = 'Некорректный формат email.';
+		} else {
+			emailError.value = 'Произошла ошибка при проверке email. Попробуйте позже.';
+		}
 	}
 };
 
