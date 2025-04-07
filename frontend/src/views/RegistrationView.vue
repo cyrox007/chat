@@ -8,21 +8,34 @@
 				<div class="form-group">
 					<label for="username">Имя пользователя:</label>
 					<input type="text" id="username" v-model="formData.username" required
-						placeholder="Введите имя пользователя" />
+						placeholder="Введите имя пользователя" @blur="checkUsernameUniqueness" />
+					<p v-if="usernameError" class="error">{{ usernameError }}</p>
 				</div>
 				<div class="form-group">
 					<label for="email">Email:</label>
-					<input type="email" id="email" v-model="formData.email" required placeholder="Введите email" />
+					<input type="email" id="email" v-model="formData.email" required placeholder="Введите email"
+						@blur="checkEmailUniqueness" />
+					<p v-if="emailError" class="error">{{ emailError }}</p>
+				</div>
+				<div class="form-group">
+					<label for="gender">Пол:</label>
+					<select id="gender" v-model="formData.gender">
+						<option value="">Не указано</option>
+						<option value="male">Мужской</option>
+						<option value="female">Женский</option>
+					</select>
 				</div>
 				<div class="form-group">
 					<label for="password">Пароль:</label>
 					<input type="password" id="password" v-model="formData.password" required
 						placeholder="Введите пароль" autocomplete="off" @copy.prevent @paste.prevent />
+					<p v-if="passwordError" class="error">{{ passwordError }}</p>
 				</div>
 				<div class="form-group">
 					<label for="confirmPassword">Подтвердите пароль:</label>
 					<input type="password" id="confirmPassword" v-model="formData.confirmPassword" required
 						placeholder="Подтвердите пароль" autocomplete="off" @copy.prevent @paste.prevent />
+					<p v-if="confirmPasswordError" class="error">{{ confirmPasswordError }}</p>
 				</div>
 				<button type="submit" class="btn-primary">Продолжить</button>
 				<p v-if="errorMessage" class="error">{{ errorMessage }}</p>
@@ -43,17 +56,14 @@
 					<input type="date" id="date_of_birth" v-model="formData.date_of_birth" />
 				</div>
 				<div class="form-group">
-					<label for="gender">Пол:</label>
-					<select id="gender" v-model="formData.gender">
-						<option value="">Не указано</option>
-						<option value="male">Мужской</option>
-						<option value="female">Женский</option>
-						<option value="other">Другой</option>
-					</select>
-				</div>
-				<div class="form-group">
 					<label for="bio">Биография:</label>
 					<textarea id="bio" v-model="formData.bio" placeholder="Расскажите о себе"></textarea>
+				</div>
+				<div class="form-group">
+					<label for="avatar">Аватар:</label>
+					<input type="file" id="avatar" accept="image/*" @change="handleAvatarUpload" />
+					<p v-if="avatarError" class="error">{{ avatarError }}</p>
+					<img v-if="previewAvatar" :src="previewAvatar" alt="Preview Avatar" class="avatar-preview" />
 				</div>
 				<button type="submit" class="btn-primary">Завершить регистрацию</button>
 				<button type="button" class="btn-secondary" @click="goBackToStep1">Назад</button>
@@ -73,6 +83,8 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
+import AuthService from '@/API/AuthService';
+
 // Инициализация роутера
 const router = useRouter();
 
@@ -87,33 +99,128 @@ const formData = ref({
 	date_of_birth: '',
 	gender: '',
 	bio: '',
+	avatar: null,
 });
 const step = ref(1); // Текущий шаг
 const errorMessage = ref('');
+const usernameError = ref('');
+const emailError = ref('');
+const passwordError = ref('');
+const confirmPasswordError = ref('');
+const avatarError = ref('');
+const previewAvatar = ref(null);
 
 // Валидация первого шага
 const validateStep1 = () => {
+	if (!formData.value.username) {
+		usernameError.value = 'Имя пользователя обязательно.';
+		return;
+	}
+	if (!formData.value.email) {
+		emailError.value = 'Email обязателен.';
+		return;
+	}
+	if (formData.value.password.length < 8) {
+		passwordError.value = 'Пароль должен содержать минимум 8 символов.';
+		return;
+	}
 	if (formData.value.password !== formData.value.confirmPassword) {
-		errorMessage.value = 'Пароли не совпадают.';
+		confirmPasswordError.value = 'Пароли не совпадают.';
 		return;
 	}
 	step.value = 2; // Переход ко второму шагу
 };
 
+// Проверка уникальности имени пользователя
+const checkUsernameUniqueness = async () => {
+	try {
+		const response = await AuthService.checkUsername(formData.value.username);
+		if (!response.data.isUnique) {
+			usernameError.value = 'Имя пользователя уже занято.';
+		} else {
+			usernameError.value = '';
+		}
+	} catch (error) {
+		console.error('Ошибка проверки имени пользователя:', error);
+	}
+};
+
+// Проверка уникальности email
+const checkEmailUniqueness = async () => {
+	try {
+		const response = await AuthService.checkEmail(formData.value.email);
+		if (!response.data.isUnique) {
+			emailError.value = 'Email уже используется.';
+		} else {
+			emailError.value = '';
+		}
+	} catch (error) {
+		console.error('Ошибка проверки email:', error);
+	}
+};
+
+// Обработчик загрузки аватара
+const handleAvatarUpload = (event) => {
+	const file = event.target.files[0];
+	if (file) {
+		if (file.size > 10 * 1024 * 1024) {
+			avatarError.value = 'Файл слишком большой. Максимальный размер: 10 МБ.';
+			return;
+		}
+		convertImageToWebP(file).then((webpBlob) => {
+			formData.value.avatar = webpBlob;
+			previewAvatar.value = URL.createObjectURL(webpBlob);
+			avatarError.value = '';
+		}).catch((error) => {
+			avatarError.value = 'Ошибка обработки изображения.';
+			console.error('Ошибка конвертации в WebP:', error);
+		});
+	}
+};
+
+// Конвертация изображения в WebP
+const convertImageToWebP = (file) => {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = (e) => {
+			const img = new Image();
+			img.src = e.target.result;
+			img.onload = () => {
+				const canvas = document.createElement('canvas');
+				const ctx = canvas.getContext('2d');
+				canvas.width = img.width;
+				canvas.height = img.height;
+				ctx.drawImage(img, 0, 0);
+				canvas.toBlob(
+					(blob) => blob ? resolve(blob) : reject(new Error('Ошибка создания Blob')),
+					'image/webp',
+					0.75 // Качество сжатия
+				);
+			};
+			img.onerror = reject;
+		};
+		reader.onerror = reject;
+		reader.readAsDataURL(file);
+	});
+};
+
 // Обработчик регистрации
 const handleRegistration = async () => {
 	try {
-		// Логика отправки данных на сервер
+		// Создаем FormData для отправки
 		const formDataToSend = new FormData();
 		Object.keys(formData.value).forEach((key) => {
-			formDataToSend.append(key, formData.value[key]);
+			if (key === 'avatar' && formData.value[key]) {
+				formDataToSend.append(key, formData.value[key], 'avatar.webp');
+			} else {
+				formDataToSend.append(key, formData.value[key]);
+			}
 		});
 
-		console.log('Отправка данных:', formDataToSend);
+		// Вызываем метод регистрации через AuthService
+		await AuthService.registration(formDataToSend);
 
-		// Пример: await AuthService.register(formDataToSend);
-
-		// Перенаправление на страницу авторизации
+		// Перенаправляем пользователя на страницу авторизации
 		router.push({ name: 'login' });
 	} catch (error) {
 		errorMessage.value = 'Ошибка регистрации. Попробуйте снова.';
@@ -129,13 +236,16 @@ const goBackToStep1 = () => {
 
 <style scoped>
 .registration-container {
+	height: calc(100vh - (54px + 5px));
+	
+	width: 100%;
+	flex: 0 0 100%;
 	display: flex;
-	justify-content: center;
+	flex-direction: row;
 	align-items: center;
-	height: calc(100vh - 5px);
-	background-size: cover;
-	background-position: center;
-	margin: 0 auto;
+	justify-content: center;
+	flex-wrap: nowrap;
+	overflow-x: hidden;
 }
 
 .registration-form {
@@ -224,5 +334,13 @@ a {
 
 a:hover {
 	text-decoration: underline;
+}
+.avatar-preview {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 50%;
+    margin-top: 10px;
+    display: block;
 }
 </style>

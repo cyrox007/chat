@@ -102,13 +102,16 @@ const goToRegistration = () => {
 <style scoped>
 /* Стили остаются прежними */
 .login-container {
+	height: calc(100vh - (54px + 5px));
+	
+	width: 100%;
+	flex: 0 0 100%;
 	display: flex;
-	justify-content: center;
+	flex-direction: row;
 	align-items: center;
-	height: calc(100vh - 5px);
-	/* height: 100vh;
-	background: var(--bg-gradient); */
-	margin: 0 auto;
+	justify-content: center;
+	flex-wrap: nowrap;
+	overflow-x: hidden;
 }
 
 .login-form {

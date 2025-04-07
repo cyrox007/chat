@@ -12,7 +12,10 @@ export class WebSocketService {
 			return this.socket;
 		}
 
-		this.socket = new WebSocket(`ws://localhost:9000/ws/${this.token}/rooms/${this.roomId}`);
+		// Получаем адрес сервера из переменной окружения
+        const wsServerUrl = import.meta.env.VITE_API_WS_SERVER_URL || 'ws://localhost:9000';
+
+		this.socket = new WebSocket(`${wsServerUrl}/ws/${this.token}/rooms/${this.roomId}`);
 
 		// Обработка открытия соединения
 		this.socket.onopen = () => {
