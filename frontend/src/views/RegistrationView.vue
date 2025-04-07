@@ -10,12 +10,7 @@
 					:validationRules="(value) => !value ? 'Поле обязательно' : ''"
 					:asyncValidation="checkUsernameUniqueness" />
 
-				<BaseInput 
-					id="email" 
-					label="Email" 
-					type="email" 
-					placeholder="Введите email" 
-					v-model="formData.email"
+				<BaseInput id="email" label="Email" type="email" placeholder="Введите email" v-model="formData.email"
 					:error="emailError" :validationRules="(value) => !value ? 'Поле обязательно' : ''"
 					:asyncValidation="checkEmailUniqueness" />
 
@@ -39,7 +34,7 @@
 				<BaseTextarea id="bio" label="Биография" placeholder="Расскажите о себе" v-model="formData.bio" />
 
 				<BaseFileUpload id="avatar" label="Аватар" placeholder="Выбрать файл" v-model="formData.avatar"
-					:error="avatarError" />
+					:max-size="10 * 1024 * 1024" @validation-error="(message) => (avatarError = message)" />
 
 				<button type="submit" class="btn-primary">Завершить регистрацию</button>
 				<button type="button" class="btn-secondary" @click="goBackToStep1">Назад</button>
@@ -161,7 +156,7 @@ const checkEmailUniqueness = async () => {
 };
 
 // Обработчик загрузки аватара
-const handleAvatarUpload = (event) => {
+/* const handleAvatarUpload = (event) => {
 	const file = event.target.files[0];
 	if (file) {
 		if (file.size > 10 * 1024 * 1024) {
@@ -203,7 +198,7 @@ const convertImageToWebP = (file) => {
 		reader.onerror = reject;
 		reader.readAsDataURL(file);
 	});
-};
+}; */
 
 // Обработчик регистрации
 const handleRegistration = async () => {

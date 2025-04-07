@@ -15,18 +15,18 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, defineProps, defineEmits } from "vue";
 
 const props = defineProps({
 	id: { type: String, required: true },
 	label: { type: String, default: "" },
 	placeholder: { type: String, default: "Выбрать файл" },
-	modelValue: { type: [File, null], default: null },
+	modelValue: { type: [Blob, null], default: null },
 	maxSize: { type: Number, default: 10 * 1024 * 1024 }, // Максимальный размер файла (по умолчанию 10 МБ)
 	error: { type: String, default: "" },
 });
 
-const emit = defineEmits(["update:modelValue"]);
+const emit = defineEmits(["update:modelValue", "validation-error"]);
 
 const isDragging = ref(false);
 const preview = ref(null);
@@ -47,14 +47,21 @@ const convertImageToWebP = (file) => {
 			const img = new Image();
 			img.src = e.target.result;
 			img.onload = () => {
-				const canvas = document.createElement("canvas");
-				const ctx = canvas.getContext("2d");
+				const canvas = document.createElement('canvas');
+				const ctx = canvas.getContext('2d');
 				canvas.width = img.width;
 				canvas.height = img.height;
 				ctx.drawImage(img, 0, 0);
 				canvas.toBlob(
-					(blob) => blob ? resolve(blob) : reject(new Error("Ошибка создания Blob")),
-					"image/webp",
+					(blob) => {
+						if (blob) {
+							const webpFile = new File([blob], file.name || 'avatar.webp', { type: 'image/webp' });
+							resolve(webpFile);
+						} else {
+							reject(new Error('Ошибка создания Blob'));
+						}
+					},
+					'image/webp',
 					0.75 // Качество сжатия
 				);
 			};
