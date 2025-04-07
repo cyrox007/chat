@@ -251,25 +251,6 @@ const closeRightSidebar = () => {
 	isRightSidebarActive.value = false;
 };
 
-const isScrolledToBottom = () => {
-	const chatMessages = document.getElementById('chat-messages');
-	if (!chatMessages) return false;
-
-	const scrollHeight = chatMessages.scrollHeight;
-	const scrollTop = chatMessages.scrollTop;
-	const clientHeight = chatMessages.clientHeight;
-
-	console.log('scrollHeight:', scrollHeight);
-	console.log('scrollTop:', scrollTop);
-	console.log('clientHeight:', clientHeight);
-
-	// Проверяем, находится ли скролл внизу
-	const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 5;
-	console.log('Is scrolled to bottom:', isAtBottom);
-
-	return isAtBottom;
-};
-
 const isLastMessageVisible = () => {
 	const chatMessages = document.getElementById('chat-messages');
 	const lastMessage = document.querySelector('.message:last-child'); // Или используйте ref
