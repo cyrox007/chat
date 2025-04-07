@@ -57,16 +57,14 @@ def save_file(file_data: dict) -> str:
             extension = f".{extension}"
 
         # Создаем папку для типа файла
-        if file_data["type"] not in MIME_TO_EXTENSION:
-            logger.warning(f"Unknown file type: {file_data['type']}")
-            folder_name = "other"
-        else:
-            folder_name = {
-                "image": "images",
-                "video": "videos",
-                "audio": "audio",
-                "application": "documents",
-            }[MIME_TO_EXTENSION[extension.split('/')[0]]]
+        main_mime_type = mime_type_base.split('/')[0]  # Например, "image", "video"
+        folder_name = {
+            "image": "images",
+            "video": "videos",
+            "audio": "audio",
+            "application": "documents",
+        }.get(main_mime_type, "other")
+
         upload_dir = Path("uploads") / folder_name
         os.makedirs(upload_dir, exist_ok=True)
 
