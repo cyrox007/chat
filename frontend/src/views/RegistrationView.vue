@@ -13,6 +13,10 @@
 				<BaseInput id="email" label="Email" type="email" placeholder="Введите email" v-model="formData.email"
 					:error="emailError" :validationRules="(value) => !value ? 'Поле обязательно' : ''"
 					:asyncValidation="checkEmailUniqueness" />
+				
+				<BaseInput id="phone" label="Телефон" type="phone" placeholder="Введите номер телефона" v-model="formData.phone"
+					:error="emailError" :validationRules="(value) => !value ? 'Поле обязательно' : ''"
+					:asyncValidation="checkPhoneUniqueness" />
 
 				<BaseInput id="password" label="Пароль" type="password" placeholder="Введите пароль"
 					v-model="formData.password" :error="passwordError" />
@@ -28,6 +32,17 @@
 				<BaseInput id="first_name" label="Имя" placeholder="Введите имя" v-model="formData.first_name" />
 
 				<BaseInput id="last_name" label="Фамилия" placeholder="Введите фамилию" v-model="formData.last_name" />
+
+				<BaseSelect
+					id="gender"
+					label="Пол"
+					placeholder="Выберите пол"
+					v-model="formData.gender"
+					:options="[
+						{ value: 'male', label: 'Мужской' },
+						{ value: 'female', label: 'Женский' }
+					]"
+				/>
 
 				<BaseInput id="date_of_birth" label="Дата рождения" type="date" v-model="formData.date_of_birth" />
 
@@ -59,6 +74,7 @@ import CSRFService from '@/API/CSRFService';
 import BaseInput from "@/components/UI/BaseInput/index.vue";
 import BaseTextarea from "@/components/UI/BaseTextarea/index.vue";
 import BaseFileUpload from "@/components/UI/BaseFileUpload/index.vue";
+import BaseSelect from "@/components/UI/BaseSelect/index.vue"
 
 // Инициализация роутера
 const router = useRouter();
@@ -67,6 +83,7 @@ const router = useRouter();
 const formData = ref({
 	username: '',
 	email: '',
+	phone: '',
 	password: '',
 	confirmPassword: '',
 	first_name: '',
@@ -80,10 +97,10 @@ const step = ref(1); // Текущий шаг
 const errorMessage = ref('');
 const usernameError = ref('');
 const emailError = ref('');
+const phoneError = ref('');
 const passwordError = ref('');
 const confirmPasswordError = ref('');
 const avatarError = ref('');
-const previewAvatar = ref(null);
 
 // Валидация первого шага
 const validateStep1 = () => {
@@ -154,6 +171,35 @@ const checkEmailUniqueness = async () => {
 		}
 	}
 };
+
+const checkPhoneUniqueness = async () => {
+	if (!formData.value.phone || formData.value.phone.trim() === '') {
+		phoneError.value = 'Поле не может быть пустым.';
+		return;
+	}
+
+	try {
+		// Отправляем запрос на сервер для проверки уникальности email
+		const response = await AuthService.checkPhone(formData.value.email);
+
+		// Если email уже используется, устанавливаем сообщение об ошибке
+		if (!response.data.isUnique) {
+			emailError.value = 'Номер телефона уже используется.';
+		} else {
+			emailError.value = ''; // Очищаем ошибку, если email уникален
+		}
+	} catch (error) {
+		// Логируем ошибку и устанавливаем сообщение для пользователя
+		console.error('Ошибка проверки поля:', error);
+
+		// Если сервер вернул статус 400, выводим сообщение о некорректных данных
+		if (error.response && error.response.status === 400) {
+			emailError.value = 'Некорректный формат номера.';
+		} else {
+			emailError.value = 'Произошла ошибка при проверке номера телефона. Попробуйте позже.';
+		}
+	}
+}
 
 // Обработчик загрузки аватара
 /* const handleAvatarUpload = (event) => {

@@ -16,5 +16,8 @@ export default class AuthService {
 	static async checkEmail(email) {
 		return $api.post('/users/check-email', { email });
 	}
+	static async checkPhone(phone) {
+		return $api.post('/users/check-phone', { phone });
+	}
 	// Другие методы...
 }
