@@ -58,6 +58,7 @@ const selectRoom = (room) => {
 		position: absolute;
 		left: 0;
 		transform: translateX(-120%);
+		z-index: 9999;
 	}
 	.chat-sidebar-left.active {
 		transform: translateX(0%);
