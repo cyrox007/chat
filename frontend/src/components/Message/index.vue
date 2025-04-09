@@ -173,8 +173,14 @@ const safeMessage = computed(() => {
 // Форматируем дату для отображения
 const formattedTimestamp = computed(() => {
 	if (!safeMessage.value) return '';
-	const date = new Date(safeMessage.value.created_at);
-	return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+
+	let rawDate = safeMessage.value.created_at;
+	if (!rawDate.endsWith('Z')) {
+		rawDate += 'Z'; // Добавляем суффикс Z, если его нет
+	}
+	const utcDate = new Date(rawDate);
+
+	return `${utcDate.toLocaleDateString()} ${utcDate.toLocaleTimeString()}`;
 });
 
 // Вычисляем тип сообщения
