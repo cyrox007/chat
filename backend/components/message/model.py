@@ -29,35 +29,49 @@ class Message(Database.Base):
     author_uid = Column(UUID(as_uuid=True), ForeignKey("users.uid"))
     author = relationship("User", foreign_keys=[author_uid], back_populates="messages")
 
-    # Упоминание пользователя (опционально)
-    mention_uid = Column(UUID(as_uuid=True), ForeignKey("users.uid"))
-    mention = relationship("User", foreign_keys=[mention_uid])
+    # Поля для ответа на сообщение
+    reply_to_uid = Column(UUID(as_uuid=True), ForeignKey("messages.uid"))
+    reply_to = relationship("Message", remote_side=[uid], post_update=True)
 
     def __repr__(self):
         return f"<Message(uid={self.uid}, type={self.content_type}, room={self.room_uid})>"
     
     @staticmethod
-    def format_message(msg):
-        """
-        Форматирует объект Message в словарь для отправки клиенту.
-
-        :param msg: Объект Message
-        :return: Словарь с данными сообщения
-        """
-        return {
+    def format_message(msg, include_reply_details=True):
+        """Форматирует сообщение для отправки клиенту"""
+        if not msg:
+            return None
+            
+        if isinstance(msg, dict):
+            # Если сообщение уже словарь (например, из кеша)
+            return msg
+        
+        formatted = {
             "type": "message",
             "uid": str(msg.uid),
-            "content": msg.text,  # Текст сообщения
+            "content": msg.text,
             "content_type": msg.content_type,
-            "media_metadata": msg.media_metadata,  # Метаданные для медиа
+            "media_metadata": msg.media_metadata,
             "sender": {
                 "uid": str(msg.author_uid),
-                "name": msg.author.username if msg.author else "Unknown",  # Имя пользователя
-                "avatar": msg.author.avatar if msg.author else None  # Аватар пользователя
+                "username": msg.author.username if msg.author else "Unknown",
+                "avatar": msg.author.avatar if msg.author else None
             },
             "room_uid": str(msg.room_uid),
             "created_at": msg.created_at.isoformat()
         }
+
+        if include_reply_details and msg.reply_to:
+            formatted["reply_to"] = {
+                "uid": str(msg.reply_to.uid),
+                "content": msg.reply_to.text,
+                "sender": {
+                    "uid": str(msg.reply_to.author_uid),
+                    "name": msg.reply_to.author.username if msg.reply_to.author else "Unknown"
+                }
+            }
+
+        return formatted
 
     @staticmethod
     def create_message(db_session: Session, message_data: dict):
@@ -76,6 +90,7 @@ class Message(Database.Base):
                 media_metadata=message_data.get("media_metadata"),  # Метаданные для медиа
                 room_uid=message_data.get("room_uid"),
                 author_uid=message_data.get("sender_uid"),
+                reply_to_uid=message_data.get("reply_to_uid"),
                 created_at=datetime.utcnow()
             )
 
@@ -95,7 +110,8 @@ class Message(Database.Base):
     @staticmethod
     def get_last_messages(db_session: Session, room_uid: UUID, limit: int = 5) -> List["Message"]:
         """
-        Возвращает последние сообщения для указанной комнаты.
+        Возвращает последние сообщения для указанной комнаты в порядке от старых к новым.
+        Это позволяет отображать их на фронтенде в естественном порядке (сверху вниз).
 
         :param db_session: SQLAlchemy сессия
         :param room_uid: UUID комнаты
@@ -103,18 +119,22 @@ class Message(Database.Base):
         :return: Список объектов Message
         """
         try:
-            # Выполняем запрос к базе данных
-            last_messages = (
+            # Запрашиваем сообщения в порядке от новых к старым
+            messages = (
                 db_session.query(Message)
-                .options(joinedload(Message.author))  # Загружаем связанные данные о пользователе
+                .options(
+                    joinedload(Message.author),
+                    joinedload(Message.reply_to).joinedload(Message.author)
+                )
                 .filter(Message.room_uid == str(room_uid))
-                .order_by(desc(Message.created_at))  # Сортировка по времени создания (по убыванию)
+                .order_by(desc(Message.created_at))  # Сортируем по возрастанию даты
                 .limit(limit)
                 .all()
             )
-            return last_messages
+
+            # Форматируем сообщения (уже в правильном порядке)
+            return [Message.format_message(msg) for msg in messages]
         except Exception as e:
-            # Логируем ошибку
             logger.error(f"Error fetching last messages: {e}")
             raise
 
