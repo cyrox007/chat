@@ -168,6 +168,7 @@ async def handle_file_message(data: dict, room_uid: UUID, user_uid: UUID, db_ses
         "media_metadata": {
             "files": saved_files,
         },
+        "reply_to_uid": data.get("reply_to_uid"),
     }
 
     try:
@@ -221,6 +222,7 @@ async def handle_audio_message(data: dict, room_uid: UUID, user_uid: UUID, db_se
             "content_type": "audio",
             "sender_uid": str(user_uid),
             "room_uid": str(room_uid),
+            "reply_to_uid": data.get("reply_to_uid"),
             "timestamp": datetime.utcnow().isoformat(),
         }
 
