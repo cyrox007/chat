@@ -21,9 +21,13 @@
 						:key="msg.uid || msg.tempId"
 						:message="msg"
 						:ref="index === messages.length - 1 ? 'lastMessage' : null"
+						@reply="handleMessageReply"
 					/>
 				</section>
-				<MessageComposer @send-message="handleSendMessage" />
+				<MessageComposer 
+					ref="messageComposer"
+					@send-message="handleSendMessage" 
+				/>
 			</div>
 			<section v-else-if="!isLoading" class="placeholder">
 				<p>Выберите комнату, чтобы начать общение.</p>
@@ -38,7 +42,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, onUnmounted, watch, nextTick } from 'vue';
+import { ref, onMounted, computed, onUnmounted, watch, nextTick } from 'vue';
 import { useStore } from 'vuex';
 import { v4 as uuidv4 } from 'uuid';
 import DOMPurify from 'dompurify';
@@ -48,9 +52,9 @@ import RightSidebar from '@/components/RightSidebar/index.vue';
 import Message from '@/components/Message/index.vue';
 import MessageComposer from '@/components/MessageComposer/index.vue';
 import RoomsService from '@/API/RoomsService';
-import UsersService from '@/API/UsersService';
+/* import UsersService from '@/API/UsersService'; */
 /* import { WebSocketService } from '@/services/WebSocketService'; */
-import CSRFService from '@/API/CSRFService';
+/* import CSRFService from '@/API/CSRFService'; */
 
 // Инициализация хранилища
 const store = useStore();
@@ -73,14 +77,14 @@ const currentUser = computed(() => {
 
 // Состояния
 const isLoading = ref(false);
-/* const messages = ref([]); */
+const currentReply = ref(null);
 const isLeftSidebarActive = ref(false);
 const isRightSidebarActive = ref(false);
 const rooms = ref([]);
-/* const wsService = ref(null); */
+const messageComposer = ref(null);
 
 // Загрузка данных пользователей
-const fetchUserData = async (userUids) => {
+/* const fetchUserData = async (userUids) => {
 	try {
 		await CSRFService.getCSRF();
 		const response = await UsersService.get_users_by_uids(userUids);
@@ -92,7 +96,7 @@ const fetchUserData = async (userUids) => {
 		console.error('Ошибка загрузки данных пользователей:', error);
 		return [];
 	}
-};
+}; */
 
 // Загрузка списка комнат
 const loadRooms = async () => {
@@ -111,14 +115,22 @@ const loadRooms = async () => {
 	await store.dispatch('chat/connectSocket', roomId);
 }; */
 
-const sanitizeMessage = (messageData) => {
+/* const sanitizeMessage = (messageData) => {
 	// Очищаем текстовое поле
 	// Возвращаем очищенные данные
 	return DOMPurify.sanitize(messageData)
+}; */
+
+// Обработчик ответа на сообщение
+const handleMessageReply = (message) => {
+  messageComposer.value?.setReply(message);
+  scrollToBottom();
 };
 
+// Модифицированная функция отправки сообщения
 const handleSendMessage = async (messageData) => {
-	const sanitizedContent = sanitizeMessage(messageData.content);
+	const sanitizedContent = DOMPurify.sanitize(messageData.content);
+
 	const messagePayload = {
 		frontId: uuidv4(),
 		content: sanitizedContent || '',
@@ -129,12 +141,17 @@ const handleSendMessage = async (messageData) => {
 			name: currentUser.value.username,
 			avatar: currentUser.value.avatar,
 		},
-		//created_at: new Date().toISOString(),
+		reply_to_uid: messageData.reply_to_uid,
 		status: 'sending',
 	};
 
 	store.dispatch('chat/sendMessage', messagePayload);
 };
+
+// Отмена ответа
+/* const cancelReply = () => {
+	currentReply.value = null;
+}; */
 
 // Подключение к WebSocket
 /* const connectToWebSocket = (roomId) => {
@@ -236,7 +253,7 @@ const closeRightSidebar = () => {
 	isRightSidebarActive.value = false;
 };
 
-const isLastMessageVisible = () => {
+/* const isLastMessageVisible = () => {
 	const chatMessages = document.getElementById('chat-messages');
 	const lastMessage = document.querySelector('.message:last-child'); // Или используйте ref
 
@@ -251,7 +268,7 @@ const isLastMessageVisible = () => {
 		messageRect.bottom <= containerRect.bottom + 50 && // Допуск 50px
 		messageRect.top >= containerRect.top
 	);
-};
+}; */
 
 const scrollToBottom = async () => {
     await nextTick(); // Ждём обновления DOM
@@ -362,5 +379,41 @@ watch(
 	display: flex;
 	align-items: center;
 	justify-content: center;
+}
+
+/* Адаптивные стили для чата */
+@media (max-width: 768px) {
+	.message {
+		max-width: 90%;
+	}
+
+	.reply-button {
+		width: 30px;
+		height: 30px;
+		font-size: 1.1em;
+	}
+
+	.reply-preview .reply-content {
+		max-width: 80vw;
+	}
+}
+
+/* Анимация для кнопки ответа */
+@keyframes pulse {
+	0% {
+		transform: scale(1);
+	}
+
+	50% {
+		transform: scale(1.1);
+	}
+
+	100% {
+		transform: scale(1);
+	}
+}
+
+.message:active .reply-button {
+	animation: pulse 0.3s ease;
 }
 </style>

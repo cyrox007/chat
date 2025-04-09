@@ -1,5 +1,21 @@
 <template>
-	<div v-if="safeMessage" :class="['message', messageType]">
+	<div v-if="safeMessage" :class="['message', messageType, { 'has-reply': safeMessage.reply_to }]">
+		<!-- Кнопка "ответить" -->
+		<button class="reply-button" @click="handleReply"
+			:aria-label="`Ответить на сообщение от ${safeMessage.sender.name}`">
+			<i class="fas fa-reply"></i>
+		</button>
+		<!-- Блок цитируемого сообщения -->
+		<div v-if="safeMessage.reply_to" class="reply-preview">
+			<div class="reply-header">
+				<i class="fas fa-reply"></i>
+				{{ safeMessage.reply_to.sender.name }}
+			</div>
+			<div class="reply-content">
+				{{ truncate(safeMessage.reply_to.content, 50) }}
+			</div>
+		</div>
+
 		<!-- Заголовок сообщения -->
 		<div class="message-header">
 			<img :src="safeMessage.sender.avatar" alt="Аватар" class="avatar" />
@@ -11,13 +27,11 @@
 
 		<!-- Тело сообщения -->
 		<div class="message-body">
-			
 			<div v-if="safeMessage.content_type === 'text'">
 				<!-- Текст -->
 				{{ safeMessage.content }}
 			</div>
 
-			
 			<div v-else-if="safeMessage.content_type === 'image'" class="image_list">
 				<!-- Изображение -->
 				<div class="image_item" v-for="(image, index) in safeMessage.media_metadata.files" :key="index">
@@ -27,7 +41,6 @@
 				<span v-show="safeMessage.content">{{ safeMessage.content }}</span>
 			</div>
 
-			
 			<div v-else-if="safeMessage.content_type === 'video'">
 				<!-- Видео -->
 				<video controls class="message-video">
@@ -36,7 +49,6 @@
 				</video>
 			</div>
 
-			
 			<div v-else-if="safeMessage.content_type === 'audio'">
 				<!-- Аудио -->
 				<audio controls class="message-audio">
@@ -45,7 +57,6 @@
 				</audio>
 			</div>
 
-			
 			<div v-else-if="safeMessage.content_type === 'file'" class="message-files">
 				<!-- Файлы -->
 				<!-- Проверка на null или отсутствие files -->
@@ -84,11 +95,13 @@
 </template>
 
 <script setup>
-import { defineProps, computed } from 'vue';
+import { defineProps, defineEmits, computed } from 'vue';
 import { useStore } from 'vuex';
 
 // Инициализируем хранилище
 const store = useStore();
+
+const emit = defineEmits(['reply']);
 
 // Определяем пропсы
 const props = defineProps({
@@ -121,9 +134,9 @@ const isImage = (fileUrl) => {
 };
 
 // Извлечение имени файла из URL
-const getFileName = (fileUrl) => {
+/* const getFileName = (fileUrl) => {
 	return fileUrl.split('/').pop();
-}
+} */
 
 const getFileIcon = (fileUrl) => {
 	// Проверяем расширение файла
@@ -146,27 +159,47 @@ const getFileIcon = (fileUrl) => {
 // Создаём безопасный объект сообщения с значениями по умолчанию
 const safeMessage = computed(() => {
 	if (!props.message) {
-		return null; // Возвращаем null, если сообщение не определено
+		return null;
 	}
 
+	// Обрабатываем медиа-метаданные
 	const mediaMetadata = props.message.media_metadata || {};
 	const files = Array.isArray(mediaMetadata.files) ? mediaMetadata.files : [];
 
+	// Обрабатываем отправителя
+	const sender = props.message.sender || {};
+
+	// Обрабатываем ответ на сообщение
+	let replyTo = null;
+	if (props.message.reply_to) {
+		replyTo = {
+			uid: props.message.reply_to.uid || null,
+			content: props.message.reply_to.content || '',
+			sender: {
+				uid: props.message.reply_to.sender?.uid || null,
+				name: props.message.reply_to.sender?.name || 'Неизвестный пользователь'
+			}
+		};
+	}
+
 	return {
 		uid: props.message.uid || null,
-		frontId: props.message.tempId,
-		content: props.message.content || '', // Текст или ссылка на медиа
-		content_type: props.message.content_type || 'text', // Тип контента
+		frontId: props.message.frontId || props.message.tempId || null,
+		content: props.message.content || props.message.text || '', // Поддержка старого и нового формата
+		content_type: props.message.content_type || 'text',
 		media_metadata: {
-			files: files, // Убедимся, что это всегда массив
+			files: files,
 		},
 		sender: {
-			uid: props.message.sender?.uid || null,
-			name: props.message.sender?.name || 'Неизвестный пользователь',
-			avatar: props.message.sender?.avatar || '/images/default-avatar.png',
+			uid: sender.uid || null,
+			name: sender.username || sender.name || 'Неизвестный пользователь',
+			avatar: sender.avatar || '/images/default-avatar.png',
 		},
+		room_uid: props.message.room_uid || null,
 		created_at: props.message.created_at || new Date().toISOString(),
-		status: props.message.status || 'sent', // Статус: отправлено по умолчанию
+		status: props.message.status || 'sent',
+		reply_to: replyTo, // Добавляем информацию о цитируемом сообщении
+		type: props.message.type || 'message' // Добавляем тип сообщения
 	};
 });
 
@@ -195,10 +228,25 @@ const messageType = computed(() => {
 	// Возвращаем комбинированный тип сообщения
 	return isSender ? `sender ${safeMessage.value.content_type}` : `other-user ${safeMessage.value.content_type}`;
 });
+
+// Добавляем обработчик ответа
+const handleReply = () => {
+	emit('reply', {
+		uid: safeMessage.value.uid,
+		content: safeMessage.value.content,
+		sender: safeMessage.value.sender
+	});
+};
+
+// Функция для сокращения текста
+const truncate = (text, length) => {
+	return text?.length > length ? text.slice(0, length) + '...' : text;
+};
 </script>
 
 <style scoped>
 .message {
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	max-width: 80%;
@@ -267,5 +315,63 @@ const messageType = computed(() => {
 	text-align: center;
 	color: #888;
 	font-style: italic;
+}
+/* Стили для кнопки ответа */
+.reply-button {
+	position: absolute;
+	right: 10px;
+	top: 10px;
+	background: rgba(0, 0, 0, 0.1);
+	border: none;
+	border-radius: 50%;
+	width: 25px;
+	height: 25px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.2s;
+}
+
+.message:hover .reply-button {
+	opacity: 1;
+}
+
+/* На мобильных устройствах показываем всегда */
+@media (max-width: 768px) {
+	.reply-button {
+		opacity: 1;
+	}
+}
+
+/* Стили для цитируемого сообщения */
+.reply-preview {
+	background: rgba(0, 0, 0, 0.05);
+	border-left: 3px solid var(--primary-color);
+	padding: 5px 10px;
+	margin-bottom: 8px;
+	border-radius: 0 5px 5px 0;
+}
+
+.reply-header {
+	font-size: 0.8em;
+	color: var(--primary-color);
+	display: flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.reply-content {
+	font-size: 0.9em;
+	color: #666;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Дополнительный отступ для сообщений с цитатой */
+.message.has-reply {
+	padding-top: 5px;
 }
 </style>

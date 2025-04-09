@@ -1,5 +1,18 @@
 <template>
 	<div class="chat-window-inputs">
+		<!-- Блок цитаты (если есть) -->
+		<div v-if="replyTo" class="reply-preview">
+			<div class="reply-header">
+				Ответ на сообщение {{ replyTo.sender.name }}
+				<button @click="clearReply" class="cancel-reply">
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+			<div class="reply-content">
+				{{ truncate(replyTo.content, 50) }}
+			</div>
+		</div>
+
 		<!-- Отображение выбранных файлов -->
 		<div class="file-preview" v-if="selectedFiles.length > 0">
 			<div v-for="(file, index) in selectedFiles" :key="index" class="file-item">
@@ -39,10 +52,8 @@
 				<i class="fas fa-paperclip"></i>
 			</button>
 			<!-- Кнопка записи голоса/видео или отправки -->
-			<button class="record-button" @click="toggleRecordingType"
-				@mousedown="startRecording"
-				@mouseup="stopRecordingOrVideo"
-				v-if="messageInput.trim() === '' && selectedFiles.length === 0">
+			<button class="record-button" @click="toggleRecordingType" @mousedown="startRecording"
+				@mouseup="stopRecordingOrVideo" v-if="messageInput.trim() === '' && selectedFiles.length === 0">
 				<i :class="isRecordingTypeVoice ? 'fas fa-microphone' : 'fas fa-video'"></i>
 			</button>
 			<button class="send-button" @click="prepareMessage" v-else>
@@ -75,12 +86,23 @@
 </template>
 
 <script setup>
-import { ref, computed, defineEmits, onUnmounted } from 'vue';
+import { ref, defineProps, defineEmits, defineExpose, onUnmounted } from 'vue';
 import { useStore } from 'vuex';
 import data from "emoji-mart-vue-fast/data/all.json";
 import "emoji-mart-vue-fast/css/emoji-mart.css";
 import { Picker, EmojiIndex } from "emoji-mart-vue-fast/src";
 import imageCompression from 'browser-image-compression';
+
+const emit = defineEmits(['send-message']);
+
+const props = defineProps({
+    replyTo: {
+        type: Object,
+        default: null,
+    },
+});
+
+const store = useStore();
 
 // Состояния
 const messageInput = ref('');
@@ -95,8 +117,8 @@ const audioContext = ref(null);
 const analyser = ref(null);
 const audioLevel = ref(0);
 const isAudioRecorded = ref(false);
-const emit = defineEmits(['send-message']);
 const emojiIndex = new EmojiIndex(data);
+const replyTo = ref(null);
 
 // Флаг для переключения между записью голоса и видео
 const isRecordingTypeVoice = ref(true);
@@ -311,34 +333,69 @@ const determineContentType = ({ text, files, voice }) => {
 	return 'unknown'; // Неизвестный тип
 };
 
-// Подготовка сообщения для отправки
-const prepareMessage = async () => {
-	if (!messageInput.value.trim() && !recordedVoice.value && selectedFiles.value.length === 0) return;
+// Обработчик установки цитаты (вызывается из родителя)
+const setReply = (message) => {
+	replyTo.value = message;
+	focusInput();
+};
 
-	// Преобразуем файлы в Base64
-	const filesBase64 = await Promise.all(
+// Очистка цитаты
+const clearReply = () => {
+	replyTo.value = null;
+};
+
+// Фокусировка на поле ввода
+const focusInput = () => {
+	document.querySelector('.input-container input')?.focus();
+};
+
+const truncate = (text, length) => {
+  if (!text) return '';
+  return text.length > length ? text.slice(0, length) + '...' : text;
+};
+
+defineExpose({
+  setReply,
+  focusInput
+});
+const processFiles = async () => {
+	if (selectedFiles.value.length === 0) return [];
+
+	return await Promise.all(
 		selectedFiles.value.map(async (file) => {
-			return new Promise((resolve, reject) => {
+			const base64 = await new Promise((resolve, reject) => {
 				const reader = new FileReader();
 				reader.onload = () => resolve(reader.result);
 				reader.onerror = (error) => reject(error);
 				reader.readAsDataURL(file);
 			});
+
+			return {
+				url: base64,
+				name: file.name,
+				type: file.type,
+				size: file.size
+			};
 		})
 	);
+};
 
-	// Преобразуем голосовое сообщение в Base64
-	let voiceBase64 = null;
-	if (recordedVoice.value) {
-		voiceBase64 = await new Promise((resolve, reject) => {
-			const reader = new FileReader();
-			reader.onload = () => resolve(reader.result);
-			reader.onerror = (error) => reject(error);
-			reader.readAsDataURL(new Blob(recordedVoice.value, { type: 'audio/webm' }));
-		});
-	}
-	
-	// Формируем данные сообщения
+const processVoice = async () => {
+	if (!recordedVoice.value || recordedVoice.value.length === 0) return null;
+
+	return await new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(reader.result);
+		reader.onerror = (error) => reject(error);
+		reader.readAsDataURL(new Blob(recordedVoice.value, { type: 'audio/webm' }));
+	});
+};
+
+// Подготовка сообщения для отправки
+// Модифицированная функция подготовки сообщения
+const prepareMessage = async () => {
+	if (!messageInput.value.trim() && !recordedVoice.value && selectedFiles.value.length === 0) return;
+
 	const messagePayload = {
 		content: messageInput.value.trim() || '',
 		content_type: determineContentType({
@@ -347,23 +404,18 @@ const prepareMessage = async () => {
 			voice: recordedVoice.value,
 		}),
 		media_metadata: {
-			files: filesBase64.map((base64, index) => ({
-				url: base64,
-				name: selectedFiles.value[index].name,
-				type: selectedFiles.value[index].type,
-				size: selectedFiles.value[index].size,
-			})),
-			voice: voiceBase64, // Голосовое сообщение в Base64
-			video_voice: null, // Будущий функционал для видео-сообщений
-		}
+			files: await processFiles(),
+			voice: await processVoice(),
+		},
+		reply_to_uid: replyTo.value?.uid // Добавляем UID сообщения, на которое отвечаем
 	};
 
-	// Очищаем поля после отправки
+	// Очищаем поля
 	messageInput.value = '';
 	selectedFiles.value = [];
 	clearVoice();
+	clearReply();
 
-	// Эмитируем событие для отправки данных
 	emit('send-message', messagePayload);
 };
 
@@ -572,5 +624,44 @@ onUnmounted(() => {
 	overflow: hidden;
 	white-space: nowrap;
     max-width: 150px; /* Ограничиваем максимальную ширину */
+}
+/* Стили для блока цитаты */
+.reply-preview {
+	background: rgba(var(--primary-color-rgb), 0.1);
+	border-left: 3px solid var(--primary-color);
+	padding: 8px;
+	margin-bottom: 8px;
+	border-radius: 0 4px 4px 0;
+	position: relative;
+}
+
+.reply-header {
+	font-size: 0.8em;
+	color: var(--primary-color);
+	display: flex;
+	justify-content: space-between;
+}
+
+.reply-content {
+	font-size: 0.9em;
+	color: #555;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.cancel-reply {
+	background: none;
+	border: none;
+	color: #999;
+	cursor: pointer;
+}
+
+/* Адаптивные стили */
+@media (max-width: 768px) {
+	.reply-preview {
+		padding: 6px;
+		margin-bottom: 6px;
+	}
 }
 </style>
