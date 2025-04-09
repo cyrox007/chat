@@ -2,53 +2,25 @@
 import { ref, onMounted } from 'vue';
 import HeaderComponent from './components/HeaderComponent/index.vue';
 import { useStore } from 'vuex';
-import $api from '@/API/index.js';
 
 const store = useStore();
-const serverAvailable = ref(true);
 const showErrorNotification = ref(false);
 
-// Проверка доступности сервера
-/* const checkServerAvailability = async () => {
-	try {
-		await $api.get('/health');
-	} catch (error) {
-		serverAvailable.value = false;
-		showErrorNotification.value = true;
-
-		setTimeout(() => {
-			showErrorNotification.value = false;
-		}, 5000);
-	}
-}; */
-
 onMounted(async () => {
-	if (localStorage.getItem('access_token')) {
-		// Проверяем, есть ли данные пользователя в хранилище
-		if (!store.getters.getUser && localStorage.getItem('user')) {
-			try {
-				// Загружаем данные пользователя с сервера
-				//await store.dispatch('fetchUserData');
-				store.commit('setUser', JSON.parse(localStorage.getItem('user')));
-			} catch (error) {
-				console.error('Ошибка загрузки данных пользователя:', error);
-				// Если загрузка не удалась, очищаем состояние авторизации
-				store.dispatch('clearUser');
-				localStorage.removeItem('access_token');
-			}
-		}
+	// Восстановление соединения при наличии активной комнаты
+	if (store.getters['chat/getCurrentRoom']) {
+		const roomId = store.getters['chat/getCurrentRoom'].uid;
+		store.dispatch('chat/connectSocket', roomId);
 	}
-	/* checkServerAvailability(); */
 });
 </script>
 
 <template>
 	<div class="container chat-container">
 		<HeaderComponent />
-
-		<!-- Всплывающее уведомление об ошибке -->
 		<transition name="fade">
 			<div v-if="showErrorNotification" class="error-notification">
+				<!-- Всплывающее уведомление об ошибке -->
 				<p>Ошибка: сервер недоступен. Пожалуйста, проверьте соединение.</p>
 			</div>
 		</transition>
@@ -60,9 +32,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* .chat-wrapper {
-	padding: 0 10px;
-} */
 .error-notification {
 	background-color: rgba(255, 99, 71, 0.9); /* Светло-красный цвет */
 	color: white;

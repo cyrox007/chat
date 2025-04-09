@@ -8,13 +8,13 @@
 				<button class="toggle-left-sidebar" aria-label="Открыть/закрыть левый сайдбар" @click="toggleLeftSidebar">
 					<i class="fas fa-comments"></i>
 				</button>
-				<h2>{{ chatStore.currentRoom?.name || 'Нет выбранной комнаты' }}</h2>
+				<h2>{{ currentRoom?.name || 'Нет выбранной комнаты' }}</h2>
 				<button class="toggle-right-sidebar" aria-label="Открыть/закрыть правый сайдбар" @click="toggleRightSidebar"
-					:disabled="!chatStore.currentRoom?.id">
+					:disabled="!currentRoom?.id">
 					<i class="fas fa-info-circle"></i>
 				</button>
 			</header>
-			<div v-if="chatStore.currentRoom?.id && !isLoading" class="chat-container">
+			<div v-if="currentRoom?.id && !isLoading" class="chat-container">
 				<section id="chat-messages" ref="chatMessages" class="chat-window-body" >
 					<Message 
 						v-for="(msg, index) in messages" 
@@ -31,8 +31,8 @@
 		</div>
 		
 		<Loader :isLoading="isLoading" />
-		<RightSidebar v-if="chatStore.currentRoom?.id && !isLoading" :class="{ active: isRightSidebarActive }"
-			@close="closeRightSidebar" :roomInfo="chatStore.currentRoom" :users="chatStore.connectedUsers" />
+		<RightSidebar v-if="currentRoom?.id && !isLoading" :class="{ active: isRightSidebarActive }"
+			@close="closeRightSidebar" :roomInfo="currentRoom" :users="connectedUsers" />
 	</main>
 	
 </template>
@@ -49,22 +49,17 @@ import Message from '@/components/Message/index.vue';
 import MessageComposer from '@/components/MessageComposer/index.vue';
 import RoomsService from '@/API/RoomsService';
 import UsersService from '@/API/UsersService';
-import { WebSocketService } from '@/services/WebSocketService';
+/* import { WebSocketService } from '@/services/WebSocketService'; */
 import CSRFService from '@/API/CSRFService';
 
 // Инициализация хранилища
 const store = useStore();
 
-// Получаем состояние чата из Vuex
-const chatStore = reactive({
-	currentRoom: computed(() => store.getters['chat/getCurrentRoom']),
-	connectedUsers: computed(() => store.getters['chat/getConnectedUsers']),
-});
-
-// Функции для изменения состояния
-const setCurrentRoom = (room) => store.dispatch('chat/updateCurrentRoom', room);
-const clearCurrentRoom = () => store.commit('chat/clearCurrentRoom');
-const setConnectedUsers = (users) => store.dispatch('chat/updateConnectedUsers', users);
+// Получаем данные из хранилища
+const currentRoom = computed(() => store.getters['chat/getCurrentRoom']);
+const messages = computed(() => store.getters['chat/getMessages']);
+const isConnected = computed(() => store.getters['chat/isConnected']);
+const connectedUsers = computed(() => store.getters['chat/getConnectedUsers']);
 
 // Получаем данные текущего пользователя из хранилища
 const currentUser = computed(() => {
@@ -78,11 +73,11 @@ const currentUser = computed(() => {
 
 // Состояния
 const isLoading = ref(false);
-const messages = ref([]);
+/* const messages = ref([]); */
 const isLeftSidebarActive = ref(false);
 const isRightSidebarActive = ref(false);
 const rooms = ref([]);
-const wsService = ref(null);
+/* const wsService = ref(null); */
 
 // Загрузка данных пользователей
 const fetchUserData = async (userUids) => {
@@ -111,6 +106,11 @@ const loadRooms = async () => {
 	}
 };
 
+// Инициализация WebSocket
+const initializeChat = async (roomId) => {
+	await store.dispatch('chat/connectSocket', roomId);
+};
+
 const sanitizeMessage = (messageData) => {
 	// Очищаем текстовое поле
 	// Возвращаем очищенные данные
@@ -133,19 +133,7 @@ const handleSendMessage = async (messageData) => {
 		status: 'sending',
 	};
 
-	try {
-		console.log(messagePayload);
-
-		// Отправляем сообщение через WebSocket
-		if (!wsService.value || !wsService.value.send) {
-			console.error('WebSocket не подключен или метод send не определён');
-			return;
-		}
-		messages.value.push(messagePayload);
-		wsService.value.send(messagePayload);
-	} catch (error) {
-		console.error('Ошибка отправки сообщения:', error);
-	}
+	store.dispatch('chat/sendMessage', messagePayload);
 };
 
 // Подключение к WebSocket
@@ -208,20 +196,17 @@ const disconnectFromWebSocket = () => {
 
 // Функция для переключения комнаты
 const switchRoom = async (room) => {
-	
-	if (wsService.value) disconnectFromWebSocket();
-	messages.value = [];
-	clearCurrentRoom(); // Очистка текущей комнаты
 	isLoading.value = true;
-
 	try {
 		const roomData = await RoomsService.get_room(room.uid);
-		setCurrentRoom(roomData.data.room); // Устанавливаем новую комнату
-		connectToWebSocket(room.uid);
-		isLoading.value = false;
+		await store.dispatch('chat/switchRoom', {
+			room: roomData.data.room,
+			roomId: room.uid
+		});
 		isRightSidebarActive.value = true;
 	} catch (error) {
 		console.error('Ошибка загрузки данных комнаты:', error);
+	} finally {
 		isLoading.value = false;
 	}
 };
@@ -241,7 +226,7 @@ const closeLeftSidebar = () => {
 
 // Функция для переключения правого сайдбара
 const toggleRightSidebar = () => {
-	if (chatStore.currentRoom.id) {
+	if (currentRoom.value.id) {
 		isRightSidebarActive.value = !isRightSidebarActive.value;
 	}
 };
@@ -281,22 +266,27 @@ const scrollToBottom = async () => {
 // Загрузка данных при монтировании
 onMounted(async () => {
 	loadRooms();
-	if (chatStore.currentRoom) {
-		const savedRoom = rooms.value.find((room) => room.uid === chatStore.currentRoom.uid);
+	if (currentRoom) {
+		const savedRoom = rooms.value.find((room) => room.uid === currentRoom.uid);
 		if (savedRoom) {
 			await switchRoom(savedRoom);
 		}
 	}
 });
 
+// Очистка при размонтировании
 onUnmounted(() => {
-	if (wsService.value) wsService.value.disconnect();
+	//store.dispatch('chat/disconnectSocket');
 });
 
-watch(messages, async () => {
-	await nextTick();
-	scrollToBottom();
-}, { deep: true });
+watch(
+	() => [...messages.value], // Создаем новый массив для триггера
+	async () => {
+		await nextTick();
+		scrollToBottom();
+	},
+	{ deep: true }
+);
 </script>
 
 <style scoped>
