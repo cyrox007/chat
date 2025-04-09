@@ -58,7 +58,7 @@ const store = useStore();
 // Получаем данные из хранилища
 const currentRoom = computed(() => store.getters['chat/getCurrentRoom']);
 const messages = computed(() => store.getters['chat/getMessages']);
-const isConnected = computed(() => store.getters['chat/isConnected']);
+/* const isConnected = computed(() => store.getters['chat/isConnected']); */
 const connectedUsers = computed(() => store.getters['chat/getConnectedUsers']);
 
 // Получаем данные текущего пользователя из хранилища
@@ -107,9 +107,9 @@ const loadRooms = async () => {
 };
 
 // Инициализация WebSocket
-const initializeChat = async (roomId) => {
+/* const initializeChat = async (roomId) => {
 	await store.dispatch('chat/connectSocket', roomId);
-};
+}; */
 
 const sanitizeMessage = (messageData) => {
 	// Очищаем текстовое поле
@@ -129,7 +129,7 @@ const handleSendMessage = async (messageData) => {
 			name: currentUser.value.username,
 			avatar: currentUser.value.avatar,
 		},
-		created_at: new Date().toISOString(),
+		//created_at: new Date().toISOString(),
 		status: 'sending',
 	};
 
@@ -137,7 +137,7 @@ const handleSendMessage = async (messageData) => {
 };
 
 // Подключение к WebSocket
-const connectToWebSocket = (roomId) => {
+/* const connectToWebSocket = (roomId) => {
 	const token = localStorage.getItem('access_token');
 	if (!token) {
 		console.error('Токен не найден');
@@ -184,15 +184,15 @@ const connectToWebSocket = (roomId) => {
 			scrollToBottom();
 		}
 	});
-};
+}; */
 
-const disconnectFromWebSocket = () => {
+/* const disconnectFromWebSocket = () => {
 	if (wsService.value) {
 		wsService.value.disconnect();
 		wsService.value = null; // Очищаем ссылку на сервис
 		messages.value = null; // Отчищаем массив сообщений
 	}
-};
+}; */
 
 // Функция для переключения комнаты
 const switchRoom = async (room) => {
@@ -257,7 +257,7 @@ const scrollToBottom = async () => {
     await nextTick(); // Ждём обновления DOM
     const chatMessages = document.getElementById('chat-messages');
     if (chatMessages) {
-        console.log('Scrolling to bottom...');
+        //console.log('Scrolling to bottom...');
         chatMessages.scrollTop = chatMessages.scrollHeight;
         console.log('New scrollTop:', chatMessages.scrollTop);
     }
