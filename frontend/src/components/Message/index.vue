@@ -31,7 +31,7 @@
 			<div v-else-if="safeMessage.content_type === 'video'">
 				<!-- Видео -->
 				<video controls class="message-video">
-					<source :src="safeMessage.content" type="video/mp4">
+					<source :src="safeMessage.media_metadata.files[0].url" type="video/mp4">
 					Ваш браузер не поддерживает видео.
 				</video>
 			</div>
