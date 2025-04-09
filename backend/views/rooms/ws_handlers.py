@@ -238,7 +238,7 @@ async def handle_audio_message(data: dict, room_uid: UUID, user_uid: UUID, db_se
             f.write(file_content)
 
         # Формируем URL для доступа к файлу
-        saved_audio_url = f"{config.BASE_URL}/audio/{file_name}"
+        saved_audio_url = f"{config.BASE_URL}/uploads/audio/{file_name}"
 
         # Создаём данные для сообщения
         message_data = {
