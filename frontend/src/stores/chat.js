@@ -9,14 +9,16 @@ export default {
 		socket: null,
 		isConnected: false,
 		messages: [],
-		notifications: []
+		notifications: [],
+		unreadReplies: []
 	},
 	getters: {
 		getCurrentRoom: (state) => state.currentRoom,
 		getConnectedUsers: (state) => state.connectedUsers,
 		isConnected: (state) => state.isConnected,
 		getMessages: (state) => state.messages,
-		getNotifications: (state) => state.notifications
+		unreadReplies: (state) => state.unreadReplies,
+  		hasUnreadReplies: (state) => state.unreadReplies.length > 0
 	},
 	mutations: {
 		setCurrentRoom(state, room) {
@@ -40,12 +42,12 @@ export default {
 		clearMessages(state) {
 			state.messages = [];
 		},
-		addNotification(state, notification) {
-			state.notifications.push(notification);
-		},
-		clearNotifications(state) {
-			state.notifications = [];
-		}
+		ADD_UNREAD_REPLY(state, reply) {
+			state.unreadReplies.push(reply);
+		  },
+		  CLEAR_UNREAD_REPLIES(state) {
+			state.unreadReplies = [];
+		  }
 	},
 	actions: {
 		async fetchUserData({ commit }, userUids) {
@@ -113,20 +115,36 @@ export default {
 			}
 		},
 
-		async handleSocketMessage({ commit, dispatch }, data) {
+		async handleSocketMessage({ commit, dispatch, rootGetters }, data) {
 			const currentRoute = window.location.pathname;
+			const currentUser = rootGetters['getUser']; // Исправляем на полный путь
+			const currentUserId = currentUser?.uid;
 
 			switch (data.type) {
 				case 'message':
 					commit('addMessage', data);
-
-					if (!currentRoute.includes('/chat')) {
-						commit('addNotification', {
+					
+					if (currentRoute !== '/') {
+						/* commit('addNotification', {
 							type: 'message',
 							sender: data.sender,
 							content: data.content,
-							timestamp: new Date()
-						});
+							timestamp: new Date(),
+							room_uid: data.room_uid
+						}); */
+
+						if (data.reply_to?.sender?.uid === currentUserId) {
+							const reply = {
+							  uid: data.uid,
+							  sender: data.sender,
+							  content: data.content,
+							  room_uid: data.room_uid,
+							  timestamp: new Date(data.created_at || new Date())
+							};
+							
+							commit('ADD_UNREAD_REPLY', reply);
+							dispatch('playNotificationSound');
+						  }
 					}
 					break;
 
@@ -163,7 +181,7 @@ export default {
 				commit('setSocket', null);
 				commit('setConnectionStatus', false);
 				commit('clearMessages');
-				commit('clearNotifications');
+				commit('CLEAR_UNREAD_REPLIES');
 			}
 		},
 
@@ -176,17 +194,47 @@ export default {
 		},
 
 		clearNotifications({ commit }) {
-			commit('clearNotifications');
+			commit('CLEAR_UNREAD_REPLIES');
 		},
 
 		async switchRoom({ dispatch, commit }, { room, roomId }) {
 			// Очищаем предыдущие данные
 			commit('clearMessages');
-			commit('clearNotifications');
+			commit('CLEAR_UNREAD_REPLIES');
 
 			// Устанавливаем новую комнату и подключаемся
 			commit('setCurrentRoom', room);
 			await dispatch('connectSocket', roomId);
+		},
+
+		playNotificationSound() {
+			// Используем путь из public, а не из assets
+			const audio = new Audio('/sounds/chat_notification.mp3');
+		
+			// Предварительная загрузка и обработка ошибок
+			audio.preload = 'auto';
+		
+			// Обработка событий загрузки
+			audio.addEventListener('canplaythrough', () => {
+				// Когда аудио готово к воспроизведению
+				audio.play().catch((e) => {
+					console.error('Ошибка воспроизведения звука:', e);
+					// Fallback: показываем уведомление
+					/* if (Notification.permission === 'granted') {
+						new Notification('Новое сообщение', {
+							body: 'У вас новый ответ в чате',
+						});
+					} */
+				});
+			});
+		
+			// Обработка ошибок загрузки
+			audio.addEventListener('error', (e) => {
+				console.error('Ошибка загрузки аудио:', e);
+			});
+		
+			// Начинаем загрузку
+			audio.load();
 		}
 	}
 };
