@@ -159,3 +159,94 @@ class PrivateMessage(Database.Base):
 
     def __repr__(self):
         return f"<PrivateMessage(uid={self.uid}, sender={self.sender_uid}, receiver={self.receiver_uid})>"
+    
+    @staticmethod
+    def format_message(msg, include_sender_details=True):
+        """Форматирует приватное сообщение для отправки клиенту"""
+        if not msg:
+            return None
+            
+        if isinstance(msg, dict):
+            return msg
+        
+        formatted = {
+            "type": "private_message",
+            "uid": str(msg.uid),
+            "content": msg.text,
+            "content_type": msg.content_type,
+            "media_metadata": msg.media_metadata,
+            "sender_uid": str(msg.sender_uid),
+            "receiver_uid": str(msg.receiver_uid),
+            "is_read": msg.is_read,
+            "created_at": msg.created_at.isoformat()
+        }
+
+        if include_sender_details and msg.sender:
+            formatted["sender"] = {
+                "uid": str(msg.sender.uid),
+                "username": msg.sender.username,
+                "avatar": msg.sender.avatar
+            }
+
+        return formatted
+
+    @staticmethod
+    def create_private_message(db_session: Session, message_data: dict):
+        """
+        Создает новое приватное сообщение и сохраняет его в базу данных.
+        """
+        try:
+            new_message = PrivateMessage(
+                content_type=message_data.get("content_type", "text"),
+                text=message_data.get("content"),
+                media_metadata=message_data.get("media_metadata"),
+                sender_uid=message_data.get("sender_uid"),
+                receiver_uid=message_data.get("receiver_uid"),
+                created_at=datetime.utcnow()
+            )
+
+            db_session.add(new_message)
+            db_session.commit()
+            db_session.refresh(new_message)
+
+            return PrivateMessage.format_message(new_message)
+        except Exception as e:
+            logger.error(f"Error creating private message: {e}")
+            db_session.rollback()
+            raise
+
+    @staticmethod
+    def get_conversation(db_session: Session, user1_uid: UUID, user2_uid: UUID, limit: int = 50):
+        """
+        Возвращает переписку между двумя пользователями.
+        """
+        try:
+            messages = db_session.query(PrivateMessage).options(
+                    joinedload(PrivateMessage.sender)
+                ).filter(
+                    (PrivateMessage.sender_uid == str(user1_uid)) & 
+                    ((PrivateMessage.receiver_uid == str(user2_uid))) |
+                    ((PrivateMessage.sender_uid == str(user2_uid)) & 
+                    ((PrivateMessage.receiver_uid == str(user1_uid)))
+                )).order_by(asc(PrivateMessage.created_at)).limit(limit).all()
+
+            return [PrivateMessage.format_message(msg) for msg in messages]
+        except Exception as e:
+            logger.error(f"Error fetching conversation: {e}")
+            raise
+
+    @staticmethod
+    def mark_as_read(db_session: Session, message_uid: UUID):
+        """
+        Помечает сообщение как прочитанное.
+        """
+        try:
+            message = db_session.query(PrivateMessage).filter(PrivateMessage.uid == str(message_uid)).first()
+            if message:
+                message.is_read = True
+                db_session.commit()
+            return message
+        except Exception as e:
+            logger.error(f"Error marking message as read: {e}")
+            db_session.rollback()
+            raise
