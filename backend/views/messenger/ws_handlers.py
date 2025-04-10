@@ -17,7 +17,7 @@ async def initialize_messenger_connection(websocket: WebSocket, db_session: Sess
     """
     Инициализирует соединение для мессенджера.
     """
-    await private_manager.connect_to_messenger(websocket, None, user_uid)
+    await private_manager.connect_to_messenger(websocket, user_uid)
     logger.info(f"User {user_uid} connected to messenger")
 
 async def handle_private_messages(websocket: WebSocket, user_uid: UUID, db_session: Session):
