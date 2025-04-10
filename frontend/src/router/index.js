@@ -47,17 +47,17 @@ const router = createRouter({
 				title: "Профиль",
 				requestAuth: true
 			}
-		}
-		/*{
-			path: '/messages',
-			name: 'messages',
-			component: () => import('../views/MessagesView.vue'),
+		},
+		{
+			path: '/messenger',
+			name: 'messenger',
+			component: () => import('../views/MessengerView.vue'),
 			meta: {
 				title: "Сообщения",
 				requestAuth: true
 			}
 		},
-		{
+		/*{
 			path: '/settings',
 			name: 'settings',
 			component: () => import('../views/SettingsView.vue'),

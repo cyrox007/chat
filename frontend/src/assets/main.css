@@ -20,6 +20,17 @@
 	--profile-edit-btn: #007bff;
 	--profile-edit-btn-hover: #0056b3;
 	--profile-details-color: #6c757d;
+
+	--messenger-bg: var(--bg-light);
+	--messenger-sidebar-bg: var(--sidebar-bg-light);
+	--messenger-conversation-bg: var(--bg-light);
+	--messenger-input-bg: var(--sidebar-bg-light);
+	--messenger-border: #ddd;
+	--messenger-text: var(--text-light);
+	--messenger-message-sent-bg: var(--primary-color);
+	--messenger-message-received-bg: var(--other-user-bg);
+	--messenger-message-text: var(--text-light);
+	--messenger-time-color: #777;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,6 +40,17 @@
 		--text-light: #ffffff;
 		--profile-bg-light: #343a40;
 		--profile-details-color: #adb5bd;
+
+		--messenger-bg: var(--bg-dark);
+		--messenger-sidebar-bg: var(--sidebar-bg-dark);
+		--messenger-conversation-bg: var(--bg-dark);
+		--messenger-input-bg: var(--sidebar-bg-dark);
+		--messenger-border: #444;
+		--messenger-text: var(--text-dark);
+		--messenger-message-sent-bg: var(--primary-color);
+		--messenger-message-received-bg: #495057;
+		--messenger-message-text: var(--text-dark);
+		--messenger-time-color: #aaa;
 	}
 }
 

@@ -101,7 +101,7 @@ const navigation = computed(() => {
 			icon: 'fa-comments',
 		},
 		{
-			path: '/messages',
+			path: '/messenger',
 			label: 'Сообщения',
 			icon: 'fa-envelope',
 		},

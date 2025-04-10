@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import HeaderComponent from './components/HeaderComponent/index.vue';
 import ReplyNotifications from '@/components/Notifications/ReplyNotifications.vue';
 import { useStore } from 'vuex';
@@ -12,6 +12,18 @@ onMounted(async () => {
 	if (store.getters['chat/getCurrentRoom']) {
 		const roomId = store.getters['chat/getCurrentRoom'].uid;
 		store.dispatch('chat/connectSocket', roomId);
+	}
+
+	// Подключаемся к мессенджеру
+	store.dispatch('messenger/connectMessenger');
+});
+
+// Отслеживаем изменения авторизации
+watch(() => store.getters['isAuth'], (newVal) => {
+	if (newVal) {
+		store.dispatch('messenger/connectMessenger');
+	} else {
+		store.dispatch('messenger/disconnectMessenger');
 	}
 });
 </script>
