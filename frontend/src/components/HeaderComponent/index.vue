@@ -2,10 +2,10 @@
 	<header class="app-header">
 		<!-- Логотип сайта -->
 		<div class="site-logo">
-			<a href="/">
+			<router-link :to="{ path: '/' }">
 				<!-- <img src="@/assets/logo.png" alt="Логотип сайта" /> -->
 				<span>ЧАТ</span>
-			</a>
+			</router-link>
 		</div>
 
 		<!-- Пользовательское меню (правая часть) -->
@@ -205,7 +205,7 @@ const applyTheme = (theme) => {
 	cursor: pointer;
 }
 
-.site-logo span {
+.site-logo a {
 	text-decoration: none;
 	color: inherit;
 }
