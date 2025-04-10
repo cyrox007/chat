@@ -38,7 +38,7 @@ async def initialize_websocket(websocket: WebSocket, db_session, room_uid: UUID,
         return
 
     # Подключение пользователя к комнате
-    await manager.connect(websocket, room_uid, user_uid)
+    await manager.connect_to_room(websocket, room_uid, user_uid)
 
     # Отправка начальных данных
     await send_initial_data(websocket, db_session, room_uid, user_uid)
@@ -88,7 +88,7 @@ async def handle_text_message(data: dict, room_uid: UUID, user_uid: UUID, db_ses
         formatted_message = Message.create_message(db_session, message_data)
         formatted_message['frontId'] = data.get('frontId')  # Сохраняем frontId
         
-        await manager.broadcast(room_uid, formatted_message)
+        await manager.broadcast_to_room(room_uid, formatted_message)
         logger.info(f"Сообщение отправлено в комнату {room_uid}: {formatted_message}")
 
     except Exception as e:
@@ -111,7 +111,7 @@ async def handle_file_message(data: dict, room_uid: UUID, user_uid: UUID, db_ses
                 "max_allowed_files": config.MAX_FILES_LIMIT,
             },
         }
-        await manager.broadcast(room_uid, error_message)
+        await manager.broadcast_to_room(room_uid, error_message)
         return
 
     saved_files = []
@@ -156,7 +156,7 @@ async def handle_file_message(data: dict, room_uid: UUID, user_uid: UUID, db_ses
             "message": "All files failed to process.",
             "details": errors,
         }
-        await manager.broadcast(room_uid, error_message)
+        await manager.broadcast_to_room(room_uid, error_message)
         return
 
     # Создаём данные для сообщения
@@ -174,7 +174,7 @@ async def handle_file_message(data: dict, room_uid: UUID, user_uid: UUID, db_ses
     try:
         formatted_message = Message.create_message(db_session, message_data)
         formatted_message['frontId'] = data.get('frontId')
-        await manager.broadcast(room_uid, formatted_message)
+        await manager.broadcast_to_room(room_uid, formatted_message)
         logger.info(f"Файловое сообщение отправлено в комнату {room_uid}: {formatted_message}")
 
         if errors:
@@ -186,7 +186,7 @@ async def handle_file_message(data: dict, room_uid: UUID, user_uid: UUID, db_ses
                     "errors": errors,
                 },
             }
-            await manager.broadcast(room_uid, partial_error_message)
+            await manager.broadcast_to_room(room_uid, partial_error_message)
     except Exception as e:
         logger.error(f"Ошибка при создании файлового сообщения: {e}")
         raise
@@ -228,7 +228,7 @@ async def handle_audio_message(data: dict, room_uid: UUID, user_uid: UUID, db_se
 
         formatted_message = Message.create_message(db_session, message_data)
         formatted_message['frontId'] = data.get('frontId')
-        await manager.broadcast(room_uid, formatted_message)
+        await manager.broadcast_to_room(room_uid, formatted_message)
         logger.info(f"Аудио сообщение отправлено в комнату {room_uid}: {formatted_message}")
 
     except Exception as e:
