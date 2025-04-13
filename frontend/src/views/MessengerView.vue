@@ -1,61 +1,61 @@
 <template>
 	<div class="messenger-container">
+		<!-- Левая панель: список диалогов -->
 		<div class="conversations-list">
 			<div class="search-bar">
-				<input type="text" placeholder="Поиск пользователей..." v-model="searchQuery">
+				<input type="text" placeholder="Поиск пользователей..." v-model="searchQuery" />
 			</div>
 			<div class="conversations">
-				<div v-for="conversation in filteredConversations" :key="conversation.userId" class="conversation-item"
-					:class="{ active: isActiveDialog(conversation.userId) }"
-					@click="openConversation(conversation.userId)">
-					<div class="user-avatar">
-						<img :src="conversation.avatar || '/images/default-avatar.png'" alt="User Avatar">
+				<!-- Если диалоги есть -->
+				<div v-if="dialogs.length > 0">
+					<div v-for="dialog in filteredDialogs" :key="dialog.partner_id" class="conversation-item"
+						:class="{ active: isActiveDialog(dialog.partner_id) }"
+						@click="openConversation(dialog.partner_id)">
+						<div class="user-avatar">
+							<img :src="dialog.partner.avatar || '/images/default-avatar.png'" alt="User Avatar" />
+						</div>
+						<div class="conversation-info">
+							<div class="user-name">{{ dialog.partner.username }}</div>
+							<div class="last-message">{{ dialog.last_message || 'Нет сообщений' }}</div>
+						</div>
+						<div class="unread-count" v-if="dialog.unread_count > 0">{{ dialog.unread_count }}</div>
 					</div>
-					<div class="conversation-info">
-						<div class="user-name">{{ conversation.username }}</div>
-						<div class="last-message">{{ getLastMessagePreview(conversation.userId) }}</div>
-					</div>
-					<div class="unread-count" v-if="getUnreadCount(conversation.userId) > 0">
-						{{ getUnreadCount(conversation.userId) }}
+				</div>
+				<!-- Если диалогов нет -->
+				<div v-else class="empty-state">
+					<div class="empty-content">
+						<!-- <i class="fas fa-comments"></i> -->
+						<p>Нет активных диалогов</p>
 					</div>
 				</div>
 			</div>
 		</div>
-
+		<!-- Правая панель: текущий диалог -->
 		<div class="conversation-view" v-if="activeDialog">
 			<div class="conversation-header">
 				<div class="back-button" @click="closeConversation" v-if="isMobile">
 					<i class="fas fa-arrow-left"></i>
 				</div>
 				<div class="user-info">
-					<img :src="activeDialogUser.avatar || '/images/default-avatar.png'" alt="User Avatar">
+					<img :src="activeDialogUser.avatar || '/images/default-avatar.png'" alt="User Avatar" />
 					<span>{{ activeDialogUser.username }}</span>
 				</div>
 			</div>
-
 			<div class="messages-container" ref="messagesContainer">
-				<div v-for="(message, index) in getConversation(activeDialog)" :key="message.uid || index"
-					class="message" :class="{
-						'sent': message.isCurrentUser,
-						'received': !message.isCurrentUser
-					}">
-					<div class="message-content">
-						{{ message.content }}
-					</div>
-					<div class="message-time">
-						{{ formatTime(message.timestamp) }}
-					</div>
-				</div>
-			</div>
-
-			<div class="message-input">
-				<input type="text" v-model="newMessage" placeholder="Введите сообщение..." @keyup.enter="sendMessage">
-				<button @click="sendMessage">
-					<i class="fas fa-paper-plane"></i>
-				</button>
-			</div>
+                <div v-for="(message, index) in getConversation(activeDialog)" :key="message.uid || index"
+                     class="message" :class="{ sent: message.isCurrentUser, received: !message.isCurrentUser }">
+                    <div class="message-content" :data-message-id="message.uid">
+                        {{ message.content }}
+                    </div>
+                    <div class="message-time">
+                        {{ formatTime(message.created_at) }}
+                    </div>
+                </div>
+            </div>
+			<!-- Компонент подготовки сообщений -->
+			<MessageComposer ref="messageComposer" @send-message="handleSendMessage" />
 		</div>
-
+		<!-- Если диалог не выбран -->
 		<div class="empty-state" v-else>
 			<div class="empty-content">
 				<i class="fas fa-comments"></i>
@@ -68,99 +68,129 @@
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useStore } from 'vuex';
+import MessengerService from '@/API/MessengerService';
+import MessageComposer from '@/components/MessageComposer/index.vue';
+import DOMPurify from 'dompurify';
+import MediaPreview from '@/components/Message/MediaPreview.vue';
+import VoiceMessage from '@/components/Message/VoiceMessage.vue';
 
 const store = useStore();
 const searchQuery = ref('');
-const newMessage = ref('');
 const messagesContainer = ref(null);
 const isMobile = ref(window.innerWidth < 768);
+const dialogs = ref([]);
 
+// Получаем данные текущего пользователя из хранилища
+const currentUser = computed(() => {
+	const user = store.getters.getUser || {
+		uid: null,
+		username: 'Неизвестный пользователь',
+		avatar: '/images/default-avatar.png',
+	};
+	return user;
+});
+
+// Загружаем диалоги при монтировании компонента
+onMounted(async () => {
+	try {
+		const response = await MessengerService.getDialogs();
+
+		if (response.data.status === 'ok') {
+			dialogs.value = response.data.dialogs;
+		}
+	} catch (error) {
+		console.error('Ошибка при загрузке диалогов:', error);
+	}
+
+	if (messagesContainer.value) {
+		const options = {
+			root: null,
+			threshold: 0,
+		};
+
+		const observer = new IntersectionObserver((entries) => {
+			entries.forEach(entry => {
+				if (entry.isIntersecting) {
+					// Если сообщение видимо, помечаем его как прочитанное
+					markMessageAsRead(entry.target.dataset.messageId);
+				}
+			});
+		}, options);
+
+		// Наблюдаем за всеми сообщениями
+		Array.from(messagesContainer.value.querySelectorAll('.message')).forEach(messageElement => {
+			observer.observe(messageElement);
+		});
+	}
+});
+
+// Фильтрация диалогов по поисковому запросу
+const filteredDialogs = computed(() => {
+	return dialogs.value.filter((dialog) =>
+		dialog.partner.username.toLowerCase().includes(searchQuery.value.toLowerCase())
+	);
+});
+
+// Активный диалог
 const activeDialog = computed(() => store.getters['messenger/getActiveDialog']);
-const conversations = computed(() => store.state.messenger.conversations);
-const currentUser = computed(() => store.getters['user/getUser']);
 
-// Пример данных - в реальном приложении нужно заменить на запрос к API
-const users = ref([
-	{ uid: '1', username: 'Пользователь 1', avatar: '' },
-	{ uid: '2', username: 'Пользователь 2', avatar: '' },
-	{ uid: '3', username: 'Пользователь 3', avatar: '' },
-]);
-
-const filteredConversations = computed(() => {
-	return users.value.filter(user =>
-		user.username.toLowerCase().includes(searchQuery.value.toLowerCase())
-	).map(user => ({
-		userId: user.uid,
-		username: user.username,
-		avatar: user.avatar,
-		lastMessage: getLastMessagePreview(user.uid)
-	}));
-});
-
+// Информация о собеседнике
 const activeDialogUser = computed(() => {
-	return users.value.find(user => user.uid === activeDialog.value) || {};
+	const dialog = dialogs.value.find((d) => d.partner_id === activeDialog.value);
+	return dialog?.partner || {};
 });
 
-function getConversation(userId) {
+// Получаем историю сообщений для активного диалога
+const getConversation = (userId) => {
 	return store.getters['messenger/getConversation'](userId);
-}
+};
 
-function getUnreadCount(userId) {
-	return store.getters['messenger/getUnreadCount'](userId);
-}
+const markMessageAsRead = async (messageId) => {
+	try {
+		await store.dispatch('messenger/markMessageAsRead', messageId);
+	} catch (error) {
+		console.error('Ошибка при отметке сообщения как прочитанного:', error);
+	}
+};
 
-function getLastMessagePreview(userId) {
-	const messages = getConversation(userId);
-	if (!messages || messages.length === 0) return 'Нет сообщений';
-	const lastMessage = messages[messages.length - 1];
-	return lastMessage.content.length > 30
-		? lastMessage.content.substring(0, 30) + '...'
-		: lastMessage.content;
-}
+// Обработка отправки сообщения
+const handleSendMessage = async (messageData) => {
+	// Проверяем, что содержимое сообщения не пустое и активный диалог выбран
+	if (!messageData.content.trim() && !messageData.media_metadata?.files?.length && !messageData.media_metadata?.voice) return;
 
-function formatTime(date) {
-	return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
+	// Очищаем содержимое текстового поля
+	const sanitizedContent = DOMPurify.sanitize(messageData.content);
 
-function isActiveDialog(userId) {
-	return activeDialog.value === userId;
-}
-
-function openConversation(userId) {
-	store.dispatch('messenger/setActiveDialog', userId);
-	// Загружаем историю переписки
-	store.dispatch('messenger/requestConversation', {
-		otherUserId: userId,
-		requestId: Date.now().toString()
-	});
-}
-
-function closeConversation() {
-	store.dispatch('messenger/setActiveDialog', null);
-}
-
-async function sendMessage() {
-	if (!newMessage.value.trim() || !activeDialog.value) return;
-
-	const messageData = {
-		content: newMessage.value,
-		content_type: 'text',
-		receiver_uid: activeDialog.value,
-		frontId: Date.now().toString()
+	// Формируем полезную нагрузку для отправки сообщения
+	const messagePayload = {
+		frontId: Date.now().toString(), // Используем временный ID для отслеживания
+		content: sanitizedContent || '', // Очищенный текст или пустая строка
+		content_type: messageData.content_type, // Тип контента (текст, файл, голос)
+		media_metadata: messageData.media_metadata, // Медиа-метаданные (файлы, голос)
+		sender: {
+			uid: currentUser.value.uid, // UID текущего пользователя
+			name: currentUser.value.username, // Имя текущего пользователя
+			avatar: currentUser.value.avatar || '/images/default-avatar.png', // Аватар
+		},
+		receiver_uid: activeDialog.value, // UID получателя
+		reply_to_uid: messageData.reply_to_uid, // UID сообщения, на которое отвечаем
+		status: 'sending', // Статус отправки
 	};
 
-	store.dispatch('messenger/sendPrivateMessage', messageData);
-	newMessage.value = '';
+	// Отправляем сообщение через Vuex
+	store.dispatch('messenger/sendPrivateMessage', messagePayload);
 
+	// Прокручиваем до конца списка сообщений
 	await nextTick();
 	scrollToBottom();
-}
+};
 
-function scrollToBottom() {
+// Прокрутка до конца списка сообщений
+const scrollToBottom = () => {
 	if (messagesContainer.value) {
 		messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
 	}
-}
+};
 
 // Автопрокрутка при новых сообщениях
 watch(
@@ -169,11 +199,29 @@ watch(
 	{ deep: true }
 );
 
-onMounted(() => {
-	window.addEventListener('resize', () => {
-		isMobile.value = window.innerWidth < 768;
+// Форматирование времени
+const formatTime = (date) => {
+	return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+// Открытие диалога
+const openConversation = (userId) => {
+	store.dispatch('messenger/setActiveDialog', userId);
+	store.dispatch('messenger/requestConversation', {
+		otherUserId: userId,
+		requestId: Date.now().toString(),
 	});
-});
+};
+
+// Закрытие диалога
+const closeConversation = () => {
+	store.dispatch('messenger/setActiveDialog', null);
+};
+
+// Проверка активного диалога
+const isActiveDialog = (userId) => {
+	return activeDialog.value === userId;
+};
 </script>
 
 <style scoped>
@@ -359,32 +407,6 @@ onMounted(() => {
 	margin-top: 5px;
 }
 
-.message-input {
-	padding: 15px;
-	border-top: 1px solid #ddd;
-	display: flex;
-	background-color: var(--sidebar-bg-light);
-}
-
-.message-input input {
-	flex: 1;
-	padding: 10px 15px;
-	border-radius: 20px;
-	border: 1px solid #ddd;
-	outline: none;
-	margin-right: 10px;
-}
-
-.message-input button {
-	width: 40px;
-	height: 40px;
-	border-radius: 50%;
-	border: none;
-	background-color: var(--primary-color);
-	color: white;
-	cursor: pointer;
-}
-
 .empty-state {
 	flex: 1;
 	display: flex;
@@ -435,14 +457,12 @@ onMounted(() => {
 @media (prefers-color-scheme: dark) {
 
 	.conversations-list,
-	.conversation-header,
-	.message-input {
+	.conversation-header {
 		background-color: var(--sidebar-bg-dark);
 		border-color: #444;
 	}
 
-	.search-bar input,
-	.message-input input {
+	.search-bar input {
 		background-color: #333;
 		border-color: #444;
 		color: white;
@@ -463,5 +483,80 @@ onMounted(() => {
 	.message-time {
 		color: #aaa;
 	}
+}
+
+.message.has-media {
+	max-width: 85%;
+}
+
+.message-media {
+	margin-top: 8px;
+	display: grid;
+	gap: 8px;
+}
+
+.media-preview {
+	border-radius: 12px;
+	overflow: hidden;
+	max-width: 100%;
+}
+
+.media-preview img {
+	max-width: 100%;
+	max-height: 300px;
+	border-radius: 12px;
+	display: block;
+}
+
+.file-preview {
+	display: flex;
+	align-items: center;
+	padding: 8px 12px;
+	background: rgba(0, 0, 0, 0.05);
+	border-radius: 8px;
+}
+
+.file-preview i {
+	margin-right: 8px;
+	font-size: 1.2em;
+}
+
+.file-size {
+	margin-left: auto;
+	font-size: 0.8em;
+	opacity: 0.7;
+}
+
+.voice-message {
+	display: flex;
+	align-items: center;
+	background: rgba(0, 0, 0, 0.05);
+	padding: 8px 12px;
+	border-radius: 20px;
+}
+
+.voice-message audio {
+	flex-grow: 1;
+	max-width: 200px;
+}
+
+.message-reply {
+	border-left: 3px solid var(--primary-color);
+	padding-left: 8px;
+	margin-bottom: 8px;
+	opacity: 0.8;
+}
+
+.message-meta {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 4px;
+	margin-top: 4px;
+	font-size: 0.8em;
+}
+
+.message-status {
+	margin-left: 4px;
 }
 </style>

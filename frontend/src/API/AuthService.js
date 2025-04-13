@@ -19,5 +19,8 @@ export default class AuthService {
 	static async checkPhone(phone) {
 		return $api.post('/users/check-phone', { phone });
 	}
+	static async getValidAccessToken() {
+		return $api.get(`/service/check-token`);
+	}
 	// Другие методы...
 }

@@ -21,7 +21,7 @@
 					</li>
 				</ul>
 			</div>
-			
+
 			<div class="user-profile user-menu" v-if="currentUser.uid">
 				<div class="user-avatar" @click="toggleDropdown">
 					<img :src="currentUser.avatar" alt="Аватар пользователя" />
@@ -46,7 +46,7 @@
 				<i :class="currentTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon'"></i>
 			</button>
 		</nav>
-		
+
 	</header>
 </template>
 
@@ -155,20 +155,29 @@ const handleLogout = async () => {
 // Загрузка сохраненной темы из localStorage
 onMounted(() => {
 	const savedTheme = localStorage.getItem('theme') || 'light';
+	document.documentElement.classList.add(`${savedTheme}-theme`);
 	currentTheme.value = savedTheme;
-	applyTheme(savedTheme);
 });
 
 // Переключение темы
 const toggleTheme = () => {
-	const newTheme = currentTheme.value === 'light' ? 'dark' : 'light';
+	const root = document.documentElement;
+	const savedTheme = localStorage.getItem('theme') || 'light';
+	const newTheme = savedTheme === 'light' ? 'dark' : 'light';
+
+	// Удаляем старый класс и добавляем новый
+	root.classList.remove(`${savedTheme}-theme`);
+	root.classList.add(`${newTheme}-theme`);
+
+	// Сохраняем новую тему в localStorage
+	localStorage.setItem('theme', newTheme);
+
+	// Обновляем значение переменной
 	currentTheme.value = newTheme;
-	applyTheme(newTheme);
-	localStorage.setItem('theme', newTheme); // Сохраняем выбранную тему
 };
 
 // Применение темы
-const applyTheme = (theme) => {
+/* const applyTheme = (theme) => {
 	const root = document.documentElement;
 	if (theme === 'dark') {
 		root.style.setProperty('--bg-light', '#212529');
@@ -181,7 +190,7 @@ const applyTheme = (theme) => {
 		root.style.setProperty('--profile-bg-light', '#f0f4fc');
 		root.style.setProperty('--profile-details-color', '#6c757d');
 	}
-};
+}; */
 </script>
 
 <style scoped>
@@ -254,7 +263,7 @@ const applyTheme = (theme) => {
 	position: absolute;
 	top: calc(100% + 10px);
 	right: 0;
-	background: #fff;
+	background: var(--bg-light);
 	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 	border-radius: 4px;
 	padding: 10px;

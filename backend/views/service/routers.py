@@ -17,4 +17,10 @@ def install(app: FastAPI):
         status_code=status.HTTP_200_OK,
         endpoint=handlers.refresh_tokens
     )
+    router.add_api_route(
+        '/service/check-token',
+        methods=['GET'],
+        status_code=status.HTTP_200_OK,
+        endpoint=handlers.check_token
+    )
     app.include_router(router)

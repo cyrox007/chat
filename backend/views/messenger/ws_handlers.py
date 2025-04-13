@@ -115,8 +115,8 @@ async def handle_get_conversation(data: dict, user_uid: UUID, db_session: Sessio
                 "messages": messages,
                 "request_id": data.get("request_id")
             }
-            
             await private_manager.send_to_user(str(user_uid), response)
+            logger.debug(f"Отправляем сообщение {response} пользователю {str(user_uid)}")
 
     except Exception as e:
         logger.error(f"Error getting conversation: {e}")

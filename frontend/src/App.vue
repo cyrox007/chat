@@ -3,26 +3,54 @@ import { ref, onMounted, watch } from 'vue';
 import HeaderComponent from './components/HeaderComponent/index.vue';
 import ReplyNotifications from '@/components/Notifications/ReplyNotifications.vue';
 import { useStore } from 'vuex';
+import AuthService from '@/API/AuthService';
 
 const store = useStore();
 const showErrorNotification = ref(false);
 
-onMounted(async () => {
-	// Восстановление соединения при наличии активной комнаты
-	if (store.getters['chat/getCurrentRoom']) {
-		const roomId = store.getters['chat/getCurrentRoom'].uid;
-		store.dispatch('chat/connectSocket', roomId);
-	}
+// Функция для проверки и обновления токена перед подключением
+const ensureValidTokenAndConnect = async () => {
+	try {
+		// Проверяем и обновляем токен, если он устарел
+		const response = await AuthService.getValidAccessToken();
 
-	// Подключаемся к мессенджеру
-	store.dispatch('messenger/connectMessenger');
+		if (response.status !== 200) {
+			throw new Error(`Ошибка при обновлении токена: ${response.statusText}`);
+		}
+
+		// Подключаемся к чату, если есть активная комната
+		if (store.getters['chat/getCurrentRoom']) {
+			const roomId = store.getters['chat/getCurrentRoom'].uid;
+			await store.dispatch('chat/connectSocket', roomId);
+		}
+
+		// Подключаемся к мессенджеру
+		await store.dispatch('messenger/connectMessenger');
+	} catch (error) {
+		console.error('Ошибка при проверке или обновлении токена:', error);
+
+		// Проверяем, является ли ошибка связанной с сервером (например, 500)
+		if (error.response && [500, 502, 503, 504].includes(error.response.status)) {
+			showErrorNotification.value = true;
+		} else if (!error.response) {
+			// Если нет ответа от сервера (например, проблемы с сетью)
+			showErrorNotification.value = true;
+		}
+	}
+};
+
+onMounted(async () => {
+	// Выполняем проверку токена и подключение
+	await ensureValidTokenAndConnect();
 });
 
 // Отслеживаем изменения авторизации
 watch(() => store.getters['isAuth'], (newVal) => {
 	if (newVal) {
-		store.dispatch('messenger/connectMessenger');
+		// При авторизации проверяем токен и подключаемся
+		ensureValidTokenAndConnect();
 	} else {
+		// При разлогинивании отключаем соединения
 		store.dispatch('messenger/disconnectMessenger');
 	}
 });

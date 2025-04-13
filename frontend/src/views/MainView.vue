@@ -30,6 +30,7 @@
 				/>
 			</div>
 			<section v-else-if="!isLoading" class="placeholder">
+				<i class="fas fa-comments"></i>
 				<p>Выберите комнату, чтобы начать общение.</p>
 			</section>
 		</div>
@@ -316,11 +317,14 @@ watch(
 	flex-direction: row;
 	flex-wrap: nowrap;
 	overflow-x: hidden;
+	background-color: var(--bg-light); /* Используем переменную для фона */
+	color: var(--text-light);
 }
 .chat-content {
 	display: flex;
 	flex-direction: column;
 	width: 100%;
+	background-color: var(--bg-light);
 }
 .chat-window-header {
 	max-height: 40px;
@@ -329,16 +333,22 @@ watch(
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	background-color: var(--primary-color);
-	border-bottom: 1px solid var(--primary-color);
-	color: #fff;
+	background-color: var(--primary-color); /* Используем основной цвет */
+	border-bottom: 1px solid var(--primary-color); /* Используем основной цвет */
+	color: white; /* Белый текст */
+	box-shadow: var(--shadow-light); /* Добавляем легкую тень */
 }
 
 .chat-window-header button {
 	background: none;
 	border: none;
 	cursor: pointer;
-	color: #fff;
+	color: white; /* Белый текст */
+	transition: color 0.2s ease; /* Плавное изменение цвета */
+}
+
+.chat-window-header button:hover {
+	color: var(--primary-color-hover); /* Цвет при наведении */
 }
 
 .chat-window-header button:disabled {
@@ -348,11 +358,10 @@ watch(
 
 .chat-container {
 	flex: 1 1 100%;
-
 	display: flex;
 	flex-direction: column;
-	
 	overflow: hidden;
+	background-color: var(--bg-light); /* Используем переменную для фона */
 }
 
 .chat-window-body {
@@ -360,7 +369,10 @@ watch(
 	flex: 1;
 	overflow-y: auto;
 	padding: 10px;
-	background-color: #f0f0f0;
+	background-color: var(--messenger-conversation-bg);
+	color: var(--messenger-text);
+	border: 1px solid var(--messenger-border);
+	box-shadow: var(--shadow-light);
 }
 
 /* Стили для компонента ввода данных */
@@ -379,6 +391,7 @@ watch(
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	color: var(--text-light);
 }
 
 /* Адаптивные стили для чата */

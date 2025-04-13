@@ -18,15 +18,18 @@
 					<h1 class="profile-name">{{ user.username }}</h1>
 					<p class="profile-email">{{ user.email }}</p>
 				</div>
-				<!-- Кнопка редактирования (только для текущего пользователя) -->
-				<button v-if="canEditProfile" @click="toggleEditForm" class="edit-profile-btn">Редактировать профиль</button>
+				<div class="profile-actions">
+					<button v-if="canEditProfile" @click="toggleEditForm" class="edit-profile-btn">Редактировать профиль</button>
+					<button v-if="!isCurrentUser" @click="openChatWithUser" class="message-button">Отправить сообщение</button>
+				</div>
 			</div>
 
 			<!-- Основное содержимое профиля -->
 			<div class="profile-details">
 				<div class="profile-detail-item">
 					<span class="profile-detail-label">Рейтинг:</span>
-					<Rating :rating="user.rating" />
+					<span class="profile-detail-value">{{ user.rating || 'Не указана' }}</span>
+					<!-- <Rating :rating="user.rating" /> -->
 				</div>
 				<div class="profile-detail-item">
 					<span class="profile-detail-label">Страна:</span>
@@ -85,8 +88,17 @@ const canEditProfile = computed(() => {
 	return ['admin', 'moderator', 'superadministrator'].includes(userRole); // Модераторы и администраторы могут редактировать чужие профили
 });
 
+const openChatWithUser = () => {
+	store.dispatch('messenger/setActiveDialog', user.value.uid);
+	router.push('/messenger');
+};
+
 // Функция для загрузки данных пользователя
 const loadUserData = async (uid) => {
+	user.value = null; // Очистка данных пользователя
+	errorMessage.value = ''; // Очистка ошибок
+	isLoading.value = true; // Включение индикатора загрузки
+
 	try {
 		const response = await UsersServices.get_user_by_uid(uid);
 		if (response.data.status === 'ok') {
@@ -128,6 +140,12 @@ onMounted(async () => {
 	// Загружаем данные пользователя
 	await loadUserData(profileUid);
 });
+watchEffect(() => {
+	const profileUid = route.params.uid;
+	if (profileUid) {
+		loadUserData(profileUid);
+	}
+});
 </script>
 
 <style scoped>
@@ -137,8 +155,9 @@ onMounted(async () => {
 	margin: 0 auto;
 	padding: 20px;
 	background: var(--bg-light);
-	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+	box-shadow: var(--shadow-light);
 	border-radius: 8px;
+	color: var(--text-light);
 }
 
 .profile-header {
@@ -146,32 +165,43 @@ onMounted(async () => {
 	align-items: center;
 	justify-content: space-between;
 	margin-bottom: 20px;
+	flex-wrap: wrap; /* Для адаптации на маленьких экранах */
 }
 
 .profile-avatar-container {
 	position: relative;
+	width: 120px;
+	height: 120px;
+	margin-right: 20px;
+	flex-shrink: 0; /* Предотвращаем сжатие аватара */
 }
 
 .profile-avatar {
-	width: 120px;
-	height: 120px;
+	width: 100%;
+	height: 100%;
 	border-radius: 50%;
 	overflow: hidden;
 	border: 4px solid var(--profile-avatar-border);
-	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+	box-shadow: var(--shadow-light);
 }
 
 .profile-info {
-	margin-left: 20px;
+	flex: 1;
+	min-width: 0; /* Предотвращаем переполнение текста */
 }
 
 .profile-name {
 	font-size: 24px;
 	font-weight: bold;
+	margin-bottom: 5px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .profile-email {
 	color: var(--profile-details-color);
+	font-size: 0.9em;
 }
 
 .edit-profile-btn {
@@ -188,25 +218,45 @@ onMounted(async () => {
 	background: var(--profile-edit-btn-hover);
 }
 
+.message-button {
+	background: var(--primary-color);
+	color: white;
+	border: none;
+	padding: 8px 16px;
+	border-radius: 4px;
+	cursor: pointer;
+	transition: background 0.3s ease;
+	margin-left: 10px;
+}
+
+.message-button:hover {
+	background: var(--primary-color-hover);
+}
 .profile-details {
 	margin-top: 20px;
 }
 
 .profile-detail-item {
 	margin-bottom: 10px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 }
 
 .profile-detail-label {
 	font-weight: bold;
+	min-width: 100px; /* Фиксированная ширина для выравнивания */
 }
 
 .profile-detail-value {
 	color: var(--profile-details-color);
+	word-break: break-word; /* Для длинного текста */
 }
 
 .error-message {
 	color: red;
 	margin-top: 10px;
+	text-align: center;
 }
 
 .fade-enter-active,
@@ -217,5 +267,28 @@ onMounted(async () => {
 .fade-enter-from,
 .fade-leave-to {
 	opacity: 0;
+}
+
+/* Адаптация для мобильных устройств */
+@media (max-width: 768px) {
+	.profile-header {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.profile-avatar-container {
+		margin-right: 0;
+		margin-bottom: 15px;
+	}
+
+	.profile-info {
+		margin-left: 0;
+	}
+
+	.edit-profile-btn,
+	.message-button {
+		width: 100%;
+		margin-top: 10px;
+	}
 }
 </style>

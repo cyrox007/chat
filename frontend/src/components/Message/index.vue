@@ -253,21 +253,18 @@ const truncate = (text, length) => {
 	padding: 10px;
 	border-radius: 10px;
 	margin: 5px 0;
-	box-shadow: 0 0 13px  rgba(219, 219, 219, 0.76);
+	box-shadow: var(--shadow-light);
 }
 
 .message.sender {
-	background-color: #dcf8c6;
-	/* Зелёный фон для своих сообщений */
-	align-self: flex-end;
-	/* Выравнивание по правому краю */
+	background-color: var(--sent-message-bg); /* Зелёный фон для своих сообщений */
+	align-self: flex-end; /* Выравнивание по правому краю */
+	color: var(--sent-message-text);
 }
 
 .message.other-user {
-	background-color: #f1f1f1;
-	/* Серый фон для чужих сообщений */
-	align-self: flex-start;
-	/* Выравнивание по левому краю */
+	background-color: var(--received-message-bg);
+	align-self: flex-start; /* Выравнивание по левому краю */
 }
 
 .message-header {
@@ -290,7 +287,7 @@ const truncate = (text, length) => {
 
 .timestamp {
 	font-size: 12px;
-	color: #888;
+	color: var(--text-light);
 }
 
 .message-body {
@@ -309,7 +306,7 @@ const truncate = (text, length) => {
 }
 
 .loading-message {
-	background-color: #f5f5f5;
+	background-color: var(--messenger-input-bg);
 	padding: 10px;
 	border-radius: 5px;
 	text-align: center;
@@ -321,7 +318,7 @@ const truncate = (text, length) => {
 	position: absolute;
 	right: 10px;
 	top: 10px;
-	background: rgba(0, 0, 0, 0.1);
+	background: var(--primary-color-hover);
 	border: none;
 	border-radius: 50%;
 	width: 25px;
@@ -364,7 +361,7 @@ const truncate = (text, length) => {
 
 .reply-content {
 	font-size: 0.9em;
-	color: #666;
+	color: var(--text-light);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;

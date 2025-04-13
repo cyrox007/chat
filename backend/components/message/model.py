@@ -1,5 +1,5 @@
 from typing import List
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Boolean, desc, asc
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Boolean, and_, desc, asc, func, or_
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Session, relationship, joinedload
 from datetime import datetime
@@ -249,4 +249,69 @@ class PrivateMessage(Database.Base):
         except Exception as e:
             logger.error(f"Error marking message as read: {e}")
             db_session.rollback()
+            raise
+
+    @staticmethod
+    def get_dialogs(db_session: Session, current_user_uid: UUID):
+        """Получаем список диалогов с последним сообщением"""
+        try:
+            # Подзапрос для получения последних сообщений
+            subquery = (
+                db_session.query(
+                    func.greatest(PrivateMessage.sender_uid, PrivateMessage.receiver_uid).label("dialog_id"),
+                    func.max(PrivateMessage.created_at).label("last_message_time")
+                )
+                .filter(
+                    or_(
+                        PrivateMessage.sender_uid == current_user_uid,
+                        PrivateMessage.receiver_uid == current_user_uid
+                    )
+                )
+                .group_by(func.greatest(PrivateMessage.sender_uid, PrivateMessage.receiver_uid))
+                .subquery()
+            )
+
+            # Основной запрос для получения диалогов
+            dialogs = (
+                db_session.query(
+                    PrivateMessage,
+                    subquery.c.last_message_time
+                )
+                .join(
+                    subquery,
+                    and_(
+                        func.greatest(PrivateMessage.sender_uid, PrivateMessage.receiver_uid) == subquery.c.dialog_id,
+                        PrivateMessage.created_at == subquery.c.last_message_time
+                    )
+                )
+                .options(joinedload(PrivateMessage.sender), joinedload(PrivateMessage.receiver))
+                .all()
+            )
+
+            result = []
+            for dialog, last_message_time in dialogs:
+                partner_id = (
+                    dialog.receiver_uid if dialog.sender_uid == current_user_uid
+                    else dialog.sender_uid
+                )
+
+                result.append({
+                    "partner_id": str(partner_id),
+                    "last_message": dialog.text,
+                    "last_message_time": last_message_time.isoformat(),
+                    "unread_count": db_session.query(PrivateMessage)
+                        .filter(
+                            PrivateMessage.sender_uid == partner_id,
+                            PrivateMessage.receiver_uid == current_user_uid,
+                            PrivateMessage.is_read == False
+                        ).count(),
+                    "partner": {
+                        "username": dialog.sender.username if dialog.sender_uid == partner_id else dialog.receiver.username,
+                        "avatar": dialog.sender.avatar if dialog.sender_uid == partner_id else dialog.receiver.avatar
+                    }
+                })
+
+            return result
+        except Exception as e:
+            logger.error(f"Error fetching dialogs: {e}")
             raise

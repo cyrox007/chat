@@ -2,78 +2,107 @@ import axios from "axios";
 import store from "@/stores";
 
 const $api = axios.create({
-	withCredentials: true, // Включаем отправку кук
-	baseURL: import.meta.env.VITE_API_BASE_URL, // Базовый URL вашего API
+    withCredentials: true, // Включаем отправку кук
+    baseURL: import.meta.env.VITE_API_BASE_URL, // Базовый URL вашего API
 });
+
+let isRefreshing = false; // Флаг для предотвращения множественных запросов на обновление токена
+let failedQueue = []; // Очередь для хранения запросов, ожидающих обновления токена
+
+// Функция для обработки очереди запросов
+const processQueue = (error = null) => {
+    failedQueue.forEach((callback) => callback(error));
+    failedQueue = [];
+};
 
 // Перехватчик запросов: добавляем токен в заголовки
 $api.interceptors.request.use((config) => {
-	const accessToken = localStorage.getItem('access_token');
-	if (accessToken) {
-		config.headers.Authorization = `Bearer ${accessToken}`;
-	}
-	return config;
+    const accessToken = localStorage.getItem('access_token');
+    if (accessToken) {
+        config.headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return config;
 }, (error) => {
-	return Promise.reject(error);
+    return Promise.reject(error);
 });
 
 // Перехватчик ответов: обработка ошибок
 $api.interceptors.response.use(
-	(config) => {
-		return config;
-	},
-	async (error) => {
-		const originalRequest = error.config;
+    (response) => response,
+    async (error) => {
+        const originalRequest = error.config;
 
-		// Обработка ошибки 401 Unauthorized
-		if (error.response?.status === 401 && !originalRequest._isRetry) {
-			originalRequest._isRetry = true;
-			try {
-				// Обновляем токен
-				const refreshResponse = await axios.get(`${$api.defaults.baseURL}/refresh`, {
-					withCredentials: true,
-				});
-				const { access_token } = refreshResponse.data;
+        // Обработка ошибки 401 Unauthorized
+        if (error.response?.status === 401 && !originalRequest._isRetry) {
+            if (!isRefreshing) {
+                isRefreshing = true;
+                originalRequest._isRetry = true;
 
-				// Сохраняем новый access_token
-				localStorage.setItem('access_token', access_token);
+                try {
+                    // Обновляем токен
+                    const refreshResponse = await axios.get(`${$api.defaults.baseURL}/refresh`, {
+                        withCredentials: true,
+                    });
+                    const { access_token } = refreshResponse.data;
 
-				// Устанавливаем новый токен в заголовки
-				originalRequest.headers.Authorization = `Bearer ${access_token}`;
+                    // Сохраняем новый access_token
+                    localStorage.setItem('access_token', access_token);
 
-				// Повторяем исходный запрос
-				return $api.request(originalRequest);
-			} catch (e) {
-				// Если обновление токена не удалось, очищаем данные и перенаправляем на страницу входа
-				localStorage.clear();
-				store.dispatch('clearUser');
-				window.location.href = '/login';
-			}
-		}
+                    // Устанавливаем новый токен в заголовки
+                    originalRequest.headers.Authorization = `Bearer ${access_token}`;
 
-		// Обработка ошибки 403 Forbidden
-		if (error.response?.status === 403) {
-			console.error('Доступ запрещен: токен недействителен или удален.');
+                    // Повторяем все запросы из очереди
+                    processQueue();
 
-			// Очищаем данные аутентификации
-			localStorage.clear();
-			store.dispatch('clearUser');
+                    // Повторяем исходный запрос и возвращаем его результат
+                    return $api(originalRequest);
+                } catch (refreshError) {
+                    // Если обновление токена не удалось, очищаем данные и перенаправляем на страницу входа
+                    processQueue(refreshError);
+                    localStorage.clear();
+                    store.dispatch('clearUser');
+                    window.location.href = '/login';
+                    return Promise.reject(refreshError);
+                } finally {
+                    isRefreshing = false;
+                }
+            } else {
+                // Добавляем запрос в очередь на повторение
+                return new Promise((resolve, reject) => {
+                    failedQueue.push((err) => {
+                        if (err) {
+                            reject(err);
+                        } else {
+                            resolve($api(originalRequest));
+                        }
+                    });
+                });
+            }
+        }
 
-			// Перенаправляем пользователя на страницу входа
-			window.location.href = '/login';
+        // Обработка ошибки 403 Forbidden
+        if (error.response?.status === 403) {
+            console.error('Доступ запрещен: токен недействителен или удален.');
 
-			// Прерываем выполнение
-			throw error;
-		}
+            // Очищаем данные аутентификации
+            localStorage.clear();
+            store.dispatch('clearUser');
 
-		// Обработка других ошибок
-		if (error.response?.status === 400) {
-			console.error('Ошибка валидации:', error);
-		}
+            // Перенаправляем пользователя на страницу входа
+            window.location.href = '/login';
 
-		// Пробрасываем ошибку дальше
-		throw error;
-	}
+            // Прерываем выполнение
+            throw error;
+        }
+
+        // Обработка других ошибок
+        if (error.response?.status === 400) {
+            console.error('Ошибка валидации:', error);
+        }
+
+        // Пробрасываем ошибку дальше
+        throw error;
+    }
 );
 
 export default $api;

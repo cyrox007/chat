@@ -4,7 +4,9 @@ from typing import Dict, List, Tuple, Optional
 from fastapi import WebSocket
 import logging
 
-logger = logging.getLogger(__name__)
+from utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 class ConnectionManager:
     def __init__(self):
@@ -68,12 +70,30 @@ class ConnectionManager:
                     logger.error(f"Error broadcasting to room {room_uid}: {e}")
 
     async def send_to_user(self, user_uid: UUID, message: dict):
-        """Отправляет приватное сообщение конкретному пользователю"""
+        # Преобразуем user_uid в UUID, если это строка
+        if isinstance(user_uid, str):
+            try:
+                user_uid = UUID(user_uid)
+            except ValueError:
+                logger.error(f"Invalid UUID format for user_uid: {user_uid}")
+                return
+
+        # Логирование для отладки
+        logger.debug(f"Type of user_uid: {type(user_uid)}")
+        logger.debug(f"Types of keys in user_connections: {[type(k) for k in self.user_connections.keys()]}")
+
         if user_uid in self.user_connections:
             try:
                 await self.user_connections[user_uid].send_json(message)
+                logger.info(f"Message sent to user {user_uid}: {message}")
             except Exception as e:
                 logger.error(f"Error sending to user {user_uid}: {e}")
+                # Удаляем соединение, если оно недоступно
+                del self.user_connections[user_uid]
+                logger.warning(f"Removed user {user_uid} from active connections due to error")
+        else:
+            logger.error(f"User {user_uid} not found in active connections")
+            logger.debug(f"{self.user_connections}")
 
     def set_active_dialog(self, user_uid: UUID, dialog_with_uid: UUID):
         """Устанавливает активный диалог для пользователя"""

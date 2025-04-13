@@ -1,57 +1,77 @@
+/* Глобальные переменные */
 :root {
-	--bg-light: #f8f9fa;
-	--background-image: url(./images/bg.png);
-	--bg-gradient: linear-gradient(135deg, #e0eafc, #cfdef3);
-	--text-light: #212529;
-	--sidebar-bg-light: rgba(255, 255, 255, 0.9);
-	--primary-color: #007bff;
-	--primary-color-hover: #0056b3;
-	--sender-bg: rgba(209, 231, 221, 0.9);
-	--other-user-bg: rgba(248, 215, 218, 0.9);
-	--mention-bg: rgba(255, 243, 205, 0.9);
-	--mention-border: #856404;
-	--bg-dark: #343a40;
-	--bg-dark-gradient: linear-gradient(135deg, #495057, #343a40);
-	--text-dark: #ffffff;
-	--sidebar-bg-dark: rgba(50, 50, 50, 0.9);
+    --bg-light: #f8f9fa;
+    --text-light: #212529;
+    --sidebar-bg-light: rgba(255, 255, 255, 0.9);
+    --primary-color: #a4146c;
+	--primary-color-hover: #c25091;
+	--other-user-bg: #f1f1f1;
+    --messenger-bg: var(--bg-light);
+    --messenger-sidebar-bg: var(--sidebar-bg-light);
+    --messenger-conversation-bg: var(--bg-light);
+    --messenger-input-bg: var(--sidebar-bg-light);
+    --messenger-border: #ddd;
+    --messenger-text: var(--text-light);
 
-	--profile-bg-light: #f0f4fc;
-	--profile-avatar-border: #007bff;
-	--profile-edit-btn: #007bff;
-	--profile-edit-btn-hover: #0056b3;
-	--profile-details-color: #6c757d;
+	--sent-message-bg: #dcf8c6; /* Зелёный фон для своих сообщений */
+	--sent-message-text: #212529; /* Текст для своих сообщений */
+	--received-message-bg: #f1f1f1; /* Серый фон для чужих сообщений */
+	--received-message-text: #212529; /* Текст для чужих сообщений */
 
-	--messenger-bg: var(--bg-light);
-	--messenger-sidebar-bg: var(--sidebar-bg-light);
-	--messenger-conversation-bg: var(--bg-light);
-	--messenger-input-bg: var(--sidebar-bg-light);
-	--messenger-border: #ddd;
-	--messenger-text: var(--text-light);
-	--messenger-message-sent-bg: var(--primary-color);
-	--messenger-message-received-bg: var(--other-user-bg);
-	--messenger-message-text: var(--text-light);
-	--messenger-time-color: #777;
+	--profile-avatar-border: #ddd; /* Граница аватара */
+	--profile-details-color: #666; /* Цвет деталей профиля */
+	--profile-edit-btn: var(--primary-color); /* Кнопка редактирования */
+	--profile-edit-btn-hover: var(--primary-color-hover); /* Кнопка редактирования при наведении */
+
+    /* Тени */
+    --shadow-light: 0px 2px 4px rgba(0, 0, 0, 0.1);
+    --shadow-medium: 0px 4px 8px rgba(0, 0, 0, 0.15);
+    --shadow-dark: 0px 6px 12px rgba(0, 0, 0, 0.2);
 }
 
-@media (prefers-color-scheme: dark) {
-	:root {
-		--bg-light: #212529;
-		/* --background-image: none; */
-		--text-light: #ffffff;
-		--profile-bg-light: #343a40;
-		--profile-details-color: #adb5bd;
+/* Светлая тема */
+.light-theme {
+    --bg-light: #f8f9fa;
+    --text-light: #212529;
+    --sidebar-bg-light: rgba(255, 255, 255, 0.9);
+    --primary-color: #a4146c;
+	--primary-color-hover: #c25091;
+    --background-image: url('./images/bg.png');
 
-		--messenger-bg: var(--bg-dark);
-		--messenger-sidebar-bg: var(--sidebar-bg-dark);
-		--messenger-conversation-bg: var(--bg-dark);
-		--messenger-input-bg: var(--sidebar-bg-dark);
-		--messenger-border: #444;
-		--messenger-text: var(--text-dark);
-		--messenger-message-sent-bg: var(--primary-color);
-		--messenger-message-received-bg: #495057;
-		--messenger-message-text: var(--text-dark);
-		--messenger-time-color: #aaa;
-	}
+    /* Тени для светлой темы */
+    --shadow-light: 0px 2px 4px rgba(0, 0, 0, 0.1);
+    --shadow-medium: 0px 4px 8px rgba(0, 0, 0, 0.15);
+    --shadow-dark: 0px 6px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Темная тема */
+.dark-theme {
+    --background-image: url('./images/bg-dark.png');
+    --bg-light: #15252b;
+    --text-light: #ffffff;
+    --sidebar-bg-light: rgba(50, 50, 50, 0.9);
+    --primary-color: #4c747c;
+	--primary-color-hover: #6c8086;
+	--other-user-bg: #333333;
+    --messenger-bg: var(--bg-light);
+    --messenger-sidebar-bg: var(--sidebar-bg-light);
+    --messenger-conversation-bg: var(--bg-light);
+    --messenger-input-bg: var(--sidebar-bg-light);
+    --messenger-border: #445c63;
+    --messenger-text: var(--text-light);
+
+	--sent-message-bg: #2c488c; /* Синий фон для своих сообщений */
+	--sent-message-text: #ffffff; /* Белый текст для своих сообщений */
+	--received-message-bg: #333333; /* Темно-серый фон для чужих сообщений */
+	--received-message-text: #ffffff; /* Белый текст для чужих сообщений */
+
+	--profile-avatar-border: #444; /* Граница аватара */
+	--profile-details-color: #aaa; /* Цвет деталей профиля */
+
+    /* Тени для темной темы */
+    --shadow-light: 0px 2px 4px rgba(255, 255, 255, 0.1);
+    --shadow-medium: 0px 4px 8px rgba(255, 255, 255, 0.15);
+    --shadow-dark: 0px 6px 12px rgba(255, 255, 255, 0.2);
 }
 
 body {
@@ -63,7 +83,7 @@ body {
 	color: var(--text-light);
 	transition: background 0.3s, color 0.3s;
 	background-position: auto;
-	background-size: cover;
+	/* background-size: cover; */
 }
 
 * {

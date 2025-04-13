@@ -10,9 +10,10 @@ def create_app() -> FastAPI:
     from views.csrf import routers as csrf_routes
     from views.service import routers as service_routes
     from views.users import routers as user_routes
-    from views.rooms import routers as install_http_routes
-    from views.rooms import ws_routers as install_ws_routes
-    from views.messenger import ws_routers as install_ws_routes_messener
+    from views.rooms import routers as http_routes_chat
+    from views.rooms import ws_routers as ws_routes_chat
+    from views.messenger import routers as http_routers_messenger
+    from views.messenger import ws_routers as ws_routers_messenger
     
     app = FastAPI()
 
@@ -35,9 +36,10 @@ def create_app() -> FastAPI:
     csrf_routes.install(app)
     service_routes.install(app)
     user_routes.install(app)
-    install_http_routes.install(app)
-    install_ws_routes.install(app)
-    install_ws_routes_messener.install(app)
+    http_routes_chat.install(app)
+    ws_routes_chat.install(app)
+    http_routers_messenger.install(app)
+    ws_routers_messenger.install(app)
 
     return app
 

@@ -31,7 +31,7 @@ export default {
 				state.conversations[userId] = [];
 			}
 			state.conversations[userId].push(message);
-
+	
 			// Увеличиваем счетчик непрочитанных, если это не активный диалог
 			if (state.activeDialog !== userId) {
 				state.unreadCounts[userId] = (state.unreadCounts[userId] || 0) + 1;
@@ -42,7 +42,18 @@ export default {
 		},
 		CLEAR_CONVERSATION(state, userId) {
 			delete state.conversations[userId];
-		}
+		},
+		MARK_MESSAGE_AS_READ(state, messageId) {
+			// Уменьшаем счетчик непрочитанных сообщений
+			for (const userId in state.conversations) {
+				const messages = state.conversations[userId];
+				messages.forEach(message => {
+					if (message.uid === messageId) {
+						message.is_read = true;
+					}
+				});
+			}
+		},
 	},
 	actions: {
 		async connectMessenger({ commit, state, rootGetters }) {
@@ -104,7 +115,7 @@ export default {
 		},
 
 		handleMessengerMessage({ commit, rootGetters }, data) {
-			const currentUser = rootGetters['user/getUser'];
+			const currentUser = rootGetters['getUser'];
 
 			switch (data.type) {
 				case 'private_message':
@@ -123,6 +134,7 @@ export default {
 
 				case 'message_read':
 					// Обработка отметки о прочтении
+					commit('MARK_MESSAGE_AS_READ', data.message_id);
 					break;
 
 				case 'conversation':
@@ -162,9 +174,19 @@ export default {
 				state.socket.send(JSON.stringify({
 					action: 'get_conversation',
 					other_user_uid: otherUserId,
-					request_id: requestId
+					request_id: requestId,
 				}));
 			}
-		}
+		},
+		markMessageAsRead({ state }, messageId) {
+			if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+				state.socket.send(JSON.stringify({
+					action: 'mark_message_as_read',
+					message_id: messageId,
+				}));
+			} else {
+				throw new Error('Messenger WebSocket не подключен');
+			}
+		},
 	}
 };

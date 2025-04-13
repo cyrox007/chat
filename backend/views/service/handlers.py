@@ -1,10 +1,10 @@
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from jwt import PyJWTError
 
 from components.device.model import UserDevice
 from components.decorators.db import get_session
-from utils.jwt import validate_refresh_token, create_access_token, create_refresh_token
+from utils.jwt import validate_refresh_token, validate_access_token, create_access_token, create_refresh_token
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -106,3 +106,27 @@ async def refresh_tokens(request: Request, db_session=None):
     except Exception as e:
         logger.error(f"Произошла необработанная ошибка: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+    
+@get_session
+async def check_token(request: Request, response: Response, db_session=None):
+    try:
+        # Получаем токен из параметров запроса
+        access_token = request.headers.get("authorization")
+        if not access_token:
+            response.status_code = status.HTTP_400_BAD_REQUEST
+            return {"status": "error", "message": "Access token is missing"}, 400
+
+        # Проверяем токен
+        payload = validate_access_token(access_token)
+        if not payload:
+            response.status_code = status.HTTP_401_UNAUTHORIZED
+            return {"status": "error", "message": "Invalid or expired token"}, 401
+
+        # Если токен действителен, возвращаем успешный ответ
+        return {"status": "ok", "message": "Token is valid"}
+
+    except Exception as e:
+        # Логируем ошибку для отладки
+        print(f"Unexpected error in check_token: {str(e)}")
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {"status": "error", "message": "Internal server error"}, 500
