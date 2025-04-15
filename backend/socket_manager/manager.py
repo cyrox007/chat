@@ -2,7 +2,6 @@ import asyncio
 from uuid import UUID
 from typing import Dict, List, Tuple, Optional
 from fastapi import WebSocket
-import logging
 
 from utils.logger import setup_logger
 
@@ -79,8 +78,8 @@ class ConnectionManager:
                 return
 
         # Логирование для отладки
-        logger.debug(f"Type of user_uid: {type(user_uid)}")
-        logger.debug(f"Types of keys in user_connections: {[type(k) for k in self.user_connections.keys()]}")
+        #logger.debug(f"Type of user_uid: {type(user_uid)}")
+        #logger.debug(f"Types of keys in user_connections: {[type(k) for k in self.user_connections.keys()]}")
 
         if user_uid in self.user_connections:
             try:
@@ -93,7 +92,7 @@ class ConnectionManager:
                 logger.warning(f"Removed user {user_uid} from active connections due to error")
         else:
             logger.error(f"User {user_uid} not found in active connections")
-            logger.debug(f"{self.user_connections}")
+            #logger.debug(f"{self.user_connections}")
 
     def set_active_dialog(self, user_uid: UUID, dialog_with_uid: UUID):
         """Устанавливает активный диалог для пользователя"""
