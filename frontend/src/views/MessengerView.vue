@@ -3,7 +3,7 @@
 		<!-- Левая панель: список диалогов -->
 		<div class="conversations-list">
 			<div class="search-bar">
-				<input type="text" placeholder="Поиск пользователей..." v-model="searchQuery" />
+				<input type="text" placeholder="Поиск пользователей..." v-model="searchQuery" disabled/>
 			</div>
 			<div class="conversations">
 				<!-- Если диалоги есть -->
@@ -80,7 +80,7 @@ const messagesContainer = ref(null);
 const isMobile = ref(window.innerWidth < 768);
 const dialogs = ref([]);
 
-// Получаем данные текущего пользователя из хранилища
+// Текущий пользователь
 const currentUser = computed(() => {
 	const user = store.getters.getUser || {
 		uid: null,
@@ -88,47 +88,6 @@ const currentUser = computed(() => {
 		avatar: '/images/default-avatar.png',
 	};
 	return user;
-});
-
-// Загружаем диалоги при монтировании компонента
-onMounted(async () => {
-	try {
-		const response = await MessengerService.getDialogs();
-
-		if (response.data.status === 'ok') {
-			dialogs.value = response.data.dialogs;
-		}
-	} catch (error) {
-		console.error('Ошибка при загрузке диалогов:', error);
-	}
-
-	if (messagesContainer.value) {
-		const options = {
-			root: null,
-			threshold: 0,
-		};
-
-		const observer = new IntersectionObserver((entries) => {
-			entries.forEach(entry => {
-				if (entry.isIntersecting) {
-					// Если сообщение видимо, помечаем его как прочитанное
-					markMessageAsRead(entry.target.dataset.messageId);
-				}
-			});
-		}, options);
-
-		// Наблюдаем за всеми сообщениями
-		Array.from(messagesContainer.value.querySelectorAll('.message')).forEach(messageElement => {
-			observer.observe(messageElement);
-		});
-	}
-});
-
-// Фильтрация диалогов по поисковому запросу
-const filteredDialogs = computed(() => {
-	return dialogs.value.filter((dialog) =>
-		dialog.partner.username.toLowerCase().includes(searchQuery.value.toLowerCase())
-	);
 });
 
 // Активный диалог
@@ -140,17 +99,90 @@ const activeDialogUser = computed(() => {
 	return dialog?.partner || {};
 });
 
-// Получаем историю сообщений для активного диалога
+// Загрузка диалогов при монтировании компонента
+onMounted(async () => {
+	try {
+		const response = await MessengerService.getDialogs();
+		if (response.data.status === 'ok') {
+			dialogs.value = response.data.dialogs;
+		}
+	} catch (error) {
+		console.error('Ошибка при загрузке диалогов:', error);
+	}
+});
+
+// Фильтрация диалогов по поисковому запросу
+const filteredDialogs = computed(() => {
+	return dialogs.value.filter((dialog) =>
+		dialog.partner.username.toLowerCase().includes(searchQuery.value.toLowerCase())
+	);
+});
+
+// Открытие диалога
+const openConversation = async (userId) => {
+	store.dispatch('messenger/setActiveDialog', userId);
+
+	// Загружаем историю переписки
+	await store.dispatch('messenger/requestConversation', {
+		otherUserId: userId,
+		requestId: Date.now().toString(),
+	});
+
+	// Инициализируем IntersectionObserver после загрузки сообщений
+	nextTick(() => {
+		setupIntersectionObserver();
+	});
+};
+
+// Закрытие диалога
+const closeConversation = () => {
+	store.dispatch('messenger/setActiveDialog', null);
+};
+
+// Проверка активного диалога
+const isActiveDialog = (userId) => {
+	return activeDialog.value === userId;
+};
+
+// Получение истории сообщений для активного диалога
 const getConversation = (userId) => {
 	return store.getters['messenger/getConversation'](userId);
 };
 
+// Отметка сообщения как прочитанного
 const markMessageAsRead = async (messageId) => {
 	try {
 		await store.dispatch('messenger/markMessageAsRead', messageId);
 	} catch (error) {
 		console.error('Ошибка при отметке сообщения как прочитанного:', error);
 	}
+};
+
+// Метод для инициализации IntersectionObserver
+const setupIntersectionObserver = () => {
+	if (!messagesContainer.value) return;
+
+	const options = {
+		root: null, // Относительно viewport
+		threshold: 0, // Триггер при появлении любого фрагмента элемента
+	};
+
+	const observer = new IntersectionObserver((entries) => {
+		entries.forEach(entry => {
+			if (entry.isIntersecting) {
+				const messageId = entry.target.querySelector('.message-content')?.dataset.messageId;
+				if (messageId) {
+					//console.log('Сообщение видимо:', messageId);
+					markMessageAsRead(messageId);
+				}
+			}
+		});
+	}, options);
+
+	// Наблюдаем за всеми сообщениями
+	Array.from(messagesContainer.value.querySelectorAll('.message')).forEach(messageElement => {
+		observer.observe(messageElement);
+	});
 };
 
 // Обработка отправки сообщения
@@ -163,10 +195,10 @@ const handleSendMessage = async (messageData) => {
 
 	// Формируем полезную нагрузку для отправки сообщения
 	const messagePayload = {
-		frontId: Date.now().toString(), // Используем временный ID для отслеживания
+		frontId: Date.now().toString(), // Временный ID
 		content: sanitizedContent || '', // Очищенный текст или пустая строка
-		content_type: messageData.content_type, // Тип контента (текст, файл, голос)
-		media_metadata: messageData.media_metadata, // Медиа-метаданные (файлы, голос)
+		content_type: messageData.content_type, // Тип контента
+		media_metadata: messageData.media_metadata, // Медиа-метаданные
 		sender: {
 			uid: currentUser.value.uid, // UID текущего пользователя
 			name: currentUser.value.username, // Имя текущего пользователя
@@ -195,7 +227,12 @@ const scrollToBottom = () => {
 // Автопрокрутка при новых сообщениях
 watch(
 	() => getConversation(activeDialog.value)?.length,
-	() => nextTick().then(scrollToBottom),
+	() => {
+		nextTick(() => {
+			scrollToBottom();
+			setupIntersectionObserver(); // Обновляем IntersectionObserver при новых сообщениях
+		});
+	},
 	{ deep: true }
 );
 
@@ -204,24 +241,28 @@ const formatTime = (date) => {
 	return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
-// Открытие диалога
-const openConversation = (userId) => {
-	store.dispatch('messenger/setActiveDialog', userId);
-	store.dispatch('messenger/requestConversation', {
-		otherUserId: userId,
-		requestId: Date.now().toString(),
-	});
-};
+onMounted(() => {
+	if (messagesContainer.value) {
+		const options = {
+			root: null, // Относительно viewport
+			threshold: 0, // Триггер при появлении любого фрагмента элемента
+		};
+		const observer = new IntersectionObserver((entries) => {
+			entries.forEach(entry => {
+				if (entry.isIntersecting) {
+					console.log('Сообщение видимо:', entry.target.dataset.messageId);
+					markMessageAsRead(entry.target.dataset.messageId);
+				}
+			});
+		}, options);
 
-// Закрытие диалога
-const closeConversation = () => {
-	store.dispatch('messenger/setActiveDialog', null);
-};
-
-// Проверка активного диалога
-const isActiveDialog = (userId) => {
-	return activeDialog.value === userId;
-};
+		// Наблюдаем за всеми сообщениями
+		Array.from(messagesContainer.value.querySelectorAll('.message')).forEach(messageElement => {
+			console.log('Наблюдаем за сообщением:', messageElement.querySelector('.message-content').dataset.messageId);
+			observer.observe(messageElement);
+		});
+	}
+});
 </script>
 
 <style scoped>

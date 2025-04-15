@@ -44,14 +44,12 @@ export default {
 			delete state.conversations[userId];
 		},
 		MARK_MESSAGE_AS_READ(state, messageId) {
-			// Уменьшаем счетчик непрочитанных сообщений
 			for (const userId in state.conversations) {
 				const messages = state.conversations[userId];
-				messages.forEach(message => {
-					if (message.uid === messageId) {
-						message.is_read = true;
-					}
-				});
+				const message = messages.find(msg => msg.uid === messageId);
+				if (message) {
+					message.is_read = true;
+				}
 			}
 		},
 	},
@@ -178,14 +176,17 @@ export default {
 				}));
 			}
 		},
-		markMessageAsRead({ state }, messageId) {
+		markMessageAsRead({ state, commit }, messageId) {
 			if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+				// Отправляем запрос на сервер через WebSocket
 				state.socket.send(JSON.stringify({
 					action: 'mark_message_as_read',
-					message_id: messageId,
+					message_uid: messageId,
 				}));
 			} else {
-				throw new Error('Messenger WebSocket не подключен');
+				// Если WebSocket не подключен, сохраняем запрос в очередь
+				console.warn('WebSocket не подключен. Добавляем запрос в очередь...');
+				commit('ADD_PENDING_READ_REQUEST', messageId);
 			}
 		},
 	}
