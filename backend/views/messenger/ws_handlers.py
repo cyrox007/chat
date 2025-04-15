@@ -31,7 +31,7 @@ async def handle_private_messages(websocket: WebSocket, user_uid: UUID, db_sessi
 
             if action == "send_message":
                 await handle_send_private_message(data, user_uid, db_session)
-            elif action == "mark_as_read":
+            elif action == "mark_message_as_read":
                 await handle_mark_as_read(data, user_uid, db_session)
             elif action == "get_conversation":
                 await handle_get_conversation(data, user_uid, db_session)
@@ -81,17 +81,27 @@ async def handle_mark_as_read(data: dict, user_uid: UUID, db_session: Session):
     """
     try:
         message_uid = data.get("message_uid")
-        if message_uid:
-            message = PrivateMessage.mark_as_read(db_session, message_uid)
-            if message:
-                response = {
-                    "type": "message_read",
-                    "message_uid": str(message_uid),
-                    "read_at": datetime.utcnow().isoformat()
-                }
-                # Уведомляем отправителя о прочтении
-                if str(message.sender_uid) != str(user_uid):
-                    await private_manager.send_to_user(str(message.sender_uid), response)
+        if not message_uid:
+            raise ValueError("Отсутствует message_uid")
+
+        # Помечаем сообщение как прочитанное в базе данных
+        message = PrivateMessage.mark_as_read(db_session, message_uid)
+        if not message:
+            raise ValueError(f"Сообщение с UID {message_uid} не найдено")
+
+        # Формируем ответ для отправки
+        response = {
+            "type": "message_read",
+            "message_uid": str(message_uid),
+            "read_at": datetime.utcnow().isoformat()
+        }
+
+        # Уведомляем отправителя, если он онлайн
+        if str(message.sender_uid) != str(user_uid):
+            await private_manager.send_to_user(str(message.sender_uid), response)
+
+    except Exception as e:
+        logger.error(f"Ошибка при обработке отметки сообщения как прочитанного: {e}")
 
     except Exception as e:
         logger.error(f"Error marking message as read: {e}")
