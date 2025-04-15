@@ -228,7 +228,7 @@ class PrivateMessage(Database.Base):
                     ((PrivateMessage.receiver_uid == str(user2_uid))) |
                     ((PrivateMessage.sender_uid == str(user2_uid)) & 
                     ((PrivateMessage.receiver_uid == str(user1_uid)))
-                )).order_by(asc(PrivateMessage.created_at)).limit(limit).all()
+                )).order_by(desc(PrivateMessage.created_at)).limit(limit).all()
 
             return [PrivateMessage.format_message(msg) for msg in messages]
         except Exception as e:
