@@ -60,12 +60,10 @@ async def handle_send_private_message(data: dict, sender_uid: UUID, db_session: 
         formatted_message['frontId'] = data.get('frontId')
         
         # Отправляем сообщение всем устройствам отправителя
-        for websocket in private_manager.user_connections.get(sender_uid, []):
-            await private_manager.send_to_user(str(sender_uid), formatted_message)
+        await private_manager.send_to_user(str(sender_uid), formatted_message)
 
         # Отправляем сообщение всем устройствам получателя
-        for websocket in private_manager.user_connections.get(message_data["receiver_uid"], []):
-            await private_manager.send_to_user(str(message_data["receiver_uid"]), formatted_message)
+        await private_manager.send_to_user(str(message_data["receiver_uid"]), formatted_message)
 
         logger.info(f"Private message sent from {sender_uid} to {message_data['receiver_uid']}")
 
