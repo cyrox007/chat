@@ -53,7 +53,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, defineEmits, defineProps } from 'vue';
 import DeleteUserModal from '@/components/DeleteUserModal/index.vue';
 import { useRoute } from 'vue-router';
 import { useStore } from 'vuex';

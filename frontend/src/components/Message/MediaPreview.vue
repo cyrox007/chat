@@ -13,6 +13,7 @@
 </template>
 
 <script setup>
+import { defineProps } from "vue";
 const props = defineProps({
 	file: Object,
 	type: String

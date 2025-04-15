@@ -12,7 +12,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, defineExpose } from 'vue';
 import UsersServices from '@/API/UsersService';
 
 // Состояние модального окна
