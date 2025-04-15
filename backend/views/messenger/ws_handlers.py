@@ -13,12 +13,12 @@ logger = setup_logger(__name__)
 # Инициализация менеджера подключений
 private_manager = ConnectionManager()
 
-async def initialize_messenger_connection(websocket: WebSocket, db_session: Session, user_uid: UUID):
+async def initialize_messenger_connection(websocket: WebSocket, user_uid: UUID):
     """
     Инициализирует соединение для мессенджера.
     """
     await private_manager.connect_to_messenger(websocket, user_uid)
-    logger.info(f"User {user_uid} connected to messenger")
+    logger.info(f"User {user_uid} connected to messenger from a new device")
 
 async def handle_private_messages(websocket: WebSocket, user_uid: UUID, db_session: Session):
     """
@@ -34,7 +34,7 @@ async def handle_private_messages(websocket: WebSocket, user_uid: UUID, db_sessi
             elif action == "mark_message_as_read":
                 await handle_mark_as_read(data, user_uid, db_session)
             elif action == "get_conversation":
-                await handle_get_conversation(data, user_uid, db_session)
+                await handle_get_conversation(data, user_uid, db_session, websocket)
             else:
                 logger.warning(f"Unknown action: {action}")
 
@@ -58,10 +58,14 @@ async def handle_send_private_message(data: dict, sender_uid: UUID, db_session: 
         # Создаем сообщение в БД
         formatted_message = PrivateMessage.create_private_message(db_session, message_data)
         formatted_message['frontId'] = data.get('frontId')
+        
+        # Отправляем сообщение всем устройствам отправителя
+        for websocket in private_manager.user_connections.get(sender_uid, []):
+            await private_manager.send_to_user(str(sender_uid), formatted_message)
 
-        # Отправляем сообщение отправителю и получателю
-        await private_manager.send_to_user(str(sender_uid), formatted_message)
-        await private_manager.send_to_user(str(message_data["receiver_uid"]), formatted_message)
+        # Отправляем сообщение всем устройствам получателя
+        for websocket in private_manager.user_connections.get(message_data["receiver_uid"], []):
+            await private_manager.send_to_user(str(message_data["receiver_uid"]), formatted_message)
 
         logger.info(f"Private message sent from {sender_uid} to {message_data['receiver_uid']}")
 
@@ -73,7 +77,9 @@ async def handle_send_private_message(data: dict, sender_uid: UUID, db_session: 
             "details": str(e),
             "frontId": data.get('frontId')
         }
-        await private_manager.send_to_user(str(sender_uid), error_message)
+        # Уведомляем отправителя на всех его устройствах
+        for websocket in private_manager.user_connections.get(str(sender_uid), []):
+            await private_manager.send_to_user(str(sender_uid), error_message)
 
 async def handle_mark_as_read(data: dict, user_uid: UUID, db_session: Session):
     """
@@ -96,47 +102,53 @@ async def handle_mark_as_read(data: dict, user_uid: UUID, db_session: Session):
             "read_at": datetime.utcnow().isoformat()
         }
 
-        # Уведомляем отправителя, если он онлайн
+        # Уведомляем отправителя на всех его устройствах
         if str(message.sender_uid) != str(user_uid):
-            await private_manager.send_to_user(str(message.sender_uid), response)
+            for websocket in private_manager.user_connections.get(message.sender_uid, []):
+                await private_manager.send_to_user(str(message.sender_uid), response)
 
     except Exception as e:
         logger.error(f"Ошибка при обработке отметки сообщения как прочитанного: {e}")
 
-    except Exception as e:
-        logger.error(f"Error marking message as read: {e}")
-
-async def handle_get_conversation(data: dict, user_uid: UUID, db_session: Session):
+async def handle_get_conversation(data: dict, user_uid: UUID, db_session: Session, websocket: WebSocket):
     """
     Возвращает переписку с другим пользователем.
+    Отправляет историю переписки только на то устройство, которое запросило её.
     """
     try:
         other_user_uid = data.get("other_user_uid")
-        if other_user_uid:
-            messages = PrivateMessage.get_conversation(
-                db_session, 
-                user1_uid=user_uid,
-                user2_uid=UUID(other_user_uid)
-            )
-            
-            response = {
-                "type": "conversation",
-                "other_user_uid": other_user_uid,
-                "messages": messages,
-                "request_id": data.get("request_id")
-            }
-            await private_manager.send_to_user(str(user_uid), response)
-            logger.debug(f"Отправляем сообщение {response} пользователю {str(user_uid)}")
+        if not other_user_uid:
+            raise ValueError("Отсутствует other_user_uid в запросе")
+
+        # Получаем историю переписки из базы данных
+        messages = PrivateMessage.get_conversation(
+            db_session, 
+            user1_uid=user_uid,
+            user2_uid=UUID(other_user_uid)
+        )
+        
+        # Формируем ответ
+        response = {
+            "type": "conversation",
+            "other_user_uid": other_user_uid,
+            "messages": messages,
+            "request_id": data.get("request_id")
+        }
+
+        # Отправляем историю переписки только на конкретное устройство (websocket)
+        await private_manager.send_to_specific_user(websocket, response)
+        logger.debug(f"Отправляем историю переписки пользователю {user_uid} на запрашивающее устройство")
 
     except Exception as e:
-        logger.error(f"Error getting conversation: {e}")
+        logger.error(f"Ошибка при получении истории переписки: {e}")
         error_message = {
             "type": "error",
-            "message": "Failed to get conversation",
+            "message": "Не удалось получить историю переписки",
             "details": str(e),
             "request_id": data.get("request_id")
         }
-        await private_manager.send_to_user(str(user_uid), error_message)
+        # Уведомляем об ошибке только запрашивающее устройство
+        await private_manager.send_to_specific_user(websocket, error_message)
 
 @get_session
 async def handle_messenger_connection(websocket: WebSocket, user, db_session=None):
@@ -147,7 +159,7 @@ async def handle_messenger_connection(websocket: WebSocket, user, db_session=Non
         user_uid = UUID(user["user_uid"])
         
         # Инициализация соединения
-        await initialize_messenger_connection(websocket, db_session, user_uid)
+        await initialize_messenger_connection(websocket, user_uid)
         
         # Обработка входящих сообщений
         await handle_private_messages(websocket, user_uid, db_session)
