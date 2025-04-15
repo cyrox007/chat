@@ -50,12 +50,9 @@ import DOMPurify from 'dompurify';
 import Loader from '@/components/Loader/index.vue';
 import LeftSidebar from '@/components/LeftSidebar/index.vue';
 import RightSidebar from '@/components/RightSidebar/index.vue';
-import Message from '@/components/Message/index.vue';
+import Message from '@/components/Message/ChatMessage.vue';
 import MessageComposer from '@/components/MessageComposer/index.vue';
 import RoomsService from '@/API/RoomsService';
-/* import UsersService from '@/API/UsersService'; */
-/* import { WebSocketService } from '@/services/WebSocketService'; */
-/* import CSRFService from '@/API/CSRFService'; */
 
 // Инициализация хранилища
 const store = useStore();
@@ -84,21 +81,6 @@ const isRightSidebarActive = ref(false);
 const rooms = ref([]);
 const messageComposer = ref(null);
 
-// Загрузка данных пользователей
-/* const fetchUserData = async (userUids) => {
-	try {
-		await CSRFService.getCSRF();
-		const response = await UsersService.get_users_by_uids(userUids);
-		if (response.data.status === 'ok') {
-			return response.data.users;
-		}
-		return [];
-	} catch (error) {
-		console.error('Ошибка загрузки данных пользователей:', error);
-		return [];
-	}
-}; */
-
 // Загрузка списка комнат
 const loadRooms = async () => {
 	try {
@@ -110,17 +92,6 @@ const loadRooms = async () => {
 		console.error('Ошибка загрузки комнат:', error);
 	}
 };
-
-// Инициализация WebSocket
-/* const initializeChat = async (roomId) => {
-	await store.dispatch('chat/connectSocket', roomId);
-}; */
-
-/* const sanitizeMessage = (messageData) => {
-	// Очищаем текстовое поле
-	// Возвращаем очищенные данные
-	return DOMPurify.sanitize(messageData)
-}; */
 
 // Обработчик ответа на сообщение
 const handleMessageReply = (message) => {
@@ -148,69 +119,6 @@ const handleSendMessage = async (messageData) => {
 
 	store.dispatch('chat/sendMessage', messagePayload);
 };
-
-// Отмена ответа
-/* const cancelReply = () => {
-	currentReply.value = null;
-}; */
-
-// Подключение к WebSocket
-/* const connectToWebSocket = (roomId) => {
-	const token = localStorage.getItem('access_token');
-	if (!token) {
-		console.error('Токен не найден');
-		return;
-	}
-
-	wsService.value = new WebSocketService(roomId, token);
-	const socket = wsService.value.connect();
-
-	// Подписываемся на входящие сообщения
-	wsService.value.onMessage(async (data) => {
-		console.log("Полученные данные от сервера:", data);
-
-		if (data.type === 'message') {
-			if (data.sender?.uid === currentUser.value.uid) {
-				// Обновляем наше сообщение
-				const messageIndex = messages.value.findIndex(msg => msg.frontId === data.frontId);
-				if (messageIndex !== -1) {
-					messages.value[messageIndex] = {
-						...messages.value[messageIndex],
-						uid: data.uid,
-						status: 'sent',
-					};
-				}
-			} else {
-				// Добавляем сообщение от другого пользователя
-				messages.value.push(data);
-				await nextTick(); // Ждём обновления DOM
-            	scrollToBottom();
-			}
-		} else if (data.type === 'user_list') {
-			// Обработка списка пользователей
-			const usersData = await fetchUserData(data.users);
-			setConnectedUsers(usersData); // Сохраняем пользователей в хранилище
-		} else if (data.type === 'initial_data') {
-			// Проверяем структуру данных
-			if (!Array.isArray(data.messages)) {
-				console.error('Некорректные данные initial_data:', data.messages);
-				return;
-			}
-
-			// Добавляем начальные данные в начало массива
-			messages.value.unshift(...data.messages.reverse());
-			scrollToBottom();
-		}
-	});
-}; */
-
-/* const disconnectFromWebSocket = () => {
-	if (wsService.value) {
-		wsService.value.disconnect();
-		wsService.value = null; // Очищаем ссылку на сервис
-		messages.value = null; // Отчищаем массив сообщений
-	}
-}; */
 
 // Функция для переключения комнаты
 const switchRoom = async (room) => {
@@ -253,23 +161,6 @@ const toggleRightSidebar = () => {
 const closeRightSidebar = () => {
 	isRightSidebarActive.value = false;
 };
-
-/* const isLastMessageVisible = () => {
-	const chatMessages = document.getElementById('chat-messages');
-	const lastMessage = document.querySelector('.message:last-child'); // Или используйте ref
-
-	if (!chatMessages || !lastMessage) return false;
-
-	// Получаем позицию последнего сообщения относительно контейнера
-	const messageRect = lastMessage.getBoundingClientRect();
-	const containerRect = chatMessages.getBoundingClientRect();
-
-	// Проверяем, находится ли сообщение в видимой области контейнера
-	return (
-		messageRect.bottom <= containerRect.bottom + 50 && // Допуск 50px
-		messageRect.top >= containerRect.top
-	);
-}; */
 
 const scrollToBottom = async () => {
     await nextTick(); // Ждём обновления DOM

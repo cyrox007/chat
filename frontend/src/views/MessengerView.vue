@@ -42,15 +42,12 @@
 				</div>
 			</div>
 			<div class="messages-container" ref="messagesContainer">
-                <div v-for="(message, index) in getConversation(activeDialog)" :key="message.uid || index"
-                     class="message" :class="{ sent: message.isCurrentUser, received: !message.isCurrentUser }">
-                    <div class="message-content" :data-message-id="message.uid">
-                        {{ message.content }}
-                    </div>
-                    <div class="message-time">
-                        {{ formatTime(message.created_at) }}
-                    </div>
-                </div>
+				<PrivateMessage
+					v-for="(message, index) in getConversation(activeDialog)"
+					:key="message.uid || index"
+					:message="message"
+					:ref="setObserverTarget"
+				/>
             </div>
 			<!-- Компонент подготовки сообщений -->
 			<MessageComposer ref="messageComposer" @send-message="handleSendMessage" />
@@ -71,12 +68,12 @@ import { useStore } from 'vuex';
 import MessengerService from '@/API/MessengerService';
 import MessageComposer from '@/components/MessageComposer/index.vue';
 import DOMPurify from 'dompurify';
-import MediaPreview from '@/components/Message/MediaPreview.vue';
-import VoiceMessage from '@/components/Message/VoiceMessage.vue';
+import PrivateMessage from '@/components/Message/PrivateMessage.vue';
 
 const store = useStore();
 const searchQuery = ref('');
 const messagesContainer = ref(null);
+const observerTargets = ref([]);
 const isMobile = ref(window.innerWidth < 768);
 const dialogs = ref([]);
 
@@ -158,6 +155,13 @@ const markMessageAsRead = async (messageId) => {
 	}
 };
 
+// Установка целей для IntersectionObserver
+const setObserverTarget = (el) => {
+	if (el) {
+		observerTargets.value.push(el.$el); // Сохраняем корневой элемент компонента
+	}
+};
+
 // Метод для инициализации IntersectionObserver
 const setupIntersectionObserver = () => {
 	if (!messagesContainer.value) return;
@@ -170,18 +174,23 @@ const setupIntersectionObserver = () => {
 	const observer = new IntersectionObserver((entries) => {
 		entries.forEach(entry => {
 			if (entry.isIntersecting) {
-				const messageId = entry.target.querySelector('.message-content')?.dataset.messageId;
-				if (messageId) {
-					//console.log('Сообщение видимо:', messageId);
+				const messageId = entry.target.dataset.messageId;
+				const isCurrentUserMessage = entry.target.dataset.isCurrentUser === "true";
+				const isAlreadyRead = entry.target.dataset.isRead === "true";
+				// Отправляем запрос только для сообщений других пользователей и только если они еще не прочитаны
+				if (!isCurrentUserMessage && !isAlreadyRead && messageId) {
 					markMessageAsRead(messageId);
+
+					// Обновляем атрибут `data-is-read`, чтобы избежать повторной отправки
+					entry.target.dataset.isRead = "true";
 				}
 			}
 		});
 	}, options);
 
 	// Наблюдаем за всеми сообщениями
-	Array.from(messagesContainer.value.querySelectorAll('.message')).forEach(messageElement => {
-		observer.observe(messageElement);
+	observerTargets.value.forEach((target) => {
+		observer.observe(target);
 	});
 };
 
@@ -236,32 +245,8 @@ watch(
 	{ deep: true }
 );
 
-// Форматирование времени
-const formatTime = (date) => {
-	return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-};
-
 onMounted(() => {
-	if (messagesContainer.value) {
-		const options = {
-			root: null, // Относительно viewport
-			threshold: 0, // Триггер при появлении любого фрагмента элемента
-		};
-		const observer = new IntersectionObserver((entries) => {
-			entries.forEach(entry => {
-				if (entry.isIntersecting) {
-					console.log('Сообщение видимо:', entry.target.dataset.messageId);
-					markMessageAsRead(entry.target.dataset.messageId);
-				}
-			});
-		}, options);
-
-		// Наблюдаем за всеми сообщениями
-		Array.from(messagesContainer.value.querySelectorAll('.message')).forEach(messageElement => {
-			console.log('Наблюдаем за сообщением:', messageElement.querySelector('.message-content').dataset.messageId);
-			observer.observe(messageElement);
-		});
-	}
+	setupIntersectionObserver();
 });
 </script>
 
@@ -412,42 +397,6 @@ onMounted(() => {
 	background-color: var(--bg-light);
 }
 
-.message {
-	margin-bottom: 15px;
-	max-width: 70%;
-}
-
-.message.sent {
-	margin-left: auto;
-	text-align: right;
-}
-
-.message.received {
-	margin-right: auto;
-}
-
-.message-content {
-	padding: 10px 15px;
-	border-radius: 18px;
-	display: inline-block;
-}
-
-.message.sent .message-content {
-	background-color: var(--primary-color);
-	color: white;
-}
-
-.message.received .message-content {
-	background-color: var(--other-user-bg);
-	color: var(--text-light);
-}
-
-.message-time {
-	font-size: 0.7em;
-	color: #777;
-	margin-top: 5px;
-}
-
 .empty-state {
 	flex: 1;
 	display: flex;
@@ -524,80 +473,5 @@ onMounted(() => {
 	.message-time {
 		color: #aaa;
 	}
-}
-
-.message.has-media {
-	max-width: 85%;
-}
-
-.message-media {
-	margin-top: 8px;
-	display: grid;
-	gap: 8px;
-}
-
-.media-preview {
-	border-radius: 12px;
-	overflow: hidden;
-	max-width: 100%;
-}
-
-.media-preview img {
-	max-width: 100%;
-	max-height: 300px;
-	border-radius: 12px;
-	display: block;
-}
-
-.file-preview {
-	display: flex;
-	align-items: center;
-	padding: 8px 12px;
-	background: rgba(0, 0, 0, 0.05);
-	border-radius: 8px;
-}
-
-.file-preview i {
-	margin-right: 8px;
-	font-size: 1.2em;
-}
-
-.file-size {
-	margin-left: auto;
-	font-size: 0.8em;
-	opacity: 0.7;
-}
-
-.voice-message {
-	display: flex;
-	align-items: center;
-	background: rgba(0, 0, 0, 0.05);
-	padding: 8px 12px;
-	border-radius: 20px;
-}
-
-.voice-message audio {
-	flex-grow: 1;
-	max-width: 200px;
-}
-
-.message-reply {
-	border-left: 3px solid var(--primary-color);
-	padding-left: 8px;
-	margin-bottom: 8px;
-	opacity: 0.8;
-}
-
-.message-meta {
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
-	gap: 4px;
-	margin-top: 4px;
-	font-size: 0.8em;
-}
-
-.message-status {
-	margin-left: 4px;
 }
 </style>

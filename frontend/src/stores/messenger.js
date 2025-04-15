@@ -139,7 +139,7 @@ export default {
 					// Загрузка истории переписки
 					commit('SET_CONVERSATION', {
 						userId: data.other_user_uid,
-						messages: data.messages.map(msg => ({
+						messages: data.messages.reverse().map(msg => ({
 							...msg,
 							isCurrentUser: msg.sender_uid === currentUser.uid,
 							timestamp: new Date(msg.created_at)
