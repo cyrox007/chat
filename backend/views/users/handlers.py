@@ -355,4 +355,34 @@ async def get_user_by_uid(
         },
     }
 
-    return {"status": "ok", "user": user_data["full"] }#if is_owner else user_data["limited"]}
+    return {"status": "ok", "user": user_data["full"] }
+
+@get_session
+async def get_user_statuses(request: Request, db_session = None):
+    try:
+        # Получаем данные из запроса
+        data = await request.json()
+        user_ids = data.get('user_ids')
+
+        # Проверяем, что user_ids существует и является списком
+        if not user_ids or not isinstance(user_ids, list):
+            raise HTTPException(status_code=400, detail="Invalid or missing 'user_ids' in request")
+
+        # Получаем пользователей из базы данных
+        users = db_session.query(User).filter(User.uid.in_(user_ids)).all()
+
+        # Формируем статусы пользователей
+        statuses = {
+            str(user.uid): {
+                "last_online": user.last_online.isoformat() if user.last_online else None,
+                #"is_online": connection_manager.is_user_online(UUID(str(user.uid))),
+            }
+            for user in users
+        }
+
+        return {"status": "ok", "statuses": statuses}
+
+    except Exception as e:
+        # Логируем ошибку и возвращаем HTTP-ошибку
+        logger.error(f"Ошибка при получении статусов пользователей: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

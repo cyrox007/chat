@@ -312,7 +312,7 @@ class User(Database.Base):
                 return None
 
             # Обновляем поле last_online
-            user.last_online = datetime.now()
+            user.last_online = datetime.utcnow()
             db_session.add(user)
             db_session.commit()
 

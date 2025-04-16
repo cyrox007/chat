@@ -56,10 +56,11 @@ def install(app: FastAPI):
         endpoint=handlers.get_user_by_uid,
         dependencies=[Depends(auth_middle)]
     )
-    """ router.add_api_route(
-		'/status',
-        methods=['GET'],
+    router.add_api_route(
+        '/statuses',
+        methods=['POST'],
         status_code=status.HTTP_200_OK,
         endpoint=handlers.get_user_statuses,
-    ) """
+        dependencies=[Depends(auth_middle)]
+    )
     app.include_router(router)

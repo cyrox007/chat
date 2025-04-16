@@ -18,7 +18,7 @@ def create_access_token(payload: Dict[str, Any]) -> str:
         return jwt.encode(
             {
                 "sub": user_uid,  # Основной идентификатор пользователя
-                "exp": datetime.utcnow() + timedelta(seconds=config.ACCESS_TOKEN_EXPIRE_MINUTES),
+                "exp": datetime.utcnow() + timedelta(minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES),
                 "type": "access",
                 #"data": {k: v for k, v in payload.items() if k != "user_uid"},  # Исключаем user_uid из data
             },
