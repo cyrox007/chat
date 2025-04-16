@@ -3,7 +3,7 @@
 		<!-- Левая панель: список диалогов -->
 		<div class="conversations-list">
 			<div class="search-bar">
-				<input type="text" placeholder="Поиск пользователей..." v-model="searchQuery" disabled/>
+				<input type="text" placeholder="Поиск пользователей..." v-model="searchQuery" disabled />
 			</div>
 			<div class="conversations">
 				<!-- Если диалоги есть -->
@@ -11,8 +11,11 @@
 					<div v-for="dialog in filteredDialogs" :key="dialog.partner_id" class="conversation-item"
 						:class="{ active: isActiveDialog(dialog.partner_id) }"
 						@click="openConversation(dialog.partner_id)">
-						<div class="user-avatar">
-							<img :src="dialog.partner.avatar || '/images/default-avatar.png'" alt="User Avatar" />
+						<div class="user-avatar-container">
+							<div class="user-avatar">
+								<img :src="dialog.partner.avatar || '/images/default-avatar.png'" alt="User Avatar" />
+							</div>
+							<span class="status-indicator" :class="getStatusClass(dialog.partner_id)"></span>
 						</div>
 						<div class="conversation-info">
 							<div class="user-name">{{ dialog.partner.username }}</div>
@@ -37,18 +40,21 @@
 					<i class="fas fa-arrow-left"></i>
 				</div>
 				<div class="user-info">
-					<img :src="activeDialogUser.avatar || '/images/default-avatar.png'" alt="User Avatar" />
-					<span>{{ activeDialogUser.username }}</span>
+					<router-link :to="`/profile/${activeDialogUser.uid}`" class="profile-link">
+						<img :src="activeDialogUser.avatar || '/images/default-avatar.png'" alt="User Avatar" />
+					</router-link>
+					<div>
+						<router-link :to="`/profile/${activeDialogUser.uid}`" class="username-link">
+							<span>{{ activeDialogUser.username }}</span>
+						</router-link>
+						<UserStatus :userId="activeDialog" />
+					</div>
 				</div>
 			</div>
 			<div class="messages-container" ref="messagesContainer">
-				<PrivateMessage
-					v-for="(message, index) in getConversation(activeDialog)"
-					:key="message.uid || index"
-					:message="message"
-					:ref="setObserverTarget"
-				/>
-            </div>
+				<PrivateMessage v-for="(message, index) in getConversation(activeDialog)" :key="message.uid || index"
+					:message="message" :ref="setObserverTarget" />
+			</div>
 			<!-- Компонент подготовки сообщений -->
 			<MessageComposer ref="messageComposer" @send-message="handleSendMessage" />
 		</div>
@@ -66,6 +72,7 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useStore } from 'vuex';
 import MessengerService from '@/API/MessengerService';
+import UserStatus from '@/components/UserStatus/index.vue'
 import MessageComposer from '@/components/MessageComposer/index.vue';
 import DOMPurify from 'dompurify';
 import PrivateMessage from '@/components/Message/PrivateMessage.vue';
@@ -94,18 +101,6 @@ const activeDialog = computed(() => store.getters['messenger/getActiveDialog']);
 const activeDialogUser = computed(() => {
 	const dialog = dialogs.value.find((d) => d.partner_id === activeDialog.value);
 	return dialog?.partner || {};
-});
-
-// Загрузка диалогов при монтировании компонента
-onMounted(async () => {
-	try {
-		const response = await MessengerService.getDialogs();
-		if (response.data.status === 'ok') {
-			dialogs.value = response.data.dialogs;
-		}
-	} catch (error) {
-		console.error('Ошибка при загрузке диалогов:', error);
-	}
 });
 
 // Фильтрация диалогов по поисковому запросу
@@ -233,6 +228,17 @@ const scrollToBottom = () => {
 	}
 };
 
+const getStatusClass = (userId) => {
+	const userStatus = store.getters['getUserStatus'](userId);
+	if (!userStatus?.last_online) return 'offline';
+
+	const lastOnline = new Date(userStatus.last_online + 'Z');
+	const now = new Date();
+	const diffInSeconds = (now - lastOnline) / 1000;
+
+	return diffInSeconds <= 30 ? 'online' : 'offline';
+};
+
 // Автопрокрутка при новых сообщениях
 watch(
 	() => getConversation(activeDialog.value)?.length,
@@ -245,8 +251,30 @@ watch(
 	{ deep: true }
 );
 
-onMounted(() => {
-	setupIntersectionObserver();
+onMounted(async () => {
+	try {
+		// Загружаем диалоги
+		const response = await MessengerService.getDialogs();
+		if (response.data.status === 'ok') {
+			dialogs.value = response.data.dialogs;
+		}
+
+		// Получаем userIds из диалогов
+		const userIds = dialogs.value.map((dialog) => dialog.partner_id);
+
+		// Загружаем статусы пользователей
+		store.dispatch('fetchUserStatuses', userIds);
+
+		// Устанавливаем периодическое обновление статусов
+		setInterval(() => {
+			store.dispatch('fetchUserStatuses', userIds);
+		}, 60000);
+
+		// Инициализируем IntersectionObserver
+		setupIntersectionObserver();
+	} catch (error) {
+		console.error('Ошибка при загрузке данных:', error);
+	}
 });
 </script>
 
@@ -302,12 +330,41 @@ onMounted(() => {
 	color: white;
 }
 
-.user-avatar {
+.conversation-item.active:hover {
+	background-color: var(--primary-color); /* Сохраняем фон активного элемента */
+	color: white; /* Сохраняем белый текст */
+}
+
+.user-avatar-container {
+	position: relative;
 	width: 50px;
 	height: 50px;
+}
+
+.user-avatar {
+	width: 100%;
+	height: 100%;
 	border-radius: 50%;
 	overflow: hidden;
-	margin-right: 15px;
+}
+
+.status-indicator {
+	position: absolute;
+	bottom: 0;
+	right: 0;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	border: 2px solid white; /* Для контраста с фоном */
+	z-index: 1; /* Убедитесь, что маркер выше аватара */
+}
+
+.status-indicator.online {
+	background-color: green;
+}
+
+.status-indicator.offline {
+	background-color: gray;
 }
 
 .user-avatar img {
@@ -319,6 +376,7 @@ onMounted(() => {
 .conversation-info {
 	flex: 1;
 	min-width: 0;
+	margin-left: 10px;
 }
 
 .user-name {
@@ -383,11 +441,37 @@ onMounted(() => {
 	align-items: center;
 }
 
-.user-info img {
+.profile-link {
+	display: block; /* Чтобы ссылка занимала всю область аватара */
 	width: 40px;
 	height: 40px;
 	border-radius: 50%;
+	overflow: hidden; /* Обрезаем изображение по кругу */
 	margin-right: 10px;
+	cursor: pointer;
+}
+
+.profile-link img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover; /* Сохраняем пропорции изображения */
+}
+
+.username-link {
+	text-decoration: none; /* Убираем подчеркивание ссылки */
+	color: inherit; /* Наследуем цвет текста */
+	font-weight: bold;
+	cursor: pointer;
+}
+
+.username-link:hover {
+	text-decoration: underline; /* Подчеркиваем при наведении */
+}
+
+.user-info div {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
 }
 
 .messages-container {
@@ -474,4 +558,5 @@ onMounted(() => {
 		color: #aaa;
 	}
 }
+
 </style>

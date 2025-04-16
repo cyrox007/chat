@@ -14,10 +14,12 @@
 				<div class="profile-avatar-container">
 					<img :src="user.avatar" alt="Аватар пользователя" class="profile-avatar" />
 				</div>
+				
 				<div class="profile-info">
 					<h1 class="profile-name">{{ user.username }}</h1>
 					<p class="profile-email">{{ user.email }}</p>
 				</div>
+				<UserStatus v-if="!isCurrentUser" :userId="route.params.uid" />
 				<div class="profile-actions">
 					<button v-if="canEditProfile" @click="toggleEditForm" class="edit-profile-btn">Редактировать профиль</button>
 					<button v-if="!isCurrentUser" @click="openChatWithUser" class="message-button">Отправить сообщение</button>
@@ -56,7 +58,9 @@ import UsersServices from '@/API/UsersService';
 
 import Loader from '@/components/Loader/index.vue'
 import Rating from "@/components/Rating/Rating.vue";
+import UserStatus from "@/components/UserStatus/index.vue"
 import EditProfileForm from '@/components/EditProfileForm/index.vue';
+import CSRFService from '@/API/CSRFService';
 
 const route = useRoute();
 const router = useRouter();
@@ -138,6 +142,11 @@ onMounted(async () => {
 
 	// Загружаем данные пользователя
 	await loadUserData(profileUid);
+	await store.dispatch('fetchUserStatuses', [profileUid]);
+	
+	setInterval(async () => {
+		await store.dispatch('fetchUserStatuses', [profileUid]);
+	}, 15000); // Каждую минуту
 });
 watchEffect(() => {
 	const profileUid = route.params.uid;
@@ -150,7 +159,7 @@ watchEffect(() => {
 <style scoped>
 /* Специфичные стили для профиля */
 .user-profile {
-	max-width: 960px;
+	/* max-width: 960px; */
 	margin: 0 auto;
 	padding: 20px;
 	background: var(--bg-light);

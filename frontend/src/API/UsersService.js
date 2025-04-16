@@ -7,4 +7,7 @@ export default class UsersServices {
     static async get_user_by_uid(uid) {
         return $api.get(`/users/${uid}`);
     }
+    static async getUserStatuses(user_uids) {    
+        return await $api.post('/users/statuses', {user_ids: user_uids})
+    }
 }

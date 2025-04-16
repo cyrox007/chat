@@ -1,11 +1,15 @@
+import CSRFService from "@/API/CSRFService";
+import UsersServices from "@/API/UsersService";
 export default {
 	state: {
 		auth: Boolean(localStorage.getItem('auth')) || false,
 		user: JSON.parse(localStorage.getItem('user')) || null,
+		userStatuses: {},
 	},
 	getters: {
 		isAuth: (state) => state.auth,
 		getUser: (state) => state.user,
+		getUserStatus: (state) => (userId) => state.userStatuses[userId],
 	},
 	mutations: {
 		setAuth(state, status) {
@@ -15,7 +19,13 @@ export default {
 		setUser(state, userData) {
 			state.user = userData;
 			localStorage.setItem('user', JSON.stringify(userData));
-		}
+		},
+		setMultipleUserStatuses(state, statuses) {
+			state.userStatuses = { ...state.userStatuses, ...statuses };
+		},
+		clearUserStatus(state, userId) {
+			delete state.userStatuses[userId];
+		},
 	},
 	actions: {
 		clearUser(state) {
@@ -34,6 +44,17 @@ export default {
 				commit('setUser', user);
 			} else {
 				dispatchEvent('clearUser');
+			}
+		},
+		async fetchUserStatuses({ commit }, userIds) {
+			try {
+				await CSRFService.getCSRF();			
+				const response = await UsersServices.getUserStatuses(userIds);
+				if (response.data.status === 'ok') {
+					commit('setMultipleUserStatuses', response.data.statuses);
+				}
+			} catch (error) {
+				console.error('Ошибка при получении статусов пользователей:', error);
 			}
 		},
 	},
