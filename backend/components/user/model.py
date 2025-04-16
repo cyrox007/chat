@@ -295,6 +295,34 @@ class User(Database.Base):
             logger.warning(f"Пользователь с UID {uid} не найден")
         return user
 
+    @classmethod
+    def update_last_online(cls, db_session: Session, current_user_uid):
+        """
+        Обновляет время последней активности пользователя.
+        
+        :param db_session: SQLAlchemy сессия
+        :param current_user_uid: UID пользователя
+        :return: Объект пользователя или None в случае ошибки
+        """
+        try:
+            # Находим пользователя по UID
+            user = db_session.query(cls).filter(cls.uid == current_user_uid).first()
+            if not user:
+                logger.warning(f"Пользователь с UID {current_user_uid} не найден")
+                return None
+
+            # Обновляем поле last_online
+            user.last_online = datetime.now()
+            db_session.add(user)
+            db_session.commit()
+
+            logger.info(f"Время последней активности обновлено для пользователя {current_user_uid}")
+            return user
+
+        except IntegrityError as e:
+            logger.exception(f"Ошибка целостности данных при обновлении last_online: {e}")
+            db_session.rollback()
+            return None
 
 # Модель Penalty
 class Penalty(Database.Base):

@@ -39,6 +39,7 @@ async def initialize_websocket(websocket: WebSocket, db_session, room_uid: UUID,
 
     # Подключение пользователя к комнате
     await manager.connect_to_room(websocket, room_uid, user_uid)
+    await manager.update_user_activity(db_session, user_uid)
 
     # Отправка начальных данных
     await send_initial_data(websocket, db_session, room_uid, user_uid)
@@ -64,6 +65,7 @@ async def process_incoming_messages(websocket: WebSocket, room_uid: UUID, user_u
             else:
                 logger.warning(f"Неизвестный тип контента: {content_type}")
 
+            await manager.update_user_activity(db_session, user_uid)
     except WebSocketDisconnect:
         logger.info("WebSocket отключен")
         manager.disconnect(websocket, room_uid)

@@ -38,6 +38,9 @@ async def handle_private_messages(websocket: WebSocket, user_uid: UUID, db_sessi
             else:
                 logger.warning(f"Unknown action: {action}")
 
+            # Обновляем статус онлайн
+            await private_manager.update_user_activity(db_session, user_uid)
+
     except WebSocketDisconnect:
         logger.info(f"User {user_uid} disconnected from messenger")
         private_manager.disconnect(websocket, None)
