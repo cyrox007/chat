@@ -155,9 +155,13 @@ class ConnectionManager:
         async with db_session() as session:
             await User.update_last_online(session, user_uid)
 
-    def is_user_online(self, user_uid: UUID, timeout_seconds: int = 30) -> bool:
-        """Проверяет, является ли пользователь онлайн"""
-        last_seen = self.user_last_seen.get(user_uid)
-        if not last_seen:
-            return False
-        return (datetime.now() - last_seen).total_seconds() <= timeout_seconds
+    async def check_user_activity(self):
+        """Периодическая проверка активности пользователей"""
+        while True:
+            current_time = datetime.now()
+            for user_uid, last_seen in list(self.user_last_seen.items()):
+                if (current_time - last_seen).total_seconds() > 30:
+                    # Считаем пользователя оффлайн
+                    del self.user_last_seen[user_uid]
+                    #asyncio.create_task(self.broadcast_user_status(user_uid, "offline"))
+            await asyncio.sleep(10)  # Проверяем каждые 10 секунд
