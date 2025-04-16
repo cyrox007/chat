@@ -40,11 +40,11 @@
 					<i class="fas fa-arrow-left"></i>
 				</div>
 				<div class="user-info">
-					<router-link :to="`/profile/${activeDialogUser.uid}`" class="profile-link">
+					<router-link :to="`/profile/${activeDialog}`" class="profile-link">
 						<img :src="activeDialogUser.avatar || '/images/default-avatar.png'" alt="User Avatar" />
 					</router-link>
 					<div>
-						<router-link :to="`/profile/${activeDialogUser.uid}`" class="username-link">
+						<router-link :to="`/profile/${activeDialog}`" class="username-link">
 							<span>{{ activeDialogUser.username }}</span>
 						</router-link>
 						<UserStatus :userId="activeDialog" />
