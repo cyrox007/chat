@@ -60,7 +60,8 @@ import Loader from '@/components/Loader/index.vue'
 import Rating from "@/components/Rating/Rating.vue";
 import UserStatus from "@/components/UserStatus/index.vue"
 import EditProfileForm from '@/components/EditProfileForm/index.vue';
-import CSRFService from '@/API/CSRFService';
+
+const emits = defineEmits(['update'])
 
 const route = useRoute();
 const router = useRouter();

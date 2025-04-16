@@ -13,11 +13,11 @@
 			</div>
 			<div class="form-group">
 				<label for="email">Email:</label>
-				<input type="email" id="email" v-model="profile.email" required />
+				<input type="email" id="email" v-model="profile.email" required disabled />
 			</div>
 			<div class="form-group">
 				<label for="phone">Телефон:</label>
-				<input type="text" id="phone" v-model="profile.phone" />
+				<input type="text" id="phone" v-model="profile.phone" disabled />
 			</div>
 			<div class="form-group">
 				<label for="country">Страна:</label>
