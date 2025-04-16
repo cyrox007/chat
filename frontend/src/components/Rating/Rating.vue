@@ -1,5 +1,5 @@
 <template>
-    <span>{{ props.rating }}</span>
+    <span>{{ props.rating || 'Рейтинга нет'}}</span>
 </template>
 
 <script setup>
