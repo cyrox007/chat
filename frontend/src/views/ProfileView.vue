@@ -28,8 +28,7 @@
 			<div class="profile-details">
 				<div class="profile-detail-item">
 					<span class="profile-detail-label">Рейтинг:</span>
-					<span class="profile-detail-value">{{ user.rating || 'Не указана' }}</span>
-					<!-- <Rating :rating="user.rating" /> -->
+					<Rating :rating="user.rating" />
 				</div>
 				<div class="profile-detail-item">
 					<span class="profile-detail-label">Страна:</span>
