@@ -219,12 +219,6 @@ export default {
 				// Когда аудио готово к воспроизведению
 				audio.play().catch((e) => {
 					console.error('Ошибка воспроизведения звука:', e);
-					// Fallback: показываем уведомление
-					/* if (Notification.permission === 'granted') {
-						new Notification('Новое сообщение', {
-							body: 'У вас новый ответ в чате',
-						});
-					} */
 				});
 			});
 		

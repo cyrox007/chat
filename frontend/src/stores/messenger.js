@@ -5,13 +5,16 @@ export default {
 		isConnected: false,
 		activeDialog: null,
 		conversations: {},
-		unreadCounts: {}
+		unreadCounts: {},
+		notifications: [],
 	},
 	getters: {
 		getConversation: (state) => (userId) => state.conversations[userId] || [],
 		getUnreadCount: (state) => (userId) => state.unreadCounts[userId] || 0,
 		getActiveDialog: (state) => state.activeDialog,
-		isConnected: (state) => state.isConnected
+		isConnected: (state) => state.isConnected,
+		getNotifications: (state) => state.notifications,
+    	hasUnreadNotifications: (state) => state.notifications.length > 0,
 	},
 	mutations: {
 		SET_SOCKET(state, socket) {
@@ -35,7 +38,19 @@ export default {
 			// Увеличиваем счетчик непрочитанных, если это не активный диалог
 			if (state.activeDialog !== userId) {
 				state.unreadCounts[userId] = (state.unreadCounts[userId] || 0) + 1;
+		
+				// Добавляем уведомление
+				state.notifications.push({
+				  uid: message.uid,
+				  sender: message.sender,
+				  content: message.content,
+				  timestamp: message.timestamp,
+				  userId: userId,
+				});
 			}
+		},
+		CLEAR_NOTIFICATIONS(state) {
+			state.notifications = [];
 		},
 		SET_CONVERSATION(state, { userId, messages }) {
 			state.conversations[userId] = messages;
@@ -125,9 +140,13 @@ export default {
 						message: {
 							...data,
 							isCurrentUser: isFromCurrentUser,
-							timestamp: new Date(data.created_at)
-						}
+							timestamp: new Date(data.created_at),
+						},
 					});
+
+					if (!isFromCurrentUser) {
+						this.dispatch('messenger/playNotificationSound');
+					}
 					break;
 
 				case 'message_read':
@@ -188,6 +207,26 @@ export default {
 				console.warn('WebSocket не подключен. Добавляем запрос в очередь...');
 				commit('ADD_PENDING_READ_REQUEST', messageId);
 			}
+		},
+		playNotificationSound() {
+			const audio = new Audio('/sounds/private_notification.mp3');
+			audio.preload = 'auto';
+
+			audio.addEventListener('canplaythrough', () => {
+				audio.play().catch((e) => {
+					console.error('Ошибка воспроизведения звука:', e);
+				});
+			});
+
+			audio.addEventListener('error', (e) => {
+				console.error('Ошибка загрузки аудио:', e);
+			});
+
+			audio.load();
+		},
+
+		clearNotifications({ commit }) {
+			commit('CLEAR_NOTIFICATIONS');
 		},
 	}
 };

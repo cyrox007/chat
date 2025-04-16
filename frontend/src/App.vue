@@ -2,6 +2,7 @@
 import { ref, onMounted, watch } from 'vue';
 import HeaderComponent from './components/HeaderComponent/index.vue';
 import ReplyNotifications from '@/components/Notifications/ReplyNotifications.vue';
+import MessageNotifications from './components/Notifications/MessageNotifications.vue';
 import { useStore } from 'vuex';
 import AuthService from '@/API/AuthService';
 
@@ -59,6 +60,7 @@ watch(() => store.getters['isAuth'], (newVal) => {
 <template>
 	<div class="container chat-container">
 		<ReplyNotifications />
+		<MessageNotifications />
 		<HeaderComponent />
 		<transition name="fade">
 			<div v-if="showErrorNotification" class="error-notification">
