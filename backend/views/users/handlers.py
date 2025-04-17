@@ -1,21 +1,15 @@
 # Стандартные библиотеки Python
 from json import JSONDecodeError
-import re
-import uuid
 
 # Внешние зависимости
 from fastapi import Depends, Request, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr, Field, validator
-from typing import Annotated, List
 
 # Локальные модули
 from services.auth_service import authenticate_user, generate_tokens
 from components.decorators.db import get_session
 from components.device.model import UserDevice
 from components.user.model import User
-from components.user.exceptions import UserValidationError
-from utils.jwt import create_access_token, create_refresh_token
 from utils.logger import setup_logger
 from utils.password import hash_password, verify_password
 from utils.user_agents import parse_user_agent
@@ -57,32 +51,6 @@ def extract_client_metadata(request: Request):
         "user_agent": user_agent,
         "device_info": parsed_user_agent["device"],
     }
-
-
-""" # Pydantic schema
-class UserRegistrationSchema(BaseModel):
-    username: Annotated[str, Field(min_length=3, max_length=50)]
-    email: EmailStr
-    phone: str
-    password: Annotated[str, Field(min_length=8)]
-    first_name: str | None = None
-    last_name: str | None = None
-    gender: str | None = None
-
-    @validator("phone")
-    def validate_phone(cls, v):
-        # Очищаем от лишних символов
-        cleaned = re.sub(r"[^\d+]", "", v)
-
-        # Проверяем полное совпадение
-        if not re.fullmatch(r"^\+?(375\d{9}|7\d{10})$", cleaned):
-            logger.error(f"Неверный формат номера телефона: {v}")
-            raise ValueError(
-                "Неверный формат номера. Примеры: +375291234567 (BY) или +79191234567 (RU)"
-            )
-
-        logger.info(f"Номер телефона успешно валидирован: {cleaned}")
-        return cleaned """
 
 
 # Handlers
@@ -386,3 +354,74 @@ async def get_user_statuses(request: Request, db_session = None):
         # Логируем ошибку и возвращаем HTTP-ошибку
         logger.error(f"Ошибка при получении статусов пользователей: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+@get_session
+async def delete_user(request: Request, db_session = None):
+    """
+    Мягкое удаление пользователя (обновление поля deleted_at).
+
+    :param request: Запрос FastAPI.
+    :param db_session: Сессия базы данных.
+    :return: Ответ о статусе операции.
+    """
+    try:
+        # Получаем UID пользователя из запроса
+        user_uid = request.state.user_uid # Предполагается, что UID текущего пользователя доступен через request.state.user
+
+        # Выполняем "мягкое" удаление через метод модели
+        User.soft_delete(db_session, user_uid)
+
+        # Возвращаем успешный ответ в формате JSON
+        return {"status": "ok", "message": "Профиль успешно удален"}
+
+    except HTTPException as http_error:
+        # Логируем ошибку и возвращаем JSON-ответ
+        logger.error(f"Ошибка при удалении пользователя: {http_error.detail}")
+        return {"status": "error", "message": http_error.detail}, http_error.status_code
+
+    except Exception as e:
+        # Логируем неожиданную ошибку и возвращаем JSON-ответ
+        logger.error(f"Неожиданная ошибка при удалении пользователя: {str(e)}")
+        db_session.rollback()  # Откатываем изменения в случае ошибки
+        return {"status": "error", "message": "Произошла внутренняя ошибка сервера"}, status.HTTP_500_INTERNAL_SERVER_ERROR
+    
+@get_session
+async def update_profile(request: Request, db_session = None):
+    """
+    Обновление данных профиля пользователя.
+    :param request: Запрос FastAPI.
+    :param db_session: Сессия базы данных.
+    :return: JSON-ответ о статусе операции.
+    """
+    try:
+        data = await request.json()
+        target_user_uid = data.get("user_uid")
+        new_data = data.get("data", {})
+
+        if not target_user_uid:
+            logger.warning("UID пользователя не указан")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="UID пользователя не указан")
+        print(request.state.user.get('user_uid', None))
+        print(data.get("user_uid"))
+        current_user_uid = request.state.user.get('user_uid', None)  # Получаем UID текущего пользователя
+        if current_user_uid != target_user_uid:
+            current_user = User.get_user_by_uid(db_session, current_user_uid)
+            if not current_user or current_user.global_role not in ["moderator", "admin", "superadministrator"]:
+                logger.warning(f"Недостаточно прав для изменения данных пользователя {target_user_uid}")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Недостаточно прав для изменения данных другого пользователя"
+                )
+
+        updated_user = User.update_profile(db_session, target_user_uid, new_data)
+        logger.info(f"Данные пользователя {target_user_uid} успешно обновлены: {updated_user}")
+        return {"status": "ok", "message": "Данные профиля успешно обновлены", "user": updated_user.__dict__}
+
+    except HTTPException as http_error:
+        logger.error(f"Ошибка при обновлении профиля: {http_error.detail}")
+        raise http_error
+
+    except Exception as e:
+        logger.error(f"Неожиданная ошибка при обновлении профиля: {str(e)}")
+        db_session.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")

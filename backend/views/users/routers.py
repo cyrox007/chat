@@ -63,4 +63,18 @@ def install(app: FastAPI):
         endpoint=handlers.get_user_statuses,
         dependencies=[Depends(auth_middle)]
     )
+    router.add_api_route(
+        '/delete',
+        methods=['DELETE'],
+        status_code=status.HTTP_200_OK,
+        endpoint=handlers.delete_user,
+        dependencies=[Depends(auth_middle)]
+    )
+    router.add_api_route(
+        '/update',
+        methods=['PUT'],
+        status_code=status.HTTP_200_OK,
+        endpoint=handlers.update_profile,
+        dependencies=[Depends(auth_middle)]
+    )
     app.include_router(router)

@@ -5,6 +5,7 @@ from typing import List
 from uuid import uuid4
 
 # Внешние зависимости
+from fastapi import HTTPException, status
 from sqlalchemy import Column, Index, Integer, String, DateTime, Boolean, ForeignKey, Interval, UniqueConstraint
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
@@ -323,6 +324,44 @@ class User(Database.Base):
             logger.exception(f"Ошибка целостности данных при обновлении last_online: {e}")
             db_session.rollback()
             return None
+
+    @classmethod
+    def soft_delete(cls, db_session: Session, user_uid: str):
+        """
+        Мягкое удаление пользователя (обновление поля deleted_at).
+
+        :param db_session: Сессия базы данных.
+        :param user_uid: UID пользователя.
+        :return: Объект пользователя или вызывает HTTPException, если пользователь не найден.
+        """
+        # Ищем пользователя в базе данных
+        user = db_session.query(cls).filter(cls.uid == user_uid).first()
+
+        if not user:
+            logger.warning(f"Попытка удаления несуществующего пользователя с UID: {user_uid}")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+
+        # Обновляем поле deleted_at для "мягкого" удаления
+        user.deleted_at = datetime.utcnow()
+        db_session.commit()
+
+        logger.info(f"Пользователь с UID {user_uid} успешно удален (мягкое удаление)")
+        return user
+    
+    @classmethod
+    def update_profile(cls, db_session: Session, user_uid: str, new_data: dict):
+        """Обновление данных профиля пользователя."""
+        user = cls.get_user_by_uid(db_session, user_uid)
+        if not user:
+            logger.error("User not found")
+            raise HTTPException(status_code=404, detail="User not found")
+
+        for key, value in new_data.items():
+            if hasattr(user, key):
+                setattr(user, key, value)
+
+        db_session.commit()
+        return user
 
 # Модель Penalty
 class Penalty(Database.Base):
