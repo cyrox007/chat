@@ -1,4 +1,15 @@
 <template>
+	<AvatarUploadModal
+		v-if="isAvatarUploadModalOpen"
+		@close="toggleAvatarUploadModal"
+		@upload="handleAvatarUpload"
+	/>
+	<EditProfileForm
+		:modalShow="isEditProfileModalOpen"
+		:user="profileData || {}"
+		@close="toggleEditProfileModal"
+		@save="handleProfileUpdate"
+	/>
 	<div class="user-profile">
 		<transition name="fade" v-if="isLoading">
 			<Loader :message="'Загрузка профиля...'" />
@@ -8,20 +19,29 @@
 			<p>{{ errorMessage }}</p>
 		</div>
 
-		<div v-else-if="user">
+		<div v-else-if="profileData">
 			<!-- Шапка профиля -->
 			<div class="profile-header">
-				<div class="profile-avatar-container">
-					<img :src="user.avatar" alt="Аватар пользователя" class="profile-avatar" />
+				<div class="profile-avatar-container" @click="canEditProfile && toggleAvatarUploadModal()">
+					<img :src="profileData.avatar || '/images/default-avatar.png'" alt="Аватар пользователя" class="profile-avatar" />
 				</div>
 				
 				<div class="profile-info">
-					<h1 class="profile-name">{{ user.username }}</h1>
-					<p class="profile-email">{{ user.email }}</p>
+					<h1 class="profile-name">
+						{{ profileData.first_name || profileData.last_name ? `${profileData.first_name} ${profileData.last_name} (${profileData.username})` : profileData.username }}
+					</h1>
+					<p class="profile-email">{{ profileData.email }}</p>
 				</div>
 				<UserStatus v-if="!isCurrentUser" :userId="route.params.uid" />
 				<div class="profile-actions">
-					<button v-if="canEditProfile" @click="toggleEditForm" class="edit-profile-btn">Редактировать профиль</button>
+					<button
+						v-if="!isCurrentUser && ['admin', 'moderator', 'superadministrator'].includes(currentUser.value?.global_role)"
+						@click="openAdminPanel"
+						class="admin-panel-btn"
+						>
+						Открыть в админпанели
+					</button>
+					<button v-if="canEditProfile" @click="toggleEditProfileModal" class="edit-profile-btn">Редактировать профиль</button>
 					<button v-if="!isCurrentUser" @click="openChatWithUser" class="message-button">Отправить сообщение</button>
 				</div>
 			</div>
@@ -30,23 +50,26 @@
 			<div class="profile-details">
 				<div class="profile-detail-item">
 					<span class="profile-detail-label">Рейтинг:</span>
-					<Rating :rating="user.rating" />
+					<Rating :rating="profileData.rating" />
 				</div>
 				<div class="profile-detail-item">
 					<span class="profile-detail-label">Страна:</span>
-					<span class="profile-detail-value">{{ user.country || 'Не указана' }}</span>
+					<span class="profile-detail-value">{{ profileData.country || 'Не указана' }}</span>
 				</div>
 				<div class="profile-detail-item">
 					<span class="profile-detail-label">Город:</span>
-					<span class="profile-detail-value">{{ user.city || 'Не указан' }}</span>
+					<span class="profile-detail-value">{{ profileData.city || 'Не указан' }}</span>
 				</div>
 				<div class="profile-detail-item">
 					<span class="profile-detail-label">Биография:</span>
-					<span class="profile-detail-value">{{ user.bio || 'Нет информации' }}</span>
+					<span class="profile-detail-value">{{ profileData.bio || 'Нет информации' }}</span>
 				</div>
 			</div>
-			<EditProfileForm v-if="isEditing" :user="user" @close="toggleEditForm" />
 		</div>
+	</div>
+	<div class="profile-posts" v-if="false">
+		<h2>Личные записи</h2>
+		<p>Функционал временно недоступен.</p>
 	</div>
 </template>
 
@@ -59,7 +82,9 @@ import UsersServices from '@/API/UsersService';
 import Loader from '@/components/Loader/index.vue'
 import Rating from "@/components/Rating/Rating.vue";
 import UserStatus from "@/components/UserStatus/index.vue"
-import EditProfileForm from '@/components/EditProfileForm/index.vue';
+import EditProfileForm from '@/components/EditProfileForm/Modals/EditProfileModal.vue';
+import AvatarUploadModal from '@/components/EditProfileForm/Modals/AvatarUploadModal.vue';
+import CSRFService from '@/API/CSRFService';
 
 const emits = defineEmits(['update'])
 
@@ -68,10 +93,11 @@ const router = useRouter();
 const store = useStore();
 
 // Состояние для хранения данных пользователя
-const user = ref(null);
+const profileData = ref(null);
 const isLoading = ref(true); // Флаг загрузки
 const errorMessage = ref(''); // Сообщение об ошибке
-const isEditing = ref(false);
+const isAvatarUploadModalOpen = ref(false);
+const isEditProfileModalOpen = ref(false);
 
 // Получаем текущего пользователя из Vuex store
 const currentUser = computed(() => store.getters.getUser);
@@ -99,16 +125,14 @@ const openChatWithUser = () => {
 
 // Функция для загрузки данных пользователя
 const loadUserData = async (uid) => {
-	user.value = null; // Очистка данных пользователя
+	profileData.value = null; // Очистка данных пользователя
 	errorMessage.value = ''; // Очистка ошибок
 	isLoading.value = true; // Включение индикатора загрузки
 
 	try {
 		const response = await UsersServices.get_user_by_uid(uid);
 		if (response.data.status === 'ok') {
-			user.value = response.data.user;
-
-			// Обновляем заголовок страницы
+			profileData.value = response.data.user; // Сохраняем данные пользователя
 			document.title = `Профиль: ${response.data.user.username}`;
 		} else {
 			errorMessage.value = `Ошибка: ${response.data.message}`;
@@ -121,13 +145,89 @@ const loadUserData = async (uid) => {
 	}
 };
 
-// Логика для открытия/закрытия формы редактирования
-const toggleEditForm = () => {
-	isEditing.value = !isEditing.value;
+// Логика для открытия/закрытия формы редактирования аватара
+const toggleAvatarUploadModal = () => {
+	if (!canEditProfile.value) return;
+	isAvatarUploadModalOpen.value = !isAvatarUploadModalOpen.value;
+};
+
+// Логика для открытия/закрытия формы редактирования профиля
+const toggleEditProfileModal = async () => {
+	if (!profileData.value) {
+		await loadUserData(route.params.uid || currentUser.value?.uid);
+	}
+	isEditProfileModalOpen.value = !isEditProfileModalOpen.value;
+};
+
+const handleAvatarUpload = async (file) => {
+	try {
+		const formData = new FormData();
+		formData.append('avatar', file);
+
+		const response = await UsersServices.updateAvatar(formData);
+		if (response.data.status === 'ok') {
+			user.value.avatar = response.data.avatar_url; // Обновляем аватар
+		} else {
+			console.error('Ошибка при загрузке аватара:', response.data.message);
+		}
+	} catch (error) {
+		console.error('Ошибка при загрузке аватара:', error);
+	}
+};
+
+const handleProfileUpdate = async (updatedData) => {
+	isEditProfileModalOpen.value = false;
+
+	try {
+		await prepareCSRF();
+		const response = await sendProfileUpdateRequest(updatedData);
+
+		if (response.data.status === 'ok') {
+			handleSuccessfulUpdate(response.data);
+		} else {
+			handleUpdateError(response.data.message);
+		}
+	} catch (error) {
+		console.error('Ошибка при обновлении профиля:', error);
+	}
+};
+
+// Подготовка CSRF-токена
+const prepareCSRF = async () => {
+	await CSRFService.getCSRF();
+};
+
+// Отправка данных на сервер
+const sendProfileUpdateRequest = async (updatedData) => {
+	console.log('Отправляем данные для обновления:', updatedData);
+	return await UsersServices.updateProfile(profileData.value.uid, updatedData);
+};
+
+// Обработка успешного обновления
+const handleSuccessfulUpdate = (responseData) => {
+	console.log('Профиль успешно обновлен:', responseData);
+	emits('close'); // Закрываем модалку
+
+	// Если редактируется собственный профиль, обновляем данные в Vuex
+	if (route.params.uid === currentUser.value.uid) {
+		store.commit('setUser', responseData.user);
+	}
+
+	// Перезагружаем данные пользователя
+	loadUserData(route.params.uid || currentUser.value?.uid);
+};
+
+// Обработка ошибки обновления
+const handleUpdateError = (errorMessage) => {
+	console.error('Ошибка при обновлении профиля:', errorMessage);
+};
+
+const openAdminPanel = () => {
+	router.push(`/admin/profile/${route.params.uid}`);
 };
 
 onMounted(async () => {
-	const profileUid = route.params.uid;
+	const profileUid = route.params.uid || currentUser.value?.uid;
 
 	// Если параметр uid отсутствует, используем UID текущего пользователя
 	if (!profileUid) {
@@ -147,8 +247,9 @@ onMounted(async () => {
 	
 	setInterval(async () => {
 		await store.dispatch('fetchUserStatuses', [profileUid]);
-	}, 15000); // Каждую минуту
+	}, 60000); // Каждую минуту
 });
+
 watchEffect(() => {
 	const profileUid = route.params.uid;
 	if (profileUid) {

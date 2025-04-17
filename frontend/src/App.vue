@@ -11,6 +11,7 @@ const showErrorNotification = ref(false);
 
 // Функция для проверки и обновления токена перед подключением
 const ensureValidTokenAndConnect = async () => {
+	if (!store.getters['isAuth']) return;
 	try {
 		// Проверяем и обновляем токен, если он устарел
 		const response = await AuthService.getValidAccessToken();

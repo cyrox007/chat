@@ -138,17 +138,9 @@ const handleMenuClick = (item) => {
 // Обработка выхода
 const handleLogout = async () => {
 	try {
-		const response = await AuthService.logout();
-
-		if (response.data.status === 'ok') {
-			store.dispatch('clearUser');
-			/* localStorage.clear(); */
-			window.location.href = '/login'
-		} else {
-			console.error('Unexpected server response:', response);
-		}
+		await store.dispatch('logout');
 	} catch (error) {
-		console.error('Logout failed:', error);
+		console.error('Ошибка при выходе:', error);
 	}
 };
 
@@ -245,6 +237,8 @@ const toggleTheme = () => {
 /* Пользовательское меню */
 .user-profile {
 	position: relative;
+	display: flex;
+	align-items: center;
 }
 .user-avatar {
 	display: flex;

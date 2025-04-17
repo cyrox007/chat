@@ -125,13 +125,6 @@ export default {
 					commit('addMessage', data);
 					
 					if (currentRoute !== '/') {
-						/* commit('addNotification', {
-							type: 'message',
-							sender: data.sender,
-							content: data.content,
-							timestamp: new Date(),
-							room_uid: data.room_uid
-						}); */
 
 						if (data.reply_to?.sender?.uid === currentUserId) {
 							const reply = {

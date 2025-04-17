@@ -1,5 +1,6 @@
 import CSRFService from "@/API/CSRFService";
 import UsersServices from "@/API/UsersService";
+import AuthService from "@/API/AuthService";
 export default {
 	state: {
 		auth: Boolean(localStorage.getItem('auth')) || false,
@@ -17,7 +18,7 @@ export default {
 			localStorage.setItem('auth', status);
 		},
 		setUser(state, userData) {
-			state.user = userData;
+			state.user = { ...userData };
 			localStorage.setItem('user', JSON.stringify(userData));
 		},
 		setMultipleUserStatuses(state, statuses) {
@@ -34,6 +35,27 @@ export default {
 			localStorage.removeItem('auth');
 			localStorage.removeItem('user');
 			localStorage.clear();
+		},
+		async logout({ commit, dispatch }) {
+			try {
+				const response = await AuthService.logout();
+
+				if (response.data.status === 'ok') {
+					// Отключаемся от WebSocket
+					await dispatch('messenger/disconnectMessenger', null, { root: true });
+					await dispatch('chat/disconnectSocket', null, { root: true });
+
+					// Очищаем данные пользователя
+					dispatch('clearUser');
+
+					// Перенаправляем на страницу входа
+					window.location.href = '/login';
+				} else {
+					console.error('Unexpected server response:', response);
+				}
+			} catch (error) {
+				console.error('Logout failed:', error);
+			}
 		},
 		initializeUser({ commit }) {
 			const auth = Boolean(localStorage.getItem('auth'));
