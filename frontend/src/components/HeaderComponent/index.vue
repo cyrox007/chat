@@ -4,7 +4,7 @@
 		<div class="site-logo">
 			<router-link :to="{ path: '/' }">
 				<!-- <img src="@/assets/logo.png" alt="Логотип сайта" /> -->
-				<span>ЧАТ</span>
+				<span>PubChat</span>
 			</router-link>
 		</div>
 
@@ -105,11 +105,11 @@ const navigation = computed(() => {
 			label: 'Сообщения',
 			icon: 'fa-envelope',
 		},
-		{
+		/* {
 			path: '/settings',
 			label: 'Настройки',
 			icon: 'fa-cog',
-		},
+		}, */
 		{
 			path: '/users/logout',
 			label: 'Выход',
@@ -117,13 +117,13 @@ const navigation = computed(() => {
 		},
 	];
 
-	if (isAdmin.value) {
+	/* if (isAdmin.value) {
 		baseNavigation.splice(4, 0, {
 			path: '/admin',
 			label: 'Админка',
 			icon: 'fa-user-shield',
 		});
-	}
+	} */
 
 	return baseNavigation;
 });

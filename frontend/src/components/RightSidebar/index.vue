@@ -16,7 +16,7 @@
 			<p><strong>Теги:</strong> {{ roomInfo.tags }}</p>
 			<p><strong>Дата создания:</strong> {{ formatDate(roomInfo.created_at) }}</p>
 			<p><strong>Владелец:</strong>
-				<router-link v-if="owner" :to="`/profile/${owner.uid}`">{{ owner.username }}</router-link>
+				<router-link class="sidebar-link" v-if="owner" :to="`/profile/${owner.uid}`">{{ owner.username }}</router-link>
 				<span v-else>Неизвестно</span>
 			</p>
 			<div class="rating-visualization">
@@ -30,13 +30,15 @@
 
 		<!-- Список пользователей -->
 		<div class="chat-sidebar-users">
-			<h3>Пользователи</h3>
-			<ul v-if="users.length > 0">
-				<li v-for="user in users" :key="user.uid" class="user" :data-user-id="user.uid">
-					<img :src="user.avatar" alt="Avatar" class="user-avatar">
-					<router-link :to="`/profile/${user.uid}`" class="username">{{ user.username }}</router-link>
-				</li>
-			</ul>
+			<!-- <h3>Пользователи</h3> -->
+			<div class="chat-sidebar-users-list" v-if="users.length > 0">
+				<router-link v-for="user in users" :to="`/profile/${user.uid}`" class="username">
+					<div :key="user.uid" class="chat-sidebar-users-item" :data-user-id="user.uid">
+						<img :src="user.avatar" alt="Avatar" class="user-avatar">
+						{{ user.username }}
+					</div>
+				</router-link>
+			</div>
 			<p v-else>Нет подключенных пользователей</p>
 		</div>
 	</aside>
@@ -102,7 +104,8 @@ onMounted(async () => {
 	height: 100%;
 	min-width: 300px;
 	width: 300px;
-	/* width: 25%; */
+	display: flex;
+	flex-direction: column;
 	padding: 10px;
 	background-color: var(--sidebar-bg-light);
 	transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
@@ -147,18 +150,55 @@ onMounted(async () => {
 }
 
 .chat-sidebar-info {
-	padding: 20px;
+	padding: 20px 10px;
 	border-bottom: 1px solid #ddd;
 }
 
-.chat-sidebar-users {
-	padding: 20px;
+.sidebar-link {
+	text-decoration: none;
+	color: var(--text-light);
+	margin-left: 5px;
+	transition: text-decoration .15s ease-in;
 }
 
-.user {
+.sidebar-link:hover {
+	text-decoration: underline;
+}
+
+.chat-sidebar-users {
+	padding: 20px 10px;
+	
+	flex: 1;
+	overflow-y: auto;
+}
+
+.chat-sidebar-users-list {
+	flex: 1;
+	width: 100%;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 5px;
+
+	/* max-height: 300px; */ /* Максимальная высота */
+  	overflow-y: auto;
+}
+.chat-sidebar-users-list a {
+	padding: 5px;
+	border-radius: 8px;
+	transition: background-color .15s ease-in;
+}
+.chat-sidebar-users-list a:hover {
+	background-color: rgba(0, 123, 255, 0.1);
+}
+
+.chat-sidebar-users-item {
+	
 	display: flex;
 	align-items: center;
-	margin-bottom: 10px;
+	color: var(--text-light);
+	border-radius: 8px;
 }
 
 .user-avatar {
