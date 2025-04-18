@@ -14,6 +14,8 @@ def create_app() -> FastAPI:
     from views.rooms import ws_routers as ws_routes_chat
     from views.messenger import routers as http_routers_messenger
     from views.messenger import ws_routers as ws_routers_messenger
+
+    from views.admin import routers as admin_routers
     
     app = FastAPI()
 
@@ -40,6 +42,8 @@ def create_app() -> FastAPI:
     ws_routes_chat.install(app)
     http_routers_messenger.install(app)
     ws_routers_messenger.install(app)
+
+    admin_routers.install(app)
 
     return app
 

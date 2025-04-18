@@ -386,6 +386,39 @@ class Penalty(Database.Base):
         foreign_keys=[issuer_uid]
     )
 
+    @classmethod
+    def create_penalty(cls, db_session: Session, user_uid: UUID, penalty_type: str, expires_at: datetime, issuer_uid: UUID, reason: str):
+        """
+        Создает новое наказание в базе данных.
+        :param db_session: Сессия базы данных.
+        :param user_uid: UID пользователя, которому назначается наказание.
+        :param penalty_type: Тип наказания.
+        :param expires_at: Дата и время окончания наказания.
+        :param issuer_uid: UID администратора, который назначает наказание.
+        :param reason: Причина наказания.
+        :return: Созданный объект Penalty.
+        """
+        try:
+            # Создаем новую запись о наказании
+            penalty = cls(
+                user_uid=user_uid,
+                penalty_type=PenaltyType(penalty_type),
+                expires_at=expires_at,
+                issuer_uid=issuer_uid,
+                reason=reason,
+            )
+
+            # Добавляем запись в базу данных
+            db_session.add(penalty)
+            db_session.commit()
+            db_session.refresh(penalty)  # Обновляем объект после сохранения
+
+            return penalty
+        except Exception as e:
+            db_session.rollback()
+            logger.error(f"Ошибка при создании наказания: {e}")
+            raise HTTPException(status_code=500, detail="Ошибка при создании наказания")
+
 
 # Модель UserRelationship
 class UserRelationship(Database.Base):
