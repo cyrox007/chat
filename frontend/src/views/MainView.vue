@@ -26,7 +26,8 @@
 				</section>
 				<MessageComposer 
 					ref="messageComposer"
-					@send-message="handleSendMessage" 
+					@send-message="handleSendMessage"
+					:isDisabled="isUserMuted"
 				/>
 			</div>
 			<section v-else-if="!isLoading" class="placeholder">
@@ -60,7 +61,7 @@ const store = useStore();
 // Получаем данные из хранилища
 const currentRoom = computed(() => store.getters['chat/getCurrentRoom']);
 const messages = computed(() => store.getters['chat/getMessages']);
-/* const isConnected = computed(() => store.getters['chat/isConnected']); */
+
 const connectedUsers = computed(() => store.getters['chat/getConnectedUsers']);
 
 // Получаем данные текущего пользователя из хранилища
@@ -75,11 +76,11 @@ const currentUser = computed(() => {
 
 // Состояния
 const isLoading = ref(false);
-const currentReply = ref(null);
 const isLeftSidebarActive = ref(false);
 const isRightSidebarActive = ref(false);
 const rooms = ref([]);
 const messageComposer = ref(null);
+const isUserMuted = computed(() => store.getters['chat/isUserMuted']);
 
 // Загрузка списка комнат
 const loadRooms = async () => {

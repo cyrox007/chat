@@ -1,5 +1,5 @@
 <template>
-	<div class="chat-window-inputs">
+	<div class="chat-window-inputs" :class="{ disabled: props.isDisabled }">
 		<!-- Блок цитаты (если есть) -->
 		<div v-if="replyTo" class="reply-preview">
 			<div class="reply-header">
@@ -44,7 +44,7 @@
 
 		<!-- Поле ввода текста -->
 		<div class="input-container" v-if="!isRecording && !isAudioRecorded && !isVideoRecording">
-			<input type="text" v-model="messageInput" placeholder="Введите сообщение" @keydown.enter="prepareMessage" />
+			<input type="text" v-model="messageInput" placeholder="Введите сообщение" @keydown.enter="prepareMessage" :disabled="isDisabled" />
 			<button class="emoji-button" @click="toggleEmojiPicker">
 				<i class="fas fa-smile"></i>
 			</button>
@@ -65,10 +65,10 @@
 		<div class="audio-preview" v-if="isAudioRecorded">
 			<audio controls :src="voiceUrl"></audio>
 			<div class="controls">
-				<button class="remove-audio" @click="clearVoice">
+				<button class="remove-audio" @click="clearVoice" :disabled="isDisabled">
 					<i class="fas fa-times"></i>
 				</button>
-				<button class="send-button" @click="prepareMessage">
+				<button class="send-button" @click="prepareMessage" :disabled="isDisabled">
 					<i class="fas fa-paper-plane"></i>
 				</button>
 			</div>
@@ -76,12 +76,15 @@
 
 		<!-- Скрытый элемент для выбора файлов -->
 		<input type="file" ref="fileInput" @change="handleFileUpload" multiple style="display: none;"
-			accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx" />
+			accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx" :disabled="isDisabled" />
 
 		<!-- Панель выбора эмодзи -->
 		<div v-if="isEmojiPickerVisible" class="emoji-picker-container">
 			<Picker :data="emojiIndex" set="twitter" @select="insertEmoji" />
 		</div>
+		<div v-if="isDisabled" class="mute-notification">
+            <p>Вы не можете отправлять сообщения.</p>
+        </div>
 	</div>
 </template>
 
@@ -100,6 +103,10 @@ const props = defineProps({
         type: Object,
         default: null,
     },
+	isDisabled: {
+        type: Boolean,
+        default: false,
+    }
 });
 
 const store = useStore();
@@ -355,8 +362,8 @@ const truncate = (text, length) => {
 };
 
 defineExpose({
-  setReply,
-  focusInput
+	setReply,
+	focusInput
 });
 const processFiles = async () => {
 	if (selectedFiles.value.length === 0) return [];
@@ -394,6 +401,7 @@ const processVoice = async () => {
 // Подготовка сообщения для отправки
 // Модифицированная функция подготовки сообщения
 const prepareMessage = async () => {
+	if (props.isDisabled) return;
 	if (!messageInput.value.trim() && !recordedVoice.value && selectedFiles.value.length === 0) return;
 
 	const messagePayload = {
@@ -663,5 +671,17 @@ onUnmounted(() => {
 		padding: 6px;
 		margin-bottom: 6px;
 	}
+}
+.message-composer.disabled {
+	opacity: 0.6;
+	pointer-events: none;
+}
+
+.mute-notification {
+	background-color: #ffebee;
+	color: #c62828;
+	padding: 10px;
+	border-radius: 4px;
+	margin-top: 10px;
 }
 </style>

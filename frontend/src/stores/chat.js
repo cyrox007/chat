@@ -10,7 +10,8 @@ export default {
 		isConnected: false,
 		messages: [],
 		notifications: [],
-		unreadReplies: []
+		unreadReplies: [],
+		muteStatus: null,
 	},
 	getters: {
 		getCurrentRoom: (state) => state.currentRoom,
@@ -18,7 +19,9 @@ export default {
 		isConnected: (state) => state.isConnected,
 		getMessages: (state) => state.messages,
 		unreadReplies: (state) => state.unreadReplies,
-  		hasUnreadReplies: (state) => state.unreadReplies.length > 0
+  		hasUnreadReplies: (state) => state.unreadReplies.length > 0,
+		isUserMuted: (state) => !!state.muteStatus && state.muteStatus.status === 'muted',
+		getMuteDetails: (state) => state.muteStatus?.details || null,
 	},
 	mutations: {
 		setCurrentRoom(state, room) {
@@ -44,10 +47,16 @@ export default {
 		},
 		ADD_UNREAD_REPLY(state, reply) {
 			state.unreadReplies.push(reply);
-		  },
-		  CLEAR_UNREAD_REPLIES(state) {
+		},
+		CLEAR_UNREAD_REPLIES(state) {
 			state.unreadReplies = [];
-		  }
+		},
+		setMuteStatus(state, status) {
+			state.muteStatus = status;
+		},
+		clearMuteStatus(state) {
+			state.muteStatus = null;
+		},
 	},
 	actions: {
 		async fetchUserData({ commit }, userUids) {
@@ -155,6 +164,10 @@ export default {
 						commit('clearMessages');
 						data.messages.reverse().forEach(msg => commit('addMessage', msg));
 					}
+					break;
+
+				case 'mute_status':
+					commit('setMuteStatus', data);
 					break;
 
 				case 'ping':
