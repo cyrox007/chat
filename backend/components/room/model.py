@@ -77,6 +77,14 @@ class Room(Database.Base):
         room.is_active = False
         db.commit()
         return True
+    
+    @staticmethod
+    def get_rooms_by_owner(db: Session, owner_uid: UUID) -> List["Room"]:
+        """Получить все активные комнаты, созданные конкретным пользователем."""
+        return db.query(Room).filter(
+            Room.owner_uid == owner_uid,
+            Room.is_active == True
+        ).all()
 
 class RoomMember(Database.Base):
     __tablename__ = "room_members"

@@ -11,7 +11,7 @@ from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy.exc import IntegrityError
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 # Локальные модули
 from database import Database
@@ -387,23 +387,48 @@ class Penalty(Database.Base):
     )
 
     @classmethod
-    def create_penalty(cls, db_session: Session, user_uid: UUID, penalty_type: str, expires_at: datetime, issuer_uid: UUID, reason: str):
+    def create_penalty(
+        cls, 
+        db_session: Session, 
+        user_uid: UUID, 
+        penalty_type: str, 
+        expires_at: datetime, 
+        issuer_uid: UUID, 
+        reason: str
+    ):
         """
         Создает новое наказание в базе данных.
+        
         :param db_session: Сессия базы данных.
         :param user_uid: UID пользователя, которому назначается наказание.
         :param penalty_type: Тип наказания.
-        :param expires_at: Дата и время окончания наказания.
+        :param expires_at: Дата и время окончания наказания (должно быть в UTC).
         :param issuer_uid: UID администратора, который назначает наказание.
         :param reason: Причина наказания.
         :return: Созданный объект Penalty.
         """
         try:
+            # Проверяем и нормализуем время
+            if expires_at.tzinfo is None:
+                # Если время без зоны, считаем его UTC
+                expires_at_utc = expires_at.replace(tzinfo=timezone.utc)
+            else:
+                # Если с зоной, конвертируем в UTC
+                expires_at_utc = expires_at.astimezone(timezone.utc)
+            
+            # Удаляем информацию о временной зоне перед сохранением
+            expires_at_for_db = expires_at_utc.replace(tzinfo=None)
+            
+            # Логирование для отладки
+            logger.debug(f"Original expires_at: {expires_at}")
+            logger.debug(f"UTC expires_at: {expires_at_utc}")
+            logger.debug(f"DB expires_at: {expires_at_for_db}")
+
             # Создаем новую запись о наказании
             penalty = cls(
                 user_uid=user_uid,
                 penalty_type=PenaltyType(penalty_type),
-                expires_at=expires_at,
+                expires_at=expires_at_for_db,  # Сохраняем как naive UTC
                 issuer_uid=issuer_uid,
                 reason=reason,
             )
@@ -411,13 +436,105 @@ class Penalty(Database.Base):
             # Добавляем запись в базу данных
             db_session.add(penalty)
             db_session.commit()
-            db_session.refresh(penalty)  # Обновляем объект после сохранения
+            db_session.refresh(penalty)
 
             return penalty
+
+        except ValueError as e:
+            db_session.rollback()
+            logger.error(f"Ошибка валидации при создании наказания: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Некорректные данные: {str(e)}"
+            )
+            
         except Exception as e:
             db_session.rollback()
-            logger.error(f"Ошибка при создании наказания: {e}")
-            raise HTTPException(status_code=500, detail="Ошибка при создании наказания")
+            logger.error(f"Ошибка при создании наказания: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Ошибка при создании наказания"
+            )
+        
+    @classmethod
+    def get_active_mute(cls, db_session: Session, user_uid: UUID):
+        """
+        Возвращает активное наказание типа mute для пользователя.
+        :param db_session: Сессия базы данных.
+        :param user_uid: UID пользователя.
+        :return: None или словарь с данными о наказании.
+        """
+        current_time = datetime.utcnow()
+        logger.debug(f"Текущее время (UTC): {current_time}")
+
+        active_penalty = (
+            db_session.query(cls)
+            .filter(
+                cls.user_uid == user_uid,
+                cls.penalty_type == PenaltyType.MUTE,
+                cls.expires_at > current_time + timedelta(seconds=1)  # Добавляем буфер
+            )
+            .first()
+        )
+
+        if active_penalty:
+            logger.debug(f"Активное наказание найдено: expires_at={active_penalty.expires_at}")
+            return {
+                "expires_at": active_penalty.expires_at.isoformat(),
+                "reason": active_penalty.reason,
+            }
+        logger.debug("Активных наказаний нет")
+        return None
+
+    @classmethod
+    def get_user_penalties(cls, db_session: Session, user_uid: UUID):
+        one_month_ago = datetime.utcnow() - timedelta(days=30)
+    
+        penalties = (
+            db_session.query(cls)
+            .filter(
+                cls.user_uid == user_uid,
+                cls.issued_at >= one_month_ago
+            )
+            .all()
+        )
+        
+        # Возвращаем данные в виде списка словарей
+        return [
+            {
+                "id": penalty.id,
+                "type": penalty.penalty_type,
+                "reason": penalty.reason,
+                "issued_at": penalty.issued_at.isoformat(),
+                "expires_at": penalty.expires_at.isoformat(),
+                "issuer_uid": penalty.issuer_uid,
+                "issuer": {
+                    "username": penalty.issuer.username,
+                    "firstname": penalty.issuer.first_name,
+                    "lastname": penalty.issuer.last_name
+                },
+            }
+            for penalty in penalties
+        ]
+    
+    @classmethod
+    def update_penalty(cls, db_session: Session, penalty_id: int, new_data: dict):
+        penalty = db_session.query(cls).filter(cls.id == penalty_id).first()
+        if not penalty:
+            raise HTTPException(status_code=404, detail="Penalty not found")
+        for key, value in new_data.items():
+            setattr(penalty, key, value)
+        db_session.commit()
+        return penalty
+    
+    @classmethod
+    def delete_penalty(cls, db_session: Session, penalty_id: int):
+        penalty = db_session.query(cls).filter(cls.id == penalty_id).first()
+        if not penalty:
+            raise HTTPException(status_code=404, detail="Penalty not found")
+        db_session.delete(penalty)
+        db_session.commit()
+        return {"status": "ok", "message": "Penalty deleted"}
 
 
 # Модель UserRelationship

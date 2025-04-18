@@ -11,6 +11,7 @@ import uuid
 from fastapi import WebSocket, WebSocketDisconnect
 
 # Custom
+from components.user.model import Penalty
 from components.room.model import Room
 from components.message.model import Message
 from components.decorators.db import get_session
@@ -41,6 +42,19 @@ async def initialize_websocket(websocket: WebSocket, db_session, room_uid: UUID,
     await manager.connect_to_room(websocket, room_uid, user_uid)
     await manager.update_user_activity(db_session, user_uid)
 
+    # Проверка наличия активного наказания
+    active_mute = Penalty.get_active_mute(db_session, user_uid)
+    if active_mute:
+        # Отправляем информацию о наказании через WebSocket
+        await websocket.send_json({
+            "type": "mute_status",
+            "status": "muted",
+            "details": {
+                "expires_at": active_mute["expires_at"],
+                "reason": active_mute["reason"],
+            },
+        })
+
     # Отправка начальных данных
     await send_initial_data(websocket, db_session, room_uid, user_uid)
 
@@ -70,7 +84,7 @@ async def process_incoming_messages(websocket: WebSocket, room_uid: UUID, user_u
         logger.info("WebSocket отключен")
         manager.disconnect(websocket, room_uid)
 
-async def handle_text_message(data: dict, room_uid: UUID, user_uid: UUID, db_session):
+async def handle_text_message(data: dict, room_uid: UUID, user_uid: UUID, db_session):    
     content = data.get("content")
     if not content:
         logger.warning("Получено пустое текстовое сообщение")

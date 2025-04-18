@@ -14,5 +14,35 @@ def install(app: FastAPI):
         endpoint=handlers.assign_penalty,
         dependencies=[Depends(auth_middle)]
     )
+    router.add_api_route(
+        '/penalties/{penalty_id}',
+        methods=['DELETE'],
+        status_code=status.HTTP_200_OK,
+        endpoint=handlers.delete_penalty,
+        dependencies=[Depends(auth_middle)]
+    )
+    router.add_api_route(
+        '/users/{target_uid}/rooms',
+        methods=['GET'],
+        status_code=status.HTTP_200_OK,
+        endpoint=handlers.get_user_rooms,
+        dependencies=[Depends(auth_middle)]
+    )
+    
+    router.add_api_route(
+        '/users/{target_uid}/penalties',
+        methods=['GET'],
+        status_code=status.HTTP_200_OK,
+        endpoint=handlers.get_user_penalties,
+        dependencies=[Depends(auth_middle)]
+    )
+    
+    router.add_api_route(
+        '/users/{target_uid}',
+        methods=['PUT'],
+        status_code=status.HTTP_200_OK,
+        endpoint=handlers.update_user,
+        dependencies=[Depends(auth_middle)]
+    )
 
     app.include_router(router)
