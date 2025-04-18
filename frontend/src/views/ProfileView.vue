@@ -35,7 +35,7 @@
 				<UserStatus v-if="!isCurrentUser" :userId="route.params.uid" />
 				<div class="profile-actions">
 					<button
-						v-if="!isCurrentUser && ['admin', 'moderator', 'superadministrator'].includes(currentUser.value?.global_role)"
+						v-if="!isCurrentUser && isModeratorOrAdmin"
 						@click="openAdminPanel"
 						class="admin-panel-btn"
 						>
@@ -106,6 +106,10 @@ const currentUser = computed(() => store.getters.getUser);
 const isCurrentUser = computed(() => {
 	const profileUid = route.params.uid;
 	return !profileUid || profileUid === currentUser.value?.uid;
+});
+
+const isModeratorOrAdmin = computed(() => {
+	return ['admin', 'moderator', 'superadministrator'].includes(currentUser.value?.global_role);
 });
 
 // Проверка прав на редактирование профиля
