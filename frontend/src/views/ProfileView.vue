@@ -10,6 +10,11 @@
 		@close="toggleEditProfileModal"
 		@save="handleProfileUpdate"
 	/>
+	<ProfileModalForAdmin 
+		:show-modal="isModerationModalOpen"
+		:user-uid="route.params.uid" 
+		@close="toggleModerationModal"
+	/>
 	<div class="user-profile">
 		<transition name="fade" v-if="isLoading">
 			<Loader :message="'Загрузка профиля...'" />
@@ -44,6 +49,9 @@
 					<button v-if="canEditProfile" @click="toggleEditProfileModal" class="edit-profile-btn">Редактировать профиль</button>
 					<button v-if="!isCurrentUser" @click="openChatWithUser" class="message-button">Отправить сообщение</button>
 				</div>
+				<div class="moderation-actions" v-if="isModeratorOrAdmin">
+					<button @click="toggleModerationModal">Назначить наказание</button>
+				</div>
 			</div>
 
 			<!-- Основное содержимое профиля -->
@@ -77,14 +85,16 @@
 import { ref, onMounted, computed, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
+
 import UsersServices from '@/API/UsersService';
+import CSRFService from '@/API/CSRFService';
 
 import Loader from '@/components/Loader/index.vue'
 import Rating from "@/components/Rating/Rating.vue";
 import UserStatus from "@/components/UserStatus/index.vue"
 import EditProfileForm from '@/components/EditProfileForm/Modals/EditProfileModal.vue';
 import AvatarUploadModal from '@/components/EditProfileForm/Modals/AvatarUploadModal.vue';
-import CSRFService from '@/API/CSRFService';
+import ProfileModalForAdmin from '@/components/AdminComponents/Modals/ProfileModalForAdmin.vue';
 
 const emits = defineEmits(['update'])
 
@@ -98,6 +108,7 @@ const isLoading = ref(true); // Флаг загрузки
 const errorMessage = ref(''); // Сообщение об ошибке
 const isAvatarUploadModalOpen = ref(false);
 const isEditProfileModalOpen = ref(false);
+const isModerationModalOpen = ref(false);
 
 // Получаем текущего пользователя из Vuex store
 const currentUser = computed(() => store.getters.getUser);
@@ -163,6 +174,10 @@ const toggleEditProfileModal = async () => {
 	isEditProfileModalOpen.value = !isEditProfileModalOpen.value;
 };
 
+const toggleModerationModal = () => {
+  	isModerationModalOpen.value = !isModerationModalOpen.value;
+};
+
 const handleAvatarUpload = async (file) => {
 	try {
 		const formData = new FormData();
@@ -209,7 +224,7 @@ const sendProfileUpdateRequest = async (updatedData) => {
 
 // Обработка успешного обновления
 const handleSuccessfulUpdate = (responseData) => {
-	console.log('Профиль успешно обновлен:', responseData);
+	//console.log('Профиль успешно обновлен:', responseData);
 	emits('close'); // Закрываем модалку
 
 	// Если редактируется собственный профиль, обновляем данные в Vuex
@@ -228,6 +243,16 @@ const handleUpdateError = (errorMessage) => {
 
 const openAdminPanel = () => {
 	router.push(`/admin/profile/${route.params.uid}`);
+};
+
+const assignPunishment = async (punishmentData) => {
+	try {
+		await UsersServices.assignPunishment(route.params.uid, punishmentData);
+		alert("Наказание назначено");
+		closeModerationModal();
+	} catch (error) {
+		console.error("Ошибка при назначении наказания:", error);
+	}
 };
 
 onMounted(async () => {
