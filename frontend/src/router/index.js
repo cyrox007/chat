@@ -57,6 +57,15 @@ const router = createRouter({
 				requestAuth: true
 			}
 		},
+		// Маршрут для 404 ошибки (не найдено)
+        {
+            path: '/:pathMatch(.*)*',
+            name: 'NotFound',
+            component: () => import('../views/NotFoundView.vue'),
+            meta: {
+                title: "Страница не найдена"
+            }
+        }
 		/*{
 			path: '/settings',
 			name: 'settings',
