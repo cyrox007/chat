@@ -5,7 +5,7 @@ from fastapi import HTTPException, Request, Response, status
 from utils.file_handler import save_file
 from components.room.model import Room
 from utils.logger import setup_logger
-from components.user.model import Penalty, PenaltyType, User
+from components.user.model import Penalty, User
 from components.decorators.db import get_session
 
 from datetime import datetime
