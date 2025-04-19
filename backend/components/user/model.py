@@ -24,27 +24,6 @@ from utils.logger import setup_logger  # Централизованная ути
 logger = setup_logger(__name__)
 
 
-# Enums
-class PenaltyType(str, Enum):
-    BAN = "ban"
-    MUTE = "mute"
-    WARNING = "warning"
-
-
-class RelationshipType(str, Enum):
-    SPOUSE = "spouse"
-    PARENT = "parent"
-    CHILD = "child"
-    SIBLING = "sibling"
-    FRIEND = "friend"
-
-
-class Gender(str, Enum):
-    MALE = "male"
-    FEMALE = "female"
-    OTHER = "other"
-
-
 # Модель User
 class User(Database.Base):
     __tablename__ = "users"
@@ -68,7 +47,7 @@ class User(Database.Base):
     country = Column(String(100), nullable=True)
     bio = Column(String(500), nullable=True)
     date_of_birth = Column(DateTime, nullable=True)
-    gender = Column(SQLEnum('male', 'female', 'other', name='gender'), nullable=True)
+    gender = Column(String(50), nullable=True)
     career = Column(String(100), nullable=True)
     education = Column(String(100), nullable=True)
     marital_status = Column(String(50), nullable=True)
@@ -120,7 +99,7 @@ class User(Database.Base):
         email: str,
         phone: str,
         password: str,
-        gender: Gender = None,
+        gender: str = None,
         first_name: str = None,
         last_name: str = None,
         bio=None,
@@ -173,7 +152,7 @@ class User(Database.Base):
 
             # Выбор аватара по умолчанию
             if not avatar:
-                if gender == Gender.FEMALE:
+                if gender == 'female':
                     avatar = "/static/default_female.webp"
                 else:
                     avatar = "/static/default_male.webp"
@@ -369,7 +348,7 @@ class Penalty(Database.Base):
 
     id = Column(Integer, primary_key=True)
     user_uid = Column(UUID(as_uuid=True), ForeignKey("users.uid"))
-    penalty_type = Column(SQLEnum(PenaltyType))
+    penalty_type = Column(String(50))
     issued_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime)
     issuer_uid = Column(UUID(as_uuid=True), ForeignKey("users.uid"))
@@ -427,7 +406,7 @@ class Penalty(Database.Base):
             # Создаем новую запись о наказании
             penalty = cls(
                 user_uid=user_uid,
-                penalty_type=PenaltyType(penalty_type),
+                penalty_type=str(penalty_type),
                 expires_at=expires_at_for_db,  # Сохраняем как naive UTC
                 issuer_uid=issuer_uid,
                 reason=reason,
@@ -471,7 +450,7 @@ class Penalty(Database.Base):
             db_session.query(cls)
             .filter(
                 cls.user_uid == user_uid,
-                cls.penalty_type == PenaltyType.MUTE,
+                cls.penalty_type == 'mute',
                 cls.expires_at > current_time + timedelta(seconds=1)  # Добавляем буфер
             )
             .first()
@@ -548,7 +527,7 @@ class UserRelationship(Database.Base):
     id = Column(Integer, primary_key=True)
     from_user_uid = Column(UUID(as_uuid=True), ForeignKey("users.uid"))
     to_user_uid = Column(UUID(as_uuid=True), ForeignKey("users.uid"))
-    relation_type = Column(SQLEnum(RelationshipType))
+    relation_type = Column(String(50))
     since = Column(DateTime, default=datetime.utcnow)
 
     from_user = relationship("User", back_populates="relationships", foreign_keys=[from_user_uid])

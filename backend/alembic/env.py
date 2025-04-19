@@ -21,7 +21,7 @@ config.set_main_option('sqlalchemy.url', cfg.database_url())
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-from components.user.model import User
+from components.user.model import User, Penalty, UserRelationship
 target_metadata = User.__table__.metadata
 
 from components.room.model import Room, RoomMember

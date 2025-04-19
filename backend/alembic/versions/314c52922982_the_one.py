@@ -1,8 +1,8 @@
-"""Initial and Create private_messages table
+"""THE_ONE
 
-Revision ID: ecc7fc6429ec
+Revision ID: 314c52922982
 Revises: 
-Create Date: 2025-03-07 14:16:36.732090
+Create Date: 2025-04-19 18:12:20.135225
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'ecc7fc6429ec'
+revision: str = '314c52922982'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -36,12 +36,37 @@ def upgrade() -> None:
     sa.Column('is_active', sa.Boolean(), nullable=True),
     sa.Column('is_verified', sa.Boolean(), nullable=True),
     sa.Column('deleted_at', sa.DateTime(), nullable=True),
+    sa.Column('city', sa.String(length=100), nullable=True),
+    sa.Column('country', sa.String(length=100), nullable=True),
+    sa.Column('bio', sa.String(length=500), nullable=True),
+    sa.Column('date_of_birth', sa.DateTime(), nullable=True),
+    sa.Column('gender', sa.String(length=50), nullable=True),
+    sa.Column('career', sa.String(length=100), nullable=True),
+    sa.Column('education', sa.String(length=100), nullable=True),
+    sa.Column('marital_status', sa.String(length=50), nullable=True),
+    sa.Column('last_online', sa.DateTime(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index('ix_user_email', 'users', ['email'], unique=False)
+    op.create_index('ix_user_gender', 'users', ['gender'], unique=False)
+    op.create_index('ix_user_phone', 'users', ['phone'], unique=False)
+    op.create_index('ix_user_username', 'users', ['username'], unique=False)
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
     op.create_index(op.f('ix_users_phone'), 'users', ['phone'], unique=True)
     op.create_index(op.f('ix_users_uid'), 'users', ['uid'], unique=True)
     op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
+    op.create_table('penalties',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_uid', sa.UUID(), nullable=True),
+    sa.Column('penalty_type', sa.String(length=50), nullable=True),
+    sa.Column('issued_at', sa.DateTime(), nullable=True),
+    sa.Column('expires_at', sa.DateTime(), nullable=True),
+    sa.Column('issuer_uid', sa.UUID(), nullable=True),
+    sa.Column('reason', sa.String(length=255), nullable=True),
+    sa.ForeignKeyConstraint(['issuer_uid'], ['users.uid'], ),
+    sa.ForeignKeyConstraint(['user_uid'], ['users.uid'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('private_messages',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('uid', sa.UUID(), nullable=True),
@@ -74,23 +99,45 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_rooms_uid'), 'rooms', ['uid'], unique=True)
-    op.create_table('messages',
+    op.create_table('user_devices',
+    sa.Column('id', sa.String(), nullable=False),
+    sa.Column('user_uid', sa.UUID(), nullable=False),
+    sa.Column('token', sa.String(), nullable=False),
+    sa.Column('ip_address', sa.String(), nullable=False),
+    sa.Column('user_agent', sa.String(), nullable=False),
+    sa.Column('device_info', sa.String(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.Column('expires_at', sa.DateTime(), nullable=False),
+    sa.Column('is_active', sa.Boolean(), nullable=True),
+    sa.ForeignKeyConstraint(['user_uid'], ['users.uid'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('token')
+    )
+    op.create_table('user_relationships',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('uid', sa.UUID(), nullable=True),
+    sa.Column('from_user_uid', sa.UUID(), nullable=True),
+    sa.Column('to_user_uid', sa.UUID(), nullable=True),
+    sa.Column('relation_type', sa.String(length=50), nullable=True),
+    sa.Column('since', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['from_user_uid'], ['users.uid'], ),
+    sa.ForeignKeyConstraint(['to_user_uid'], ['users.uid'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('from_user_uid', 'to_user_uid', name='unique_relationship')
+    )
+    op.create_table('messages',
+    sa.Column('uid', sa.UUID(), nullable=False),
     sa.Column('content_type', sa.String(length=50), nullable=False),
     sa.Column('text', sa.String(length=1000), nullable=True),
     sa.Column('media_metadata', sa.JSON(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('room_uid', sa.UUID(), nullable=True),
     sa.Column('author_uid', sa.UUID(), nullable=True),
-    sa.Column('mention_uid', sa.UUID(), nullable=True),
+    sa.Column('reply_to_uid', sa.UUID(), nullable=True),
     sa.ForeignKeyConstraint(['author_uid'], ['users.uid'], ),
-    sa.ForeignKeyConstraint(['mention_uid'], ['users.uid'], ),
+    sa.ForeignKeyConstraint(['reply_to_uid'], ['messages.uid'], ),
     sa.ForeignKeyConstraint(['room_uid'], ['rooms.uid'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('uid')
     )
-    op.create_index(op.f('ix_messages_id'), 'messages', ['id'], unique=False)
-    op.create_index(op.f('ix_messages_uid'), 'messages', ['uid'], unique=True)
     op.create_table('room_members',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('room_uid', sa.UUID(), nullable=True),
@@ -108,17 +155,22 @@ def upgrade() -> None:
 def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_table('room_members')
-    op.drop_index(op.f('ix_messages_uid'), table_name='messages')
-    op.drop_index(op.f('ix_messages_id'), table_name='messages')
     op.drop_table('messages')
+    op.drop_table('user_relationships')
+    op.drop_table('user_devices')
     op.drop_index(op.f('ix_rooms_uid'), table_name='rooms')
     op.drop_table('rooms')
     op.drop_index(op.f('ix_private_messages_uid'), table_name='private_messages')
     op.drop_index(op.f('ix_private_messages_id'), table_name='private_messages')
     op.drop_table('private_messages')
+    op.drop_table('penalties')
     op.drop_index(op.f('ix_users_username'), table_name='users')
     op.drop_index(op.f('ix_users_uid'), table_name='users')
     op.drop_index(op.f('ix_users_phone'), table_name='users')
     op.drop_index(op.f('ix_users_email'), table_name='users')
+    op.drop_index('ix_user_username', table_name='users')
+    op.drop_index('ix_user_phone', table_name='users')
+    op.drop_index('ix_user_gender', table_name='users')
+    op.drop_index('ix_user_email', table_name='users')
     op.drop_table('users')
     # ### end Alembic commands ###

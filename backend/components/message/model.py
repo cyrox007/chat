@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 class Message(Database.Base):
     __tablename__ = "messages"
 
-    id = Column(Integer, primary_key=True, index=True)
-    uid = Column(UUID(as_uuid=True), default=uuid4, unique=True, index=True)
+    #id = Column(Integer, primary_key=True, index=True)
+    uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     content_type = Column(String(50), nullable=False)  # text, image, video, audio, document, voice, sticker
     text = Column(String(1000))  # Текст (опционально)
     media_metadata = Column(JSON)  # Метаданные для медиа
@@ -30,8 +30,8 @@ class Message(Database.Base):
     author = relationship("User", foreign_keys=[author_uid], back_populates="messages")
 
     # Поля для ответа на сообщение
-    reply_to_uid = Column(UUID(as_uuid=True), ForeignKey("messages.uid"))
-    reply_to = relationship("Message", remote_side=[uid], post_update=True)
+    reply_to_uid = Column(UUID(as_uuid=True), ForeignKey("messages.uid"), nullable=True)
+    reply_to = relationship("Message", remote_side=[uid], foreign_keys=[reply_to_uid], post_update=True)
 
     def __repr__(self):
         return f"<Message(uid={self.uid}, type={self.content_type}, room={self.room_uid})>"
