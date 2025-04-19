@@ -50,7 +50,7 @@ def install(app: FastAPI):
         endpoint=handlers.get_users_by_uids
     )
     router.add_api_route(
-        '/{uid}',
+        '/{user_uid}',
         methods=['GET'],
         status_code=status.HTTP_200_OK,
         endpoint=handlers.get_user_by_uid,

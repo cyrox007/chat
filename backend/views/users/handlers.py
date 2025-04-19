@@ -1,8 +1,9 @@
 # Стандартные библиотеки Python
 from json import JSONDecodeError
+from uuid import UUID
 
 # Внешние зависимости
-from fastapi import Depends, Request, HTTPException, UploadFile, status
+from fastapi import Depends, Request, HTTPException, Response, UploadFile, status
 from fastapi.responses import JSONResponse
 
 # Локальные модули
@@ -150,7 +151,7 @@ async def check_phone(request: Request, db_session=None):
     return {"isUnique": is_unique}
 
 @get_session
-async def login(request: Request, db_session=None):
+async def login(request: Request, response: Response, db_session=None):
     """
     Авторизация пользователя.
     """
@@ -162,7 +163,9 @@ async def login(request: Request, db_session=None):
         missing_fields = [field for field in required_fields if field not in data]
         if missing_fields:
             logger.warning(f"Отсутствуют обязательные поля: {', '.join(missing_fields)}")
-            raise HTTPException(status_code=400, detail=f"Missing fields: {', '.join(missing_fields)}")
+            response.status_code = status.HTTP_400_BAD_REQUEST
+            #raise HTTPException(status_code=400, detail=f"Missing fields: {', '.join(missing_fields)}")
+            return {'status': 'error', 'message': f"Отсутствуют обязательные поля: {', '.join(missing_fields)}"}
 
         identifier = data["identifier"]
         user = authenticate_user(db_session, data["identifier"], data["password"])
@@ -179,35 +182,6 @@ async def login(request: Request, db_session=None):
             device_info=client_metadata["device_info"],
         )
 
-        response = JSONResponse(
-            content={
-                "status": "ok",
-                "access_token": tokens["access"],
-                "token_type": "bearer",
-                "user": {
-					"uid": str(user.uid),
-					"username": user.username,
-					"email": user.email,
-					"phone": user.phone,
-					"avatar": user.avatar,
-					"first_name": user.first_name,
-					"last_name": user.last_name,
-					"global_role": user.global_role,
-					"rating": user.rating,
-					"is_active": user.is_active,
-					"is_verified": user.is_verified,
-					"city": user.city,
-					"country": user.country,
-					"bio": user.bio,
-					"date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
-					"gender": user.gender,
-					"career": user.career,
-					"education": user.education,
-					"marital_status": user.marital_status,
-					"last_online": user.last_online.isoformat() if user.last_online else None,
-				},
-            }
-        )
         response.set_cookie(
             key="refresh_token",
             value=tokens["refresh"],
@@ -218,15 +192,43 @@ async def login(request: Request, db_session=None):
         )
 
         logger.info(f"Пользователь успешно авторизован: {identifier}")
-        return response
+        return {
+            "status": "ok",
+            "access_token": tokens["access"],
+            "token_type": "bearer",
+            "user": {
+                "uid": str(user.uid),
+                "username": user.username,
+                "email": user.email,
+                "phone": user.phone,
+                "avatar": user.avatar,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "global_role": user.global_role,
+                "rating": user.rating,
+                "is_active": user.is_active,
+                "is_verified": user.is_verified,
+                "city": user.city,
+                "country": user.country,
+                "bio": user.bio,
+                "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
+                "gender": user.gender,
+                "career": user.career,
+                "education": user.education,
+                "marital_status": user.marital_status,
+                "last_online": user.last_online.isoformat() if user.last_online else None,
+            },
+        }
 
     except Exception as e:
         logger.exception("Произошла ошибка при авторизации пользователя")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        #raise HTTPException(status_code=500, detail="Internal server error")
+        return {'status': 'error', 'message': f"Internal server error"}
 
 
 @get_session
-async def logout(request: Request, db_session=None):
+async def logout(request: Request, response: Response, db_session=None):
     """
     Выход пользователя.
     """
@@ -235,7 +237,7 @@ async def logout(request: Request, db_session=None):
         refresh_token = request.cookies.get("refresh_token")
         if not refresh_token:
             logger.info("Пользователь уже вышел из системы")
-            return JSONResponse(content={"status": "ok", "message": "Already logged out"})
+            return {"status": "ok", "message": "Already logged out"}
 
         try:
             UserDevice.deactivate_token(db_session, refresh_token)
@@ -243,98 +245,101 @@ async def logout(request: Request, db_session=None):
         except ValueError:
             logger.warning("Токен уже деактивирован или отсутствует")
 
-        response = JSONResponse(content={"status": "ok", "message": "Logged out successfully"})
         response.delete_cookie(key="refresh_token")
         logger.info("Пользователь успешно вышел из системы")
-        return response
+        return {"status": "ok", "message": "Logged out successfully"}
 
     except Exception as e:
         logger.exception("Произошла ошибка при выходе пользователя")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {'status': 'error', 'message': f"Internal server error"}
 
 
 @get_session
-async def get_users_by_uids(request: Request, db_session=None):
-    """
-    Получение данных о пользователях по их user_uid.
-    """
+async def get_users_by_uids(request: Request, response: Response, db_session=None):
+    """Получение данных о пользователях по их user_uid."""
     logger.info("Начало обработки запроса на получение данных пользователей")
     try:
+        # Парсим входные данные
         data = await parse_request_data(request)
         user_uids = data.get('user_uids')
 
-        if not isinstance(user_uids, list) or not user_uids:
+        # Проверяем, что user_uids существует и является списком
+        if not user_uids or not isinstance(user_uids, list):
             logger.warning("Получен некорректный или пустой список user_uids")
-            raise HTTPException(status_code=400, detail="Invalid or empty user_uids list")
+            response.status_code = status.HTTP_400_BAD_REQUEST
+            return {"status": "error", "message": "Получен некорректный или пустой список user_uids"}
 
-        users_data = User.get_users_by_uids(db_session, user_uids)
-        logger.info(f"Данные о пользователях успешно получены: {len(users_data)} пользователей")
+        # Получаем пользователей из базы данных
+        users = db_session.query(User).filter(User.uid.in_(user_uids)).all()
+
+        # Формируем ответ
+        users_data = [
+            {
+                "uid": user.uid,
+                "username": user.username,
+                "email": user.email,
+                "phone": user.phone,
+                "avatar": user.avatar,
+                "last_online": user.last_online.isoformat() if user.last_online else None,
+            }
+            for user in users
+        ]
+
+        logger.info(f"Данные успешно получены для {len(users)} пользователей")
         return {"status": "ok", "users": users_data}
 
     except Exception as e:
-        logger.exception("Произошла ошибка при получении данных пользователей")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.error(f"Неожиданная ошибка при получении данных пользователей: {str(e)}")
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {"status": "error", "message": "Произошла внутренняя ошибка сервера"}
 
 
 @get_session
-async def get_user_by_uid(
-    uid: str,
-    #current_user=Depends(auth_middle),  # Сначала разрешаем аутентификацию
-    db_session=None  # Затем передаем сессию БД через декоратор
-):
+async def get_user_by_uid(user_uid: UUID, response: Response, db_session = None):
     """
     Получение данных пользователя по его UID.
     """
-    user = User.get_user_by_uid(db_session, uid)
+    user = User.get_user_by_uid(db_session, str(user_uid))
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {"status": "ok", "message":"Пользователь не найден"}
 
-    #is_owner = current_user.uid == user.uid
     user_data = {
-        "full": {
-            "uid": user.uid,
-            "username": user.username,
-            "email": user.email,
-            "phone": user.phone,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "avatar": user.avatar,
-            "global_role": user.global_role,
-            "rating": user.rating,
-            "city": user.city,
-            "country": user.country,
-            "bio": user.bio,
-            "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
-            "gender": user.gender,
-            "career": user.career,
-            "education": user.education,
-            "marital_status": user.marital_status,
-            "last_online": user.last_online.isoformat() if user.last_online else None,
-        },
-        "limited": {
-            "uid": user.uid,
-            "username": user.username,
-            "avatar": user.avatar,
-            "global_role": user.global_role,
-            "rating": user.rating,
-            "city": user.city,
-            "country": user.country,
-            "bio": user.bio,
-        },
+        "uid": user.uid,
+        "username": user.username,
+        "email": user.email,
+        "phone": user.phone,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "avatar": user.avatar,
+        "global_role": user.global_role,
+        "rating": user.rating,
+        "city": user.city,
+        "country": user.country,
+        "bio": user.bio,
+        "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
+        "gender": user.gender,
+        "career": user.career,
+        "education": user.education,
+        "marital_status": user.marital_status,
+        "last_online": user.last_online.isoformat() if user.last_online else None,
     }
 
-    return {"status": "ok", "user": user_data["full"] }
+    return {"status": "ok", "user": user_data }
 
 @get_session
-async def get_user_statuses(request: Request, db_session = None):
+async def get_user_statuses(request: Request, response: Response, db_session = None):
     try:
         # Получаем данные из запроса
-        data = await request.json()
+        data: dict = await request.json()
         user_ids = data.get('user_ids')
 
         # Проверяем, что user_ids существует и является списком
         if not user_ids or not isinstance(user_ids, list):
-            raise HTTPException(status_code=400, detail="Invalid or missing 'user_ids' in request")
+            response.status_code = status.HTTP_400_BAD_REQUEST
+            #raise HTTPException(status_code=400, detail="Invalid or missing 'user_ids' in request")
+            return {"status": "error", "message": "Invalid or missing 'user_ids' in request"}
 
         # Получаем пользователей из базы данных
         users = db_session.query(User).filter(User.uid.in_(user_ids)).all()
@@ -342,8 +347,7 @@ async def get_user_statuses(request: Request, db_session = None):
         # Формируем статусы пользователей
         statuses = {
             str(user.uid): {
-                "last_online": user.last_online.isoformat() if user.last_online else None,
-                #"is_online": connection_manager.is_user_online(UUID(str(user.uid))),
+                "last_online": user.last_online.isoformat() if user.last_online else None
             }
             for user in users
         }
@@ -353,10 +357,12 @@ async def get_user_statuses(request: Request, db_session = None):
     except Exception as e:
         # Логируем ошибку и возвращаем HTTP-ошибку
         logger.error(f"Ошибка при получении статусов пользователей: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        #raise HTTPException(status_code=500, detail="Internal server error")
+        return {"status": "error", "message": "Произошла внутренняя ошибка сервера"}
 
 @get_session
-async def delete_user(request: Request, db_session = None):
+async def delete_user(request: Request, response: Response, db_session = None):
     """
     Мягкое удаление пользователя (обновление поля deleted_at).
 
@@ -377,51 +383,57 @@ async def delete_user(request: Request, db_session = None):
     except HTTPException as http_error:
         # Логируем ошибку и возвращаем JSON-ответ
         logger.error(f"Ошибка при удалении пользователя: {http_error.detail}")
-        return {"status": "error", "message": http_error.detail}, http_error.status_code
+        response.status_code = http_error.status_code
+        return {"status": "error", "message": http_error.detail}
 
     except Exception as e:
         # Логируем неожиданную ошибку и возвращаем JSON-ответ
         logger.error(f"Неожиданная ошибка при удалении пользователя: {str(e)}")
         db_session.rollback()  # Откатываем изменения в случае ошибки
-        return {"status": "error", "message": "Произошла внутренняя ошибка сервера"}, status.HTTP_500_INTERNAL_SERVER_ERROR
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {"status": "error", "message": "Произошла внутренняя ошибка сервера"}
     
 @get_session
-async def update_profile(request: Request, db_session = None):
-    """
-    Обновление данных профиля пользователя.
-    :param request: Запрос FastAPI.
-    :param db_session: Сессия базы данных.
-    :return: JSON-ответ о статусе операции.
-    """
+async def update_profile(request: Request, response: Response, db_session=None):
+    """Обновление данных профиля пользователя."""
+    logger.info("Начало обработки запроса на обновление профиля")
     try:
+        # Парсим входные данные
         data = await request.json()
         target_user_uid = data.get("user_uid")
-        new_data = data.get("data", {})
+        updated_data = data.get("updated_data")
 
-        if not target_user_uid:
-            logger.warning("UID пользователя не указан")
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="UID пользователя не указан")
-        print(request.state.user.get('user_uid', None))
-        print(data.get("user_uid"))
-        current_user_uid = request.state.user.get('user_uid', None)  # Получаем UID текущего пользователя
-        if current_user_uid != target_user_uid:
-            current_user = User.get_user_by_uid(db_session, current_user_uid)
-            if not current_user or current_user.global_role not in ["moderator", "admin", "superadministrator"]:
-                logger.warning(f"Недостаточно прав для изменения данных пользователя {target_user_uid}")
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Недостаточно прав для изменения данных другого пользователя"
-                )
+        # Проверяем, что все необходимые поля присутствуют
+        if not target_user_uid or not updated_data:
+            logger.warning("Отсутствуют обязательные поля: user_uid или updated_data")
+            response.status_code = status.HTTP_400_BAD_REQUEST
+            return {"status": "error", "message": "Missing required fields"}
 
-        updated_user = User.update_profile(db_session, target_user_uid, new_data)
-        logger.info(f"Данные пользователя {target_user_uid} успешно обновлены: {updated_user}")
-        return {"status": "ok", "message": "Данные профиля успешно обновлены", "user": updated_user.__dict__}
+        # Находим пользователя в базе данных
+        user = db_session.query(User).filter(User.uid == target_user_uid).first()
+        if not user:
+            logger.warning(f"Пользователь с UID {target_user_uid} не найден")
+            response.status_code = status.HTTP_404_NOT_FOUND
+            return {"status": "error", "message": "User not found"}
+
+        # Обновляем данные пользователя
+        for key, value in updated_data.items():
+            if hasattr(user, key):
+                setattr(user, key, value)
+
+        # Сохраняем изменения в базе данных
+        db_session.commit()
+
+        logger.info(f"Данные пользователя {target_user_uid} успешно обновлены")
+        return {"status": "ok", "message": "Profile updated successfully"}
 
     except HTTPException as http_error:
         logger.error(f"Ошибка при обновлении профиля: {http_error.detail}")
-        raise http_error
+        response.status_code = http_error.status_code
+        return {"status": "error", "message": f"Ошибка при обновлении профиля: {http_error.detail}"}
 
     except Exception as e:
         logger.error(f"Неожиданная ошибка при обновлении профиля: {str(e)}")
         db_session.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {"status": "error", "message": "Произошла внутренняя ошибка сервера"}
