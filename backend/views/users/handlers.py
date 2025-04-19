@@ -167,9 +167,13 @@ async def login(request: Request, response: Response, db_session=None):
             #raise HTTPException(status_code=400, detail=f"Missing fields: {', '.join(missing_fields)}")
             return {'status': 'error', 'message': f"Отсутствуют обязательные поля: {', '.join(missing_fields)}"}
 
-        identifier = data["identifier"]
-        user = authenticate_user(db_session, data["identifier"], data["password"])
-
+        
+        user = User.get_user_by_credentials(db_session, data["identifier"])
+        if not user or not verify_password(data["password"], user.hashed_password):
+            logger.warning(f"Неверные учетные данные для пользователя: {data['identifier']}")
+            response.status_code = status.HTTP_403_FORBIDDEN
+            return {'status': 'error', 'message': f"Неверные учетные данные для пользователя: {data['identifier']}"}
+    
         tokens = generate_tokens(str(user.uid))
 
         client_metadata = extract_client_metadata(request)
@@ -191,7 +195,7 @@ async def login(request: Request, response: Response, db_session=None):
             max_age=30 * 86400,
         )
 
-        logger.info(f"Пользователь успешно авторизован: {identifier}")
+        logger.info(f"Пользователь успешно авторизован: {data['identifier']}")
         return {
             "status": "ok",
             "access_token": tokens["access"],
