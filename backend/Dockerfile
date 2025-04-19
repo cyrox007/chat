@@ -12,4 +12,4 @@ RUN pip install --no-cache-dir -r requirements.txt && pip check
 COPY . .
 
 # Команда запуска
-CMD ["sh", "-c", "alembic upgrade head && python3 run_server.py"]
+CMD alembic upgrade head && python3 run_server.py
