@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -30,6 +31,9 @@ def create_app() -> FastAPI:
 
     # Подключаем статические файлы
     app.mount("/static", StaticFiles(directory="static"), name="static")
+    # Проверяем существование директории
+    if not os.path.exists("uploads"):
+        os.makedirs("uploads")
     app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
     csrf_middleware(app)
