@@ -13,12 +13,12 @@
 			<!-- Навигационное меню -->
 			<div class="app-menu" v-if="!isAuthenticated">
 				<ul>
-					<li>
+					<!-- <li>
 						<router-link to="/login">Авторизация</router-link>
 					</li>
 					<li>
 						<router-link to="/registration">Регистрация</router-link>
-					</li>
+					</li> -->
 				</ul>
 			</div>
 

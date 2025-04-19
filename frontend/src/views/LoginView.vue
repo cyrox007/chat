@@ -76,20 +76,26 @@ const handleLogin = async () => {
 			password: password.value,
 		});
 
-		// Сохраняем токен в localStorage
-		localStorage.setItem('access_token', response.data.access_token);
-		localStorage.setItem('user', JSON.stringify(response.data.user));
+		if (response.data.status === 'ok') {
+			// Сохраняем токен в localStorage
+			localStorage.setItem('access_token', response.data.access_token);
+			localStorage.setItem('user', JSON.stringify(response.data.user));
 
-		// Сохраняем данные пользователя в хранилище
-		store.commit('setUser', response.data.user);
-		store.commit('setAuth', true);
+			// Сохраняем данные пользователя в хранилище
+			store.commit('setUser', response.data.user);
+			store.commit('setAuth', true);
 
-		// Очищаем форму
-		identifier.value = '';
-		password.value = '';
+			// Очищаем форму
+			identifier.value = '';
+			password.value = '';
 
-		// Перенаправляем на главную страницу
-		window.location.href = '/';
+			// Перенаправляем на главную страницу
+			window.location.href = '/';
+			return
+		} else {
+			errorMessage.value = response.data.message;
+			return;
+		}
 	} catch (error) {
 		errorMessage.value = error.response?.data?.message || 'Ошибка входа';
 	}

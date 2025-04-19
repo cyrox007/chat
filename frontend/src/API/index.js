@@ -89,7 +89,9 @@ $api.interceptors.response.use(
             store.dispatch('clearUser');
 
             // Перенаправляем пользователя на страницу входа
-            window.location.href = '/login';
+            if (!window.location.pathname.includes('/login')) {
+                window.location.href = '/login';
+            }
 
             // Прерываем выполнение
             throw error;
