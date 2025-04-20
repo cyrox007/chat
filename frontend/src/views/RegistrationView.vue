@@ -15,7 +15,7 @@
 					:asyncValidation="checkEmailUniqueness" />
 				
 				<BaseInput id="phone" label="Телефон" type="phone" placeholder="Введите номер телефона" v-model="formData.phone"
-					:error="emailError" :validationRules="(value) => !value ? 'Поле обязательно' : ''"
+					:error="phoneError" :validationRules="(value) => !value ? 'Поле обязательно' : ''"
 					:asyncValidation="checkPhoneUniqueness" />
 
 				<BaseInput id="password" label="Пароль" type="password" placeholder="Введите пароль"
@@ -149,6 +149,15 @@ const checkEmailUniqueness = async () => {
 		return;
 	}
 
+	// Регулярное выражение для проверки допустимых символов (только латинские буквы, цифры и подчеркивание)
+	const validUsernamePattern = /^[a-zA-Z0-9_]+$/;
+
+	// Проверяем, соответствует ли имя пользователя допустимому формату
+	if (!validUsernamePattern.test(formData.value.username)) {
+		usernameError.value = "Имя пользователя может содержать только латинские буквы, цифры и символ подчеркивания.";
+		return;
+	}
+
 	try {
 		// Отправляем запрос на сервер для проверки уникальности email
 		const response = await AuthService.checkEmail(formData.value.email);
@@ -184,9 +193,9 @@ const checkPhoneUniqueness = async () => {
 
 		// Если email уже используется, устанавливаем сообщение об ошибке
 		if (!response.data.isUnique) {
-			emailError.value = 'Номер телефона уже используется.';
+			phoneError.value = 'Номер телефона уже используется.';
 		} else {
-			emailError.value = ''; // Очищаем ошибку, если email уникален
+			phoneError.value = ''; // Очищаем ошибку, если email уникален
 		}
 	} catch (error) {
 		// Логируем ошибку и устанавливаем сообщение для пользователя
@@ -194,9 +203,9 @@ const checkPhoneUniqueness = async () => {
 
 		// Если сервер вернул статус 400, выводим сообщение о некорректных данных
 		if (error.response && error.response.status === 400) {
-			emailError.value = 'Некорректный формат номера.';
+			phoneError.value = 'Некорректный формат номера.';
 		} else {
-			emailError.value = 'Произошла ошибка при проверке номера телефона. Попробуйте позже.';
+			phoneError.value = 'Произошла ошибка при проверке номера телефона. Попробуйте позже.';
 		}
 	}
 }
