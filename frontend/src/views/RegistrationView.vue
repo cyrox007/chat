@@ -310,7 +310,7 @@ onMounted(async () => {
 .registration-form {
 	width: 400px;
 	padding: 20px;
-	background: white;
+	background: var(--bg-light);
 	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 	border-radius: 8px;
 }
