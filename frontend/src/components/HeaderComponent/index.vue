@@ -82,7 +82,7 @@ const currentUser = computed(() => {
 // Проверка роли администратора
 const isAdmin = computed(() => {
 	const user = store.getters.getUser;
-	return user?.global_role === 'admin' || user?.global_role === 'superadministrator';
+	return user?.global_role === 'admin' || user?.global_role === 'superadmin';
 });
 
 // Генерация навигации

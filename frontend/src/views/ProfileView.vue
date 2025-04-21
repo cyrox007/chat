@@ -120,7 +120,7 @@ const isCurrentUser = computed(() => {
 });
 
 const isModeratorOrAdmin = computed(() => {
-	return ['admin', 'moderator', 'superadministrator'].includes(currentUser.value?.global_role);
+	return ['admin', 'moderator', 'superadmin'].includes(currentUser.value?.global_role);
 });
 
 // Проверка прав на редактирование профиля
@@ -130,7 +130,7 @@ const canEditProfile = computed(() => {
 	}
 
 	const userRole = currentUser.value?.global_role;
-	return ['admin', 'moderator', 'superadministrator'].includes(userRole); // Модераторы и администраторы могут редактировать чужие профили
+	return ['admin', 'moderator', 'superadmin'].includes(userRole); // Модераторы и администраторы могут редактировать чужие профили
 });
 
 const openChatWithUser = () => {

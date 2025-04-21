@@ -3,8 +3,16 @@
 		<button class="close-sidebar" aria-label="Закрыть сайдбар" @click="closeSidebar">
 			<i class="fas fa-arrow-left"></i>
 		</button>
-		<div class="search-container">
-			<input type="text" placeholder="Поиск чатов..." />
+		<div class="sidebar-header">
+			<div class="search-container">
+				<input type="text" placeholder="Поиск чатов..." disabled />
+			</div>
+			<div class="create-chat">
+                <!-- Кнопка создания чата -->
+                <button v-if="canCreateChat" @click="emitCreateChatModal">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
 		</div>
 		<div class="chat-list">
 			<!-- <h4>Чаты</h4> -->
@@ -18,7 +26,7 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits } from 'vue';
+import { defineProps, defineEmits, computed } from 'vue';
 
 const props = defineProps({
 	isActive: {
@@ -28,17 +36,40 @@ const props = defineProps({
 	rooms: {
 		type: Array,
 		required: true
+	},
+	userRole: {
+		type: String,
+		default: 'user' // Роль пользователя (например, 'user', 'moderator', 'admin')
+	},
+	userRating: {
+		type: Number,
+		default: 0 // Рейтинг пользователя
 	}
 });
-const emit = defineEmits(['close', 'switch-room']);
+
+const emit = defineEmits(['close', 'switch-room', 'open-create-chat-modal']);
+
 // Функция для закрытия сайдбара
 const closeSidebar = () => {
 	emit('close');
 };
+
 const selectRoom = (room) => {
 	// Эмитируем событие для переключения комнаты
 	emit('switch-room', room);
 };
+
+// Функция для эмитирования события открытия модального окна создания чата
+const emitCreateChatModal = () => {
+	emit('open-create-chat-modal');
+};
+
+// Вычисляемое свойство для проверки прав на создание чата
+const canCreateChat = computed(() => {
+	const isModeratorOrHigher = ['moderator', 'admin', 'superadmin'].includes(props.userRole);
+	const hasSufficientRating = props.userRating >= 500; // Например, минимальный рейтинг 50
+	return isModeratorOrHigher || hasSufficientRating;
+});
 </script>
 
 <style>
@@ -92,9 +123,15 @@ const selectRoom = (room) => {
 	}
 }
 
-.chat-sidebar-left .search-container {
-	padding-bottom: 10px;
+.chat-sidebar-left .sidebar-header {
+	display: flex;
+	gap: 5px;
 	border-bottom: 1px solid #ccc;
+}
+
+.chat-sidebar-left .sidebar-header .search-container {
+	flex: 1;
+	padding-bottom: 10px;
 }
 
 .chat-sidebar-left .search-container input {
@@ -136,5 +173,27 @@ const selectRoom = (room) => {
 
 .chat-sidebar-left .chat-list ul li:hover {
 	background-color: rgba(0, 123, 255, 0.1);
+}
+.create-chat {
+	padding-bottom: 10px;
+}
+.create-chat button {
+	width: 38px;
+	height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s ease;
+}
+
+.create-chat button:hover {
+    background-color: var(--primary-color-hover);
 }
 </style>

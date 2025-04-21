@@ -1,7 +1,14 @@
 <template>
+	<CreateRoomModal :isShow="isCreateRoomeModalShow" @close="handleOpenCreateChatModal" @create-room-complete="loadRooms"/>
 	<main class="chat-window">
-		<LeftSidebar :class="{ active: isLeftSidebarActive }" @close="closeLeftSidebar" :rooms="rooms"
-			@switch-room="switchRoom" />
+		<LeftSidebar 
+			:class="{ active: isLeftSidebarActive }" 
+			@close="closeLeftSidebar" 
+			:rooms="rooms"
+			@switch-room="switchRoom" 
+			:userRole="currentUser.global_role"
+    		:userRating="currentUser.rating"
+    		@open-create-chat-modal="handleOpenCreateChatModal"/>
 		
 		<div class="chat-content">
 			<header class="chat-window-header">
@@ -48,15 +55,20 @@ import { ref, onMounted, computed, onUnmounted, watch, nextTick } from 'vue';
 import { useStore } from 'vuex';
 import { v4 as uuidv4 } from 'uuid';
 import DOMPurify from 'dompurify';
+
 import Loader from '@/components/Loader/index.vue';
 import LeftSidebar from '@/components/LeftSidebar/index.vue';
 import RightSidebar from '@/components/RightSidebar/index.vue';
 import Message from '@/components/Message/ChatMessage.vue';
 import MessageComposer from '@/components/MessageComposer/index.vue';
+import CreateRoomModal from '@/components/MainPageModals/CreateRoomModal.vue'
+
 import RoomsService from '@/API/RoomsService';
 
 // Инициализация хранилища
 const store = useStore();
+
+const isCreateRoomeModalShow = ref(false);
 
 // Получаем данные из хранилища
 const currentRoom = computed(() => store.getters['chat/getCurrentRoom']);
@@ -162,6 +174,10 @@ const toggleRightSidebar = () => {
 const closeRightSidebar = () => {
 	isRightSidebarActive.value = false;
 };
+
+const handleOpenCreateChatModal = () => {
+	isCreateRoomeModalShow.value = !isCreateRoomeModalShow.value;
+}
 
 const scrollToBottom = async () => {
     await nextTick(); // Ждём обновления DOM

@@ -8,4 +8,7 @@ export default class RoomsService {
     static async get_room(roomId) {
         return $api.get(`/rooms/${roomId}`);
     }
+    static async create_room(data) {
+        return await $api.post('/rooms/', data)
+    }
 }
