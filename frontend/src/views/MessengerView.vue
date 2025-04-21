@@ -263,12 +263,12 @@ onMounted(async () => {
 		const userIds = dialogs.value.map((dialog) => dialog.partner_id);
 
 		// Загружаем статусы пользователей
-		store.dispatch('fetchUserStatuses', userIds);
+		//store.dispatch('fetchUserStatuses', userIds);
 
 		// Устанавливаем периодическое обновление статусов
-		setInterval(() => {
+		/* setInterval(() => {
 			store.dispatch('fetchUserStatuses', userIds);
-		}, 60000);
+		}, 60000); */
 
 		// Инициализируем IntersectionObserver
 		setupIntersectionObserver();

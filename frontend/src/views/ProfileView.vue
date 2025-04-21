@@ -259,11 +259,11 @@ onMounted(async () => {
 
 	// Загружаем данные пользователя
 	await loadUserData(profileUid);
-	await store.dispatch('fetchUserStatuses', [profileUid]);
+	//await store.dispatch('fetchUserStatuses', [profileUid]);
 	
-	setInterval(async () => {
+	/* setInterval(async () => {
 		await store.dispatch('fetchUserStatuses', [profileUid]);
-	}, 60000); // Каждую минуту
+	}, 60000); */ // Каждую минуту
 });
 
 watchEffect(() => {
