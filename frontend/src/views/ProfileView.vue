@@ -2,7 +2,9 @@
 	<AvatarUploadModal
 		v-if="isAvatarUploadModalOpen"
 		@close="toggleAvatarUploadModal"
-		@upload="handleAvatarUpload"
+		@upload="handleSuccessfulUpdate"
+		:is-modal-open="isAvatarUploadModalOpen"
+		:user_uid="route.params.uid"
 	/>
 	<EditProfileForm
 		:modalShow="isEditProfileModalOpen"
@@ -49,7 +51,7 @@
 					<button v-if="canEditProfile" @click="toggleEditProfileModal" class="edit-profile-btn">Редактировать профиль</button>
 					<button v-if="!isCurrentUser" @click="openChatWithUser" class="message-button">Отправить сообщение</button>
 				</div>
-				<div class="moderation-actions" v-if="isModeratorOrAdmin">
+				<div class="moderation-actions" v-if="isModeratorOrAdmin && route.params.uid != currentUser.uid">
 					<button @click="toggleModerationModal">Назначить наказание</button>
 				</div>
 			</div>
@@ -178,22 +180,6 @@ const toggleModerationModal = () => {
   	isModerationModalOpen.value = !isModerationModalOpen.value;
 };
 
-const handleAvatarUpload = async (file) => {
-	try {
-		const formData = new FormData();
-		formData.append('avatar', file);
-
-		const response = await UsersServices.updateAvatar(formData);
-		if (response.data.status === 'ok') {
-			user.value.avatar = response.data.avatar_url; // Обновляем аватар
-		} else {
-			console.error('Ошибка при загрузке аватара:', response.data.message);
-		}
-	} catch (error) {
-		console.error('Ошибка при загрузке аватара:', error);
-	}
-};
-
 const handleProfileUpdate = async (updatedData) => {
 	isEditProfileModalOpen.value = false;
 
@@ -245,7 +231,7 @@ const openAdminPanel = () => {
 	router.push(`/admin/profile/${route.params.uid}`);
 };
 
-const assignPunishment = async (punishmentData) => {
+/* const assignPunishment = async (punishmentData) => {
 	try {
 		await UsersServices.assignPunishment(route.params.uid, punishmentData);
 		alert("Наказание назначено");
@@ -253,7 +239,7 @@ const assignPunishment = async (punishmentData) => {
 	} catch (error) {
 		console.error("Ошибка при назначении наказания:", error);
 	}
-};
+}; */
 
 onMounted(async () => {
 	const profileUid = route.params.uid || currentUser.value?.uid;
@@ -308,6 +294,7 @@ watchEffect(() => {
 }
 
 .profile-avatar-container {
+	cursor: pointer;
 	position: relative;
 	width: 120px;
 	height: 120px;
