@@ -35,7 +35,7 @@
 			<div v-else-if="safeMessage.content_type === 'image'" class="image_list">
 				<!-- Изображение -->
 				<div class="image_item" v-for="(image, index) in safeMessage.media_metadata.files" :key="index">
-					<img :src="image.url" alt="Изображение" class="message-image" />
+					<img :src="apiBaseUrl + image.url" alt="Изображение" class="message-image" />
 				</div>
 
 				<span v-show="safeMessage.content">{{ safeMessage.content }}</span>
@@ -44,7 +44,7 @@
 			<div v-else-if="safeMessage.content_type === 'video'">
 				<!-- Видео -->
 				<video controls class="message-video">
-					<source :src="safeMessage.media_metadata.files[0].url" type="video/mp4">
+					<source :src="apiBaseUrl + safeMessage.media_metadata.files[0].url" type="video/mp4">
 					Ваш браузер не поддерживает видео.
 				</video>
 			</div>
@@ -52,7 +52,7 @@
 			<div v-else-if="safeMessage.content_type === 'audio'">
 				<!-- Аудио -->
 				<audio controls class="message-audio">
-					<source :src="safeMessage.content" type="audio/mpeg">
+					<source :src="apiBaseUrl + safeMessage.content" type="audio/mpeg">
 					Ваш браузер не поддерживает аудио.
 				</audio>
 			</div>
