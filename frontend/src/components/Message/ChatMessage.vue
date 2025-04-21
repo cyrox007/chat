@@ -18,7 +18,7 @@
 
 		<!-- Заголовок сообщения -->
 		<div class="message-header">
-			<img :src="safeMessage.sender.avatar" alt="Аватар" class="avatar" />
+			<img :src="apiBaseUrl + safeMessage.sender.avatar" alt="Аватар" class="avatar" />
 			<div class="user-info">
 				<strong>{{ safeMessage.sender.name }}</strong>
 				<span class="timestamp">{{ formattedTimestamp }}</span>
@@ -133,11 +133,6 @@ const isImage = (fileUrl) => {
 	// Проверяем, является ли строка URL с расширением изображения
 	return /\.(jpeg|jpg|png|gif|webp)$/i.test(fileUrl);
 };
-
-// Извлечение имени файла из URL
-/* const getFileName = (fileUrl) => {
-	return fileUrl.split('/').pop();
-} */
 
 const getFileIcon = (fileUrl) => {
 	// Проверяем расширение файла
