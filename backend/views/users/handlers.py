@@ -225,7 +225,6 @@ async def login(request: Request, response: Response, db_session=None):
     except Exception as e:
         logger.exception("Произошла ошибка при авторизации пользователя")
         response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        #raise HTTPException(status_code=500, detail="Internal server error")
         return {'status': 'error', 'message': f"Internal server error"}
 
 
