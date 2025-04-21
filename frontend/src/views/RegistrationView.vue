@@ -187,6 +187,12 @@ const checkPhoneUniqueness = async () => {
 		return;
 	}
 
+	const phoneRegex = /^(?:\+7|8|\+375)\d{9,10}$/;
+	if (!phoneRegex.test(formData.value.phone)) {
+        phoneError.value = 'Неверный формат номера телефона.';
+        return;
+    }
+
 	try {
 		// Отправляем запрос на сервер для проверки уникальности email
 		const response = await AuthService.checkPhone(formData.value.email);
