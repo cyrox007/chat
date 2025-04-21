@@ -27,7 +27,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.5'  # Максимум 1.5 ядра
+          cpus: '1.0'  # Максимум 1 ядра
           memory: 1G    # Не более 1GB RAM
     networks:
       dev:

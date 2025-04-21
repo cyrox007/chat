@@ -42,7 +42,7 @@ CMD ["sh", "-c", "alembic upgrade head && \
      uvicorn app:app \
      --host 0.0.0.0 \
      --port 9000 \
-     --workers $UVICORN_WORKERS \
+     --workers 2 \
      --loop uvloop \
      --http httptools \
      --timeout-keep-alive $UVICORN_TIMEOUT_KEEP_ALIVE"]
