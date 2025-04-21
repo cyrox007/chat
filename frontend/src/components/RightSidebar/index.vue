@@ -34,7 +34,7 @@
 			<div class="chat-sidebar-users-list" v-if="users.length > 0">
 				<router-link v-for="user in users" :to="`/profile/${user.uid}`" class="username">
 					<div :key="user.uid" class="chat-sidebar-users-item" :data-user-id="user.uid">
-						<img :src="user.avatar" alt="Avatar" class="user-avatar">
+						<img :src="apiBaseUrl + user.avatar" alt="Avatar" class="user-avatar">
 						{{ user.username }}
 					</div>
 				</router-link>
@@ -71,6 +71,7 @@ const emit = defineEmits(['close']);
 
 // Хранилище для данных владельца комнаты
 const owner = ref(null);
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 // Функция для закрытия сайдбара
 const closeSidebar = () => {

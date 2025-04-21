@@ -24,7 +24,7 @@
 
 			<div class="user-profile user-menu" v-if="currentUser.uid">
 				<div class="user-avatar" @click="toggleDropdown">
-					<img :src="currentUser.avatar" alt="Аватар пользователя" />
+					<img :src="apiBaseUrl + currentUser.avatar" alt="Аватар пользователя" />
 				</div>
 				<ul v-show="isDropdownOpen">
 					<li v-for="(item, index) in navigation" :key="index">
@@ -53,7 +53,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
-import AuthService from '@/API/AuthService';
+/* import AuthService from '@/API/AuthService'; */
 import { useStore } from 'vuex';
 
 /* const route = useRoute(); */
@@ -65,6 +65,8 @@ const currentTheme = ref('light');
 
 // Флаг для выпадающего меню
 const isDropdownOpen = ref(false);
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 // Переключение выпадающего меню
 const toggleDropdown = () => {

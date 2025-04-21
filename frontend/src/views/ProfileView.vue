@@ -30,7 +30,7 @@
 			<!-- Шапка профиля -->
 			<div class="profile-header">
 				<div class="profile-avatar-container" @click="canEditProfile && toggleAvatarUploadModal()">
-					<img :src="profileData.avatar || '/images/default-avatar.png'" alt="Аватар пользователя" class="profile-avatar" />
+					<img :src="apiBaseUrl + profileData.avatar || '/images/default-avatar.png'" alt="Аватар пользователя" class="profile-avatar" />
 				</div>
 				
 				<div class="profile-info">
@@ -111,6 +111,7 @@ const errorMessage = ref(''); // Сообщение об ошибке
 const isAvatarUploadModalOpen = ref(false);
 const isEditProfileModalOpen = ref(false);
 const isModerationModalOpen = ref(false);
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 // Получаем текущего пользователя из Vuex store
 const currentUser = computed(() => store.getters.getUser);
