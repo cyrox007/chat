@@ -24,6 +24,11 @@ services:
   backend:
     build:
       context: ./backend
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'  # Максимум 1.5 ядра
+          memory: 1G    # Не более 1GB RAM
     networks:
       dev:
         aliases:
