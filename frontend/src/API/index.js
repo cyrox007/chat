@@ -87,9 +87,11 @@ $api.interceptors.response.use(
             // Очищаем данные аутентификации
             localStorage.clear();
             store.dispatch('clearUser');
-
+            
             // Перенаправляем пользователя на страницу входа
-            if (!window.location.pathname.includes('/login') || !window.location.pathname.includes('/registration')) {
+            const allowedPaths = ['/login', '/registration'];
+
+            if (!allowedPaths.some(path => window.location.pathname.includes(path))) {
                 window.location.href = '/login';
             }
 
