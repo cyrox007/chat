@@ -14,7 +14,7 @@ from components.user.model import User
 from utils.logger import setup_logger
 from utils.password import hash_password, verify_password
 from utils.user_agents import parse_user_agent
-from utils.file_handler import save_uploaded_file
+from utils.file_handler import save_file, save_uploaded_file
 from components.auth.middleware import auth_middle, authorize_user
 
 
@@ -56,10 +56,7 @@ def extract_client_metadata(request: Request):
 
 # Handlers
 @get_session
-async def register(
-    request: Request,
-    db_session=None
-):
+async def register(request: Request, db_session=None):
     """
     Регистрация нового пользователя.
     """
@@ -95,8 +92,10 @@ async def register(
         avatar_url = None
         if avatar_file and avatar_file.filename:
             avatar_url = save_uploaded_file(avatar_file)  # Сохраняем файл и получаем URL
+        
+        if date_of_birth == "":
+            date_of_birth = None
 
-        print(avatar_url)
         # Создание пользователя
         new_user = User.create_user(
             db_session=db_session,
@@ -164,7 +163,6 @@ async def login(request: Request, response: Response, db_session=None):
         if missing_fields:
             logger.warning(f"Отсутствуют обязательные поля: {', '.join(missing_fields)}")
             response.status_code = status.HTTP_400_BAD_REQUEST
-            #raise HTTPException(status_code=400, detail=f"Missing fields: {', '.join(missing_fields)}")
             return {'status': 'error', 'message': f"Отсутствуют обязательные поля: {', '.join(missing_fields)}"}
 
         
@@ -405,31 +403,34 @@ async def update_profile(request: Request, response: Response, db_session=None):
         # Парсим входные данные
         data = await request.json()
         target_user_uid = data.get("user_uid")
-        updated_data = data.get("updated_data")
-
+        updated_data = data.get("data")
+        
         # Проверяем, что все необходимые поля присутствуют
         if not target_user_uid or not updated_data:
             logger.warning("Отсутствуют обязательные поля: user_uid или updated_data")
             response.status_code = status.HTTP_400_BAD_REQUEST
             return {"status": "error", "message": "Missing required fields"}
 
-        # Находим пользователя в базе данных
-        user = db_session.query(User).filter(User.uid == target_user_uid).first()
-        if not user:
-            logger.warning(f"Пользователь с UID {target_user_uid} не найден")
-            response.status_code = status.HTTP_404_NOT_FOUND
-            return {"status": "error", "message": "User not found"}
-
-        # Обновляем данные пользователя
-        for key, value in updated_data.items():
-            if hasattr(user, key):
-                setattr(user, key, value)
-
-        # Сохраняем изменения в базе данных
-        db_session.commit()
+        if 'avatar' in updated_data and updated_data['avatar']:
+            try:
+                # Сохраняем файл через утилиту save_file
+                avatar_url = save_file(updated_data['avatar'])
+                updated_data['avatar'] = avatar_url  # Заменяем Base64 на URL аватара
+            except HTTPException as e:
+                response.status_code = e.status_code
+                return {
+                    'status': 'error',
+                    'message': e.detail,
+                }
+        print(updated_data)
+        user = User.update_profile(db_session, target_user_uid, updated_data)
+        
+        if not user: 
+            logger.warning("ОБновление не произошло")
+            response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
 
         logger.info(f"Данные пользователя {target_user_uid} успешно обновлены")
-        return {"status": "ok", "message": "Profile updated successfully"}
+        return {"status": "ok", "user": user.__dict__}
 
     except HTTPException as http_error:
         logger.error(f"Ошибка при обновлении профиля: {http_error.detail}")

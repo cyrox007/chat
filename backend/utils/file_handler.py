@@ -75,11 +75,12 @@ def save_file(file_data: dict) -> str:
         # Сохраняем файл
         with open(file_path, "wb") as f:
             f.write(file_content)
-
+        
         # Формируем URL для доступа к файлу
-        if not config.BASE_URL.endswith('/'):
-            config.BASE_URL += '/'
-        return f"{config.BASE_URL}uploads/{folder_name}/{file_name}"
+        site_url: str = config.BASE_URL
+        if not site_url.endswith('/'):
+            site_url += '/'
+        return f"{site_url}uploads/{folder_name}/{file_name}"
 
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid file format")
@@ -124,9 +125,10 @@ def save_uploaded_file(file: UploadFile) -> str:
                 f.write(chunk)
 
         # Формируем URL для доступа к файлу
-        if not config.BASE_URL.endswith('/'):
-            config.BASE_URL += '/'
-        return f"{config.BASE_URL}uploads/{folder_name}/{file_name}"
+        site_url: str = config.BASE_URL
+        if not site_url.endswith('/'):
+            site_url += '/'
+        return f"{site_url}uploads/{folder_name}/{file_name}"
 
     except Exception as e:
         logger.exception("Ошибка при сохранении загруженного файла")

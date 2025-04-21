@@ -16,7 +16,20 @@ class Config:
     SERVER_HTTP_PROTOCOL = os.getenv("SERVER_HTTP_PROTOCOL", "http://")
     SERVER_ADDR = os.getenv("SERVER_ADDR", "localhost")
     SERVER_PORT = os.getenv("SERVER_PORT", "9000")
-    BASE_URL = f"{SERVER_HTTP_PROTOCOL}{SERVER_ADDR}:{SERVER_PORT}"
+    @property
+    def BASE_URL(self):
+        """
+        Возвращает базовый URL сервера.
+        Если порт стандартный (80 для HTTP, 443 для HTTPS), он не добавляется.
+        """
+        protocol = self.SERVER_HTTP_PROTOCOL
+        address = self.SERVER_ADDR
+        port = self.SERVER_PORT
+
+        # Исключаем порт, если он стандартный
+        if port in ["80", "443"]:
+            return f"{protocol}{address}"
+        return f"{protocol}{address}:{port}"
 
     # Database
     DB_HOST = os.getenv("DB_HOST", "localhost")

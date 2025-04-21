@@ -332,14 +332,17 @@ class User(Database.Base):
         """Обновление данных профиля пользователя."""
         user = cls.get_user_by_uid(db_session, user_uid)
         if not user:
-            logger.error("User not found")
-            raise HTTPException(status_code=404, detail="User not found")
+            logger.error(f"Пользователь с {user_uid} не найден")
+            return None
 
         for key, value in new_data.items():
             if hasattr(user, key):
                 setattr(user, key, value)
-
+        
+        db_session.add(user)
         db_session.commit()
+        db_session.refresh(user)
+        
         return user
 
 # Модель Penalty
