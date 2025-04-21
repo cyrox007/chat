@@ -64,12 +64,12 @@
 					v-if="safeMessage.media_metadata && safeMessage.media_metadata.files && safeMessage.media_metadata.files.length > 0">
 					<div v-for="(file, index) in safeMessage.media_metadata.files" :key="index" class="file-item">
 						<span v-if="isImage(file)" class="file-thumbnail">
-							<img :src="file" alt="Thumbnail" />
+							<img :src="apiBaseUrl + file" alt="Thumbnail" />
 						</span>
 						<span v-else class="file-icon">
 							<i :class="getFileIcon(file.name)"></i> <!-- Значок для файлов -->
 						</span>
-						<a :href="file.url" target="_blank" class="file-link">{{ file.name }}</a>
+						<a :href="apiBaseUrl + file.url" target="_blank" class="file-link">{{ file.name }}</a>
 					</div>
 				</div>
 				<!-- Если media_metadata отсутствует или files пустой -->
@@ -102,6 +102,7 @@ import { useStore } from 'vuex';
 const store = useStore();
 
 const emit = defineEmits(['reply']);
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 // Определяем пропсы
 const props = defineProps({
