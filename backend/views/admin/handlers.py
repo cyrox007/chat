@@ -46,7 +46,7 @@ async def assign_penalty(request: Request, response: Response, db_session=None):
 
         # Проверяем, существует ли пользователь
         try:
-            user = User.get_user_by_uid(db_session, user_uid)
+            user = await User.get_user_by_uid(db_session, user_uid)
             if not user:
                 response.status_code = status.HTTP_404_NOT_FOUND
                 return {
@@ -113,7 +113,7 @@ async def assign_penalty(request: Request, response: Response, db_session=None):
             }
         
         # Создаем запись о наказании
-        penalty = Penalty.create_penalty(
+        penalty = await Penalty.create_penalty(
             db_session=db_session,
             user_uid=user.uid,
             penalty_type=penalty_type,
@@ -147,7 +147,7 @@ async def assign_penalty(request: Request, response: Response, db_session=None):
 @get_session
 async def delete_penalty(penalty_id: int, response: Response, db_session = None):
     try:
-        response_data = Penalty.delete_penalty(db_session, penalty_id)
+        response_data = await Penalty.delete_penalty(db_session, penalty_id)
         return response_data
     except HTTPException:
         response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -164,7 +164,7 @@ async def get_user_rooms(target_uid: UUID, request: Request, db_session = None):
 
 @get_session
 async def get_user_penalties(target_uid: UUID, request: Request, db_session = None):
-    penalties = Penalty.get_user_penalties(
+    penalties = await Penalty.get_user_penalties(
         db_session=db_session,
         user_uid=target_uid
     )
@@ -213,7 +213,7 @@ async def update_user(target_uid: UUID, request: Request, response: Response, db
                 }
 
         # Обновление профиля
-        updated_user = User.update_profile(
+        updated_user = await User.update_profile(
             db_session=db_session,
             user_uid=target_uid,
             new_data=user_data

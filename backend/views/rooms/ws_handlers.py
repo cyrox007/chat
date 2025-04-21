@@ -43,7 +43,7 @@ async def initialize_websocket(websocket: WebSocket, db_session, room_uid: UUID,
     await manager.update_user_activity(db_session, user_uid)
 
     # Проверка наличия активного наказания
-    active_mute = Penalty.get_active_mute(db_session, user_uid)
+    active_mute = await Penalty.get_active_mute(db_session, user_uid)
     if active_mute:
         # Отправляем информацию о наказании через WebSocket
         await websocket.send_json({

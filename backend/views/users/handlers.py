@@ -7,7 +7,7 @@ from fastapi import Depends, Request, HTTPException, Response, UploadFile, statu
 from fastapi.responses import JSONResponse
 
 # Локальные модули
-from services.auth_service import authenticate_user, generate_tokens
+from services.auth_service import generate_tokens
 from components.decorators.db import get_session
 from components.device.model import UserDevice
 from components.user.model import User
@@ -97,7 +97,7 @@ async def register(request: Request, db_session=None):
             date_of_birth = None
 
         # Создание пользователя
-        new_user = User.create_user(
+        new_user = await User.create_user(
             db_session=db_session,
             username=username,
             email=email,
@@ -166,7 +166,7 @@ async def login(request: Request, response: Response, db_session=None):
             return {'status': 'error', 'message': f"Отсутствуют обязательные поля: {', '.join(missing_fields)}"}
 
         
-        user = User.get_user_by_credentials(db_session, data["identifier"])
+        user = await User.get_user_by_credentials(db_session, data["identifier"])
         if not user or not verify_password(data["password"], user.hashed_password):
             logger.warning(f"Неверные учетные данные для пользователя: {data['identifier']}")
             response.status_code = status.HTTP_403_FORBIDDEN
@@ -302,7 +302,7 @@ async def get_user_by_uid(user_uid: UUID, response: Response, db_session = None)
     """
     Получение данных пользователя по его UID.
     """
-    user = User.get_user_by_uid(db_session, str(user_uid))
+    user = await User.get_user_by_uid(db_session, str(user_uid))
     if not user:
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"status": "ok", "message":"Пользователь не найден"}
@@ -377,7 +377,7 @@ async def delete_user(request: Request, response: Response, db_session = None):
         user_uid = request.state.user_uid # Предполагается, что UID текущего пользователя доступен через request.state.user
 
         # Выполняем "мягкое" удаление через метод модели
-        User.soft_delete(db_session, user_uid)
+        await User.soft_delete(db_session, user_uid)
 
         # Возвращаем успешный ответ в формате JSON
         return {"status": "ok", "message": "Профиль успешно удален"}
@@ -423,7 +423,7 @@ async def update_profile(request: Request, response: Response, db_session=None):
                     'message': e.detail,
                 }
         print(updated_data)
-        user = User.update_profile(db_session, target_user_uid, updated_data)
+        user = await User.update_profile(db_session, target_user_uid, updated_data)
         
         if not user: 
             logger.warning("ОБновление не произошло")

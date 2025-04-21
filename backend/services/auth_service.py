@@ -8,14 +8,14 @@ from utils.password import verify_password
 # Создаем логгер
 logger = setup_logger(__name__)
 
-def authenticate_user(db_session, identifier: str, password: str) -> User:
+""" def authenticate_user(db_session, identifier: str, password: str) -> User:
     # Пытаемся получить пользователя
     user = User.get_user_by_credentials(db_session, identifier)
     if not user or not verify_password(password, user.hashed_password):
         logger.warning(f"Неверные учетные данные для пользователя: {identifier}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    return user
+    return user """
 
 def generate_tokens(user_uid: str) -> dict:
     access_token = create_access_token({"user_uid": user_uid})

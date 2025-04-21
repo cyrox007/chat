@@ -6,10 +6,10 @@ from uuid import uuid4
 
 # Внешние зависимости
 from fastapi import HTTPException, status
-from sqlalchemy import Column, Index, Integer, String, DateTime, Boolean, ForeignKey, Interval, UniqueConstraint
-from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import Column, Index, Integer, String, DateTime, Boolean, ForeignKey, UniqueConstraint, select
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Session, relationship
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta, timezone
 
@@ -92,9 +92,9 @@ class User(Database.Base):
         return f"User {self.uid}"
 
     @classmethod
-    def create_user(
+    async def create_user(
         cls,
-        db_session: Session,
+        db_session: AsyncSession,
         username: str,
         email: str,
         phone: str,
@@ -108,7 +108,7 @@ class User(Database.Base):
     ):
         """
         Создает нового пользователя в БД.
-        :param db_session: Сессия БД
+        :param db_session: Асинхронная сессия БД
         :param username: Логин пользователя
         :param email: Почта пользователя
         :param phone: Номер телефона
@@ -128,17 +128,21 @@ class User(Database.Base):
 
             # Валидация телефона
             phone_pattern = r'^\+?(375\d{9}|7\d{10})$'
-            cleaned_phone = re.sub(r'[^\d+]', '', phone)  # Очистка от лишних символов
+            cleaned_phone = re.sub(r'[^\d+]', '', phone)
             if not re.fullmatch(phone_pattern, cleaned_phone):
                 logger.error(f"Неверный формат номера телефона: {phone}")
                 raise UserValidationError("Invalid phone number format")
 
-            # Проверка уникальности
-            existing_user = db_session.query(cls).filter(
-                (cls.username == username) |
-                (cls.email == email) |
-                (cls.phone == phone)
-            ).first()
+            # Проверка уникальности (асинхронная)
+            result = await db_session.execute(
+                select(cls).where(
+                    (cls.username == username) |
+                    (cls.email == email) |
+                    (cls.phone == phone)
+                )
+            )
+            existing_user = result.scalars().first()
+            
             if existing_user:
                 if existing_user.username == username:
                     logger.warning(f"Пользователь с таким username уже существует: {username}")
@@ -152,10 +156,7 @@ class User(Database.Base):
 
             # Выбор аватара по умолчанию
             if not avatar:
-                if gender == 'female':
-                    avatar = "/static/default_female.webp"
-                else:
-                    avatar = "/static/default_male.webp"
+                avatar = "/static/default_female.webp" if gender == 'female' else "/static/default_male.webp"
 
             # Создание пользователя
             new_user = cls(
@@ -170,61 +171,54 @@ class User(Database.Base):
                 bio=bio,
                 date_of_birth=date_of_birth
             )
+            
             db_session.add(new_user)
-            db_session.commit()
+            await db_session.commit()
+            await db_session.refresh(new_user)  # Обновляем объект после коммита
+            
             logger.info(f"Пользователь успешно создан: {username}")
             return new_user
 
-        except IntegrityError:
+        except IntegrityError as e:
             logger.exception(f"Ошибка целостности данных при создании пользователя: {username}")
-            db_session.rollback()
+            await db_session.rollback()
+            return None
+        except Exception as e:
+            logger.exception(f"Неожиданная ошибка при создании пользователя: {e}")
+            await db_session.rollback()
             return None
 
     @classmethod
-    def get_user_by_credentials(cls, db_session: Session, identifier: str):
-        """
-        Получает пользователя по логину, email или телефону.
-        :param db_session: Сессия БД
-        :param identifier: Логин, email или телефон
-        :return: Объект пользователя или None
-        """
-        logger.info(f"Поиск пользователя по идентификатору: {identifier}")
+    async def get_user_by_credentials(cls, db_session: AsyncSession, identifier: str):
         normalized = identifier.strip()
-
-        # Поиск по email
-        if re.fullmatch(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", normalized):
-            user = db_session.query(cls).filter(cls.email.ilike(normalized)).first()
-            if user:
-                logger.info(f"Пользователь найден по email: {normalized}")
-            return user
-
-        # Поиск по телефону
+        
+        # Подготовка условий для телефона
         phone_digits = re.sub(r'[^\d]', '', normalized)
         possible_phones = []
         if len(phone_digits) == 11 and phone_digits.startswith('7'):
-            possible_phones.append(f"+{phone_digits}")  # +79191234567
-            possible_phones.append(phone_digits)        # 79191234567
+            possible_phones.extend([f"+{phone_digits}", phone_digits])
         elif len(phone_digits) == 12 and phone_digits.startswith('375'):
-            possible_phones.append(f"+{phone_digits}")  # +375291234567
-            possible_phones.append(phone_digits)        # 375291234567
+            possible_phones.extend([f"+{phone_digits}", phone_digits])
 
-        if possible_phones:
-            user = db_session.query(cls).filter(cls.phone.in_(possible_phones)).first()
-            if user:
-                logger.info(f"Пользователь найден по телефону: {normalized}")
-            return user
-
-        # Поиск по username
-        user = db_session.query(cls).filter(cls.username.ilike(normalized)).first()
+        # Единый запрос
+        query = select(cls).where(
+            (cls.email.ilike(normalized)) |
+            (cls.phone.in_(possible_phones)) |
+            (cls.username.ilike(normalized))
+        )
+        
+        result = await db_session.execute(query)
+        user = result.scalars().first()
+        
         if user:
-            logger.info(f"Пользователь найден по username: {normalized}")
+            logger.info(f"Пользователь найден: {normalized}")
         return user
 
     @classmethod
-    def get_users_by_uids(cls, db_session: Session, user_uids: List[str]):
+    async def get_users_by_uids(cls, db_session: AsyncSession, user_uids: List[str]):
         """
         Получение данных о пользователях по их user_uid.
-        :param db_session: SQLAlchemy сессия
+        :param db_session: Асинхронная сессия SQLAlchemy
         :param user_uids: Список UUID пользователей
         :return: Список словарей с данными пользователей
         """
@@ -233,7 +227,11 @@ class User(Database.Base):
             logger.warning("Получен пустой список user_uids")
             return []
 
-        users = db_session.query(cls).filter(cls.uid.in_(user_uids)).all()
+        result = await db_session.execute(
+            select(cls).where(cls.uid.in_(user_uids))
+        )
+        users = result.scalars().all()
+        
         users_data = [
             {
                 "uid": str(user.uid),
@@ -256,19 +254,25 @@ class User(Database.Base):
             }
             for user in users
         ]
+        
         logger.info(f"Данные о пользователях успешно получены: {len(users_data)} пользователей")
         return users_data
 
     @classmethod
-    def get_user_by_uid(cls, db_session: Session, uid: str):
+    async def get_user_by_uid(cls, db_session: AsyncSession, uid: str):
         """
         Получает пользователя по его UID.
-        :param db_session: Сессия БД
+        :param db_session: Асинхронная сессия БД
         :param uid: UID пользователя
         :return: Объект пользователя или None
         """
         logger.info(f"Поиск пользователя по UID: {uid}")
-        user = db_session.query(cls).filter(cls.uid == uid).first()
+        
+        result = await db_session.execute(
+            select(cls).where(cls.uid == uid)
+        )
+        user = result.scalars().first()
+        
         if user:
             logger.info(f"Пользователь найден: {user.username}")
         else:
@@ -276,17 +280,21 @@ class User(Database.Base):
         return user
 
     @classmethod
-    def update_last_online(cls, db_session: Session, current_user_uid):
+    async def update_last_online(cls, db_session: AsyncSession, current_user_uid):
         """
         Обновляет время последней активности пользователя.
         
-        :param db_session: SQLAlchemy сессия
+        :param db_session: Асинхронная SQLAlchemy сессия
         :param current_user_uid: UID пользователя
         :return: Объект пользователя или None в случае ошибки
         """
         try:
             # Находим пользователя по UID
-            user = db_session.query(cls).filter(cls.uid == current_user_uid).first()
+            result = await db_session.execute(
+                select(cls).where(cls.uid == current_user_uid)
+            )
+            user = result.scalars().first()
+            
             if not user:
                 logger.warning(f"Пользователь с UID {current_user_uid} не найден")
                 return None
@@ -294,43 +302,48 @@ class User(Database.Base):
             # Обновляем поле last_online
             user.last_online = datetime.utcnow()
             db_session.add(user)
-            db_session.commit()
+            await db_session.commit()
+            await db_session.refresh(user)
 
             logger.info(f"Время последней активности обновлено для пользователя {current_user_uid}")
             return user
 
         except IntegrityError as e:
             logger.exception(f"Ошибка целостности данных при обновлении last_online: {e}")
-            db_session.rollback()
+            await db_session.rollback()
             return None
 
     @classmethod
-    def soft_delete(cls, db_session: Session, user_uid: str):
+    async def soft_delete(cls, db_session: AsyncSession, user_uid: str):
         """
         Мягкое удаление пользователя (обновление поля deleted_at).
 
-        :param db_session: Сессия базы данных.
-        :param user_uid: UID пользователя.
-        :return: Объект пользователя или вызывает HTTPException, если пользователь не найден.
+        :param db_session: Асинхронная сессия базы данных
+        :param user_uid: UID пользователя
+        :return: Объект пользователя или вызывает HTTPException
         """
         # Ищем пользователя в базе данных
-        user = db_session.query(cls).filter(cls.uid == user_uid).first()
+        result = await db_session.execute(
+            select(cls).where(cls.uid == user_uid)
+        )
+        user = result.scalars().first()
 
         if not user:
             logger.warning(f"Попытка удаления несуществующего пользователя с UID: {user_uid}")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
 
-        # Обновляем поле deleted_at для "мягкого" удаления
+        # Обновляем поле deleted_at
         user.deleted_at = datetime.utcnow()
-        db_session.commit()
+        await db_session.commit()
+        await db_session.refresh(user)
 
         logger.info(f"Пользователь с UID {user_uid} успешно удален (мягкое удаление)")
         return user
     
     @classmethod
-    def update_profile(cls, db_session: Session, user_uid: str, new_data: dict):
+    async def update_profile(cls, db_session: AsyncSession, user_uid: str, new_data: dict):
         """Обновление данных профиля пользователя."""
-        user = cls.get_user_by_uid(db_session, user_uid)
+        user = await cls.get_user_by_uid(db_session, user_uid)
         if not user:
             logger.error(f"Пользователь с {user_uid} не найден")
             return None
@@ -340,8 +353,8 @@ class User(Database.Base):
                 setattr(user, key, value)
         
         db_session.add(user)
-        db_session.commit()
-        db_session.refresh(user)
+        await db_session.commit()
+        await db_session.refresh(user)
         
         return user
 
@@ -369,9 +382,9 @@ class Penalty(Database.Base):
     )
 
     @classmethod
-    def create_penalty(
+    async def create_penalty(
         cls, 
-        db_session: Session, 
+        db_session: AsyncSession, 
         user_uid: UUID, 
         penalty_type: str, 
         expires_at: datetime, 
@@ -381,57 +394,52 @@ class Penalty(Database.Base):
         """
         Создает новое наказание в базе данных.
         
-        :param db_session: Сессия базы данных.
-        :param user_uid: UID пользователя, которому назначается наказание.
-        :param penalty_type: Тип наказания.
-        :param expires_at: Дата и время окончания наказания (должно быть в UTC).
-        :param issuer_uid: UID администратора, который назначает наказание.
-        :param reason: Причина наказания.
-        :return: Созданный объект Penalty.
+        :param db_session: Асинхронная сессия базы данных
+        :param user_uid: UID пользователя
+        :param penalty_type: Тип наказания
+        :param expires_at: Дата окончания (UTC)
+        :param issuer_uid: UID администратора
+        :param reason: Причина наказания
+        :return: Созданный объект Penalty
         """
         try:
-            # Проверяем и нормализуем время
+            # Нормализация времени
             if expires_at.tzinfo is None:
-                # Если время без зоны, считаем его UTC
                 expires_at_utc = expires_at.replace(tzinfo=timezone.utc)
             else:
-                # Если с зоной, конвертируем в UTC
                 expires_at_utc = expires_at.astimezone(timezone.utc)
             
-            # Удаляем информацию о временной зоне перед сохранением
             expires_at_for_db = expires_at_utc.replace(tzinfo=None)
             
-            # Логирование для отладки
             logger.debug(f"Original expires_at: {expires_at}")
             logger.debug(f"UTC expires_at: {expires_at_utc}")
             logger.debug(f"DB expires_at: {expires_at_for_db}")
 
-            # Создаем новую запись о наказании
+            # Создание наказания
             penalty = cls(
                 user_uid=user_uid,
                 penalty_type=str(penalty_type),
-                expires_at=expires_at_for_db,  # Сохраняем как naive UTC
+                expires_at=expires_at_for_db,
                 issuer_uid=issuer_uid,
                 reason=reason,
             )
 
-            # Добавляем запись в базу данных
             db_session.add(penalty)
-            db_session.commit()
-            db_session.refresh(penalty)
+            await db_session.commit()
+            await db_session.refresh(penalty)
 
             return penalty
 
         except ValueError as e:
-            db_session.rollback()
-            logger.error(f"Ошибка валидации при создании наказания: {e}")
+            await db_session.rollback()
+            logger.error(f"Ошибка валидации: {e}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Некорректные данные: {str(e)}"
             )
             
         except Exception as e:
-            db_session.rollback()
+            await db_session.rollback()
             logger.error(f"Ошибка при создании наказания: {e}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -439,25 +447,24 @@ class Penalty(Database.Base):
             )
         
     @classmethod
-    def get_active_mute(cls, db_session: Session, user_uid: UUID):
+    async def get_active_mute(cls, db_session: AsyncSession, user_uid: UUID):
         """
         Возвращает активное наказание типа mute для пользователя.
-        :param db_session: Сессия базы данных.
-        :param user_uid: UID пользователя.
-        :return: None или словарь с данными о наказании.
+        :param db_session: Асинхронная сессия БД
+        :param user_uid: UID пользователя
+        :return: None или словарь с данными о наказании
         """
         current_time = datetime.utcnow()
         logger.debug(f"Текущее время (UTC): {current_time}")
 
-        active_penalty = (
-            db_session.query(cls)
-            .filter(
+        result = await db_session.execute(
+            select(cls).where(
                 cls.user_uid == user_uid,
                 cls.penalty_type == 'mute',
-                cls.expires_at > current_time + timedelta(seconds=1)  # Добавляем буфер
+                cls.expires_at > current_time + timedelta(seconds=1)
             )
-            .first()
         )
+        active_penalty = result.scalars().first()
 
         if active_penalty:
             logger.debug(f"Активное наказание найдено: expires_at={active_penalty.expires_at}")
@@ -469,19 +476,23 @@ class Penalty(Database.Base):
         return None
 
     @classmethod
-    def get_user_penalties(cls, db_session: Session, user_uid: UUID):
+    async def get_user_penalties(cls, db_session: AsyncSession, user_uid: UUID):
+        """
+        Получает наказания пользователя за последний месяц.
+        :param db_session: Асинхронная сессия БД
+        :param user_uid: UID пользователя
+        :return: Список словарей с данными о наказаниях
+        """
         one_month_ago = datetime.utcnow() - timedelta(days=30)
-    
-        penalties = (
-            db_session.query(cls)
-            .filter(
+        
+        result = await db_session.execute(
+            select(cls).where(
                 cls.user_uid == user_uid,
                 cls.issued_at >= one_month_ago
             )
-            .all()
         )
+        penalties = result.scalars().all()
         
-        # Возвращаем данные в виде списка словарей
         return [
             {
                 "id": penalty.id,
@@ -500,22 +511,48 @@ class Penalty(Database.Base):
         ]
     
     @classmethod
-    def update_penalty(cls, db_session: Session, penalty_id: int, new_data: dict):
-        penalty = db_session.query(cls).filter(cls.id == penalty_id).first()
+    async def update_penalty(cls, db_session: AsyncSession, penalty_id: int, new_data: dict):
+        """
+        Обновляет данные наказания.
+        :param db_session: Асинхронная сессия БД
+        :param penalty_id: ID наказания
+        :param new_data: Новые данные
+        :return: Обновленный объект Penalty
+        """
+        result = await db_session.execute(
+            select(cls).where(cls.id == penalty_id)
+        )
+        penalty = result.scalars().first()
+        
         if not penalty:
             raise HTTPException(status_code=404, detail="Penalty not found")
+        
         for key, value in new_data.items():
             setattr(penalty, key, value)
-        db_session.commit()
+        
+        await db_session.commit()
+        await db_session.refresh(penalty)
         return penalty
     
     @classmethod
-    def delete_penalty(cls, db_session: Session, penalty_id: int):
-        penalty = db_session.query(cls).filter(cls.id == penalty_id).first()
+    async def delete_penalty(cls, db_session: AsyncSession, penalty_id: int):
+        """
+        Удаляет наказание.
+        :param db_session: Асинхронная сессия БД
+        :param penalty_id: ID наказания
+        :return: Словарь с результатом операции
+        """
+        result = await db_session.execute(
+            select(cls).where(cls.id == penalty_id)
+        )
+        penalty = result.scalars().first()
+        
         if not penalty:
             raise HTTPException(status_code=404, detail="Penalty not found")
-        db_session.delete(penalty)
-        db_session.commit()
+        
+        await db_session.delete(penalty)
+        await db_session.commit()
+        
         return {"status": "ok", "message": "Penalty deleted"}
 
 

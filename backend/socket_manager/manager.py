@@ -152,7 +152,7 @@ class ConnectionManager:
         self.user_last_seen[user_uid] = datetime.now()
 
         # Обновляем last_online в базе данных
-        User.update_last_online(db_session, user_uid)
+        await User.update_last_online(db_session, user_uid)
 
     async def check_user_activity(self):
         """Периодическая проверка активности пользователей"""

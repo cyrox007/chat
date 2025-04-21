@@ -1,15 +1,15 @@
 import functools
-from utils.logger import setup_logger  # Импортируем централизованный логгер
+from utils.logger import setup_logger
 from database import Database
 from fastapi import HTTPException, status
 
-# Создаем логгер для этого модуля
 logger = setup_logger(__name__)
 
 def get_session(func):
     @functools.wraps(func)
     async def _wrapper(*args, **kwargs):
-        db_session = Database.connect_database()
+        # Получаем асинхронную сессию
+        db_session = await Database.get_session()
         try:
             kwargs['db_session'] = db_session
             response = await func(*args, **kwargs)
@@ -20,10 +20,8 @@ def get_session(func):
         except Exception as e:
             logger.error(f"Database error: {str(e)}")
             if "websocket" in kwargs:
-                # Проверяем, было ли соединение принято
                 websocket = kwargs["websocket"]
                 try:
-                    # Закрываем WebSocket только если он был принят
                     await websocket.close(code=1011, reason="Internal server error")
                 except Exception as ws_error:
                     logger.error(f"WebSocket close error: {ws_error}")
@@ -32,5 +30,5 @@ def get_session(func):
                 detail="Internal server error"
             )
         finally:
-            db_session.close()
+            await db_session.close()  # Асинхронное закрытие сессии
     return _wrapper
