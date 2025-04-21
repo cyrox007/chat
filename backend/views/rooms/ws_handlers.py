@@ -32,7 +32,7 @@ MAX_FILENAME_LENGTH = 255
 # Инициализация подключения к комнате
 async def initialize_websocket(websocket: WebSocket, db_session, room_uid: UUID, user_uid: UUID):
     # Проверка существования комнаты
-    room = Room.get_room_by_uid(db_session, room_uid)
+    room = await Room.get_room_by_uid(db_session, room_uid)
     if not room:
         logger.warning(f"Комната не найдена: {room_uid}")
         await websocket.close(code=1008, reason="Room not found")
@@ -60,7 +60,7 @@ async def initialize_websocket(websocket: WebSocket, db_session, room_uid: UUID,
 
 async def send_initial_data(websocket: WebSocket, db_session, room_uid: UUID, user_uid: UUID):
     # Отправляем последние сообщения
-    last_messages = Message.get_last_messages(db_session, room_uid, limit=5)
+    last_messages = await Message.get_last_messages(db_session, room_uid, limit=5)
     await websocket.send_json({"type": "initial_data", "messages": last_messages})
 
 async def process_incoming_messages(websocket: WebSocket, room_uid: UUID, user_uid: UUID, db_session):
@@ -101,7 +101,7 @@ async def handle_text_message(data: dict, room_uid: UUID, user_uid: UUID, db_ses
 
     try:
         # Создаем сообщение в БД
-        formatted_message = Message.create_message(db_session, message_data)
+        formatted_message = await Message.create_message(db_session, message_data)
         formatted_message['frontId'] = data.get('frontId')  # Сохраняем frontId
         
         await manager.broadcast_to_room(room_uid, formatted_message)
@@ -188,7 +188,7 @@ async def handle_file_message(data: dict, room_uid: UUID, user_uid: UUID, db_ses
     }
 
     try:
-        formatted_message = Message.create_message(db_session, message_data)
+        formatted_message = await Message.create_message(db_session, message_data)
         formatted_message['frontId'] = data.get('frontId')
         await manager.broadcast_to_room(room_uid, formatted_message)
         logger.info(f"Файловое сообщение отправлено в комнату {room_uid}: {formatted_message}")
@@ -242,7 +242,7 @@ async def handle_audio_message(data: dict, room_uid: UUID, user_uid: UUID, db_se
             "timestamp": datetime.utcnow().isoformat(),
         }
 
-        formatted_message = Message.create_message(db_session, message_data)
+        formatted_message = await Message.create_message(db_session, message_data)
         formatted_message['frontId'] = data.get('frontId')
         await manager.broadcast_to_room(room_uid, formatted_message)
         logger.info(f"Аудио сообщение отправлено в комнату {room_uid}: {formatted_message}")

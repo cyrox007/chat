@@ -1,7 +1,9 @@
-from typing import List
+from typing import List, Optional
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Boolean, and_, desc, asc, func, or_
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Session, relationship, joinedload
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import relationship, joinedload
+from sqlalchemy.future import select
 from datetime import datetime
 from uuid import uuid4
 from database import Database
@@ -14,11 +16,10 @@ logger = logging.getLogger(__name__)
 class Message(Database.Base):
     __tablename__ = "messages"
 
-    #id = Column(Integer, primary_key=True, index=True)
     uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    content_type = Column(String(50), nullable=False)  # text, image, video, audio, document, voice, sticker
-    text = Column(String(1000))  # Текст (опционально)
-    media_metadata = Column(JSON)  # Метаданные для медиа
+    content_type = Column(String(50), nullable=False)
+    text = Column(String(1000))
+    media_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Связь с комнатой
@@ -43,7 +44,6 @@ class Message(Database.Base):
             return None
             
         if isinstance(msg, dict):
-            # Если сообщение уже словарь (например, из кеша)
             return msg
         
         formatted = {
@@ -74,80 +74,67 @@ class Message(Database.Base):
         return formatted
 
     @staticmethod
-    def create_message(db_session: Session, message_data: dict):
+    async def create_message(db_session: AsyncSession, message_data: dict):
         """
-        Создает новое сообщение и сохраняет его в базу данных.
-
-        :param db_session: SQLAlchemy сессия
-        :param message_data: Словарь с данными сообщения
-        :return: Созданный объект Message
+        Создает новое сообщение и сохраняет его в базу данных асинхронно.
         """
         try:
-            # Создаем новый объект Message
             new_message = Message(
                 content_type=message_data.get("content_type", "text"),
-                text=message_data.get("content"),  # Текст сообщения
-                media_metadata=message_data.get("media_metadata"),  # Метаданные для медиа
+                text=message_data.get("content"),
+                media_metadata=message_data.get("media_metadata"),
                 room_uid=message_data.get("room_uid"),
                 author_uid=message_data.get("sender_uid"),
                 reply_to_uid=message_data.get("reply_to_uid"),
                 created_at=datetime.utcnow()
             )
 
-            # Добавляем сообщение в сессию и фиксируем изменения
             db_session.add(new_message)
-            db_session.commit()
-            db_session.refresh(new_message)
+            await db_session.commit()
+            await db_session.refresh(new_message)
 
-            # Возвращаем сообщение в нужном формате
             return Message.format_message(new_message)
         except Exception as e:
-            # Логируем ошибку и откатываем транзакцию
             logger.error(f"Error creating message: {e}")
-            db_session.rollback()
+            await db_session.rollback()
             raise
 
     @staticmethod
-    def get_last_messages(db_session: Session, room_uid: UUID, limit: int = 5) -> List["Message"]:
+    async def get_last_messages(db_session: AsyncSession, room_uid: UUID, limit: int = 5) -> List["Message"]:
         """
-        Возвращает последние сообщения для указанной комнаты в порядке от старых к новым.
-        Это позволяет отображать их на фронтенде в естественном порядке (сверху вниз).
-
-        :param db_session: SQLAlchemy сессия
-        :param room_uid: UUID комнаты
-        :param limit: Количество сообщений для возврата
-        :return: Список объектов Message
+        Возвращает последние сообщения для указанной комнаты асинхронно.
         """
         try:
-            # Запрашиваем сообщения в порядке от новых к старым
-            messages = (
-                db_session.query(Message)
+            stmt = (
+                select(Message)
                 .options(
                     joinedload(Message.author),
                     joinedload(Message.reply_to).joinedload(Message.author)
                 )
                 .filter(Message.room_uid == str(room_uid))
-                .order_by(desc(Message.created_at))  # Сортируем по возрастанию даты
+                .order_by(desc(Message.created_at))
                 .limit(limit)
-                .all()
             )
+            
+            result = await db_session.execute(stmt)
+            messages = result.scalars().all()
 
-            # Форматируем сообщения (уже в правильном порядке)
             return [Message.format_message(msg) for msg in messages]
         except Exception as e:
             logger.error(f"Error fetching last messages: {e}")
             raise
+
 
 class PrivateMessage(Database.Base):
     __tablename__ = "private_messages"
 
     id = Column(Integer, primary_key=True, index=True)
     uid = Column(UUID(as_uuid=True), default=uuid4, unique=True, index=True)
-    content_type = Column(String(50), nullable=False)  # text, image, video, audio, document, voice, sticker
-    text = Column(String(1000))  # Текст (опционально)
-    media_metadata = Column(JSON)  # Метаданные для медиа
+    content_type = Column(String(50), nullable=False)
+    text = Column(String(1000))
+    media_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
-    is_read = Column(Boolean, default=False)  # Флаг прочтения
+    is_read = Column(Boolean, default=False)
 
     # Связь с отправителем
     sender_uid = Column(UUID(as_uuid=True), ForeignKey("users.uid"))
@@ -191,9 +178,9 @@ class PrivateMessage(Database.Base):
         return formatted
 
     @staticmethod
-    def create_private_message(db_session: Session, message_data: dict):
+    async def create_private_message(db_session: AsyncSession, message_data: dict):
         """
-        Создает новое приватное сообщение и сохраняет его в базу данных.
+        Создает новое приватное сообщение асинхронно.
         """
         try:
             new_message = PrivateMessage(
@@ -206,29 +193,36 @@ class PrivateMessage(Database.Base):
             )
 
             db_session.add(new_message)
-            db_session.commit()
-            db_session.refresh(new_message)
+            await db_session.commit()
+            await db_session.refresh(new_message)
 
             return PrivateMessage.format_message(new_message)
         except Exception as e:
             logger.error(f"Error creating private message: {e}")
-            db_session.rollback()
+            await db_session.rollback()
             raise
 
     @staticmethod
-    def get_conversation(db_session: Session, user1_uid: UUID, user2_uid: UUID, limit: int = 50):
+    async def get_conversation(db_session: AsyncSession, user1_uid: UUID, user2_uid: UUID, limit: int = 50):
         """
-        Возвращает переписку между двумя пользователями.
+        Возвращает переписку между двумя пользователями асинхронно.
         """
         try:
-            messages = db_session.query(PrivateMessage).options(
-                    joinedload(PrivateMessage.sender)
-                ).filter(
+            stmt = (
+                select(PrivateMessage)
+                .options(joinedload(PrivateMessage.sender))
+                .filter(
                     (PrivateMessage.sender_uid == str(user1_uid)) & 
-                    ((PrivateMessage.receiver_uid == str(user2_uid))) |
-                    ((PrivateMessage.sender_uid == str(user2_uid)) & 
-                    ((PrivateMessage.receiver_uid == str(user1_uid)))
-                )).order_by(desc(PrivateMessage.created_at)).limit(limit).all()
+                    (PrivateMessage.receiver_uid == str(user2_uid)) |
+                    (PrivateMessage.sender_uid == str(user2_uid)) & 
+                    (PrivateMessage.receiver_uid == str(user1_uid))
+                )
+                .order_by(desc(PrivateMessage.created_at))
+                .limit(limit)
+            )
+            
+            result = await db_session.execute(stmt)
+            messages = result.scalars().all()
 
             return [PrivateMessage.format_message(msg) for msg in messages]
         except Exception as e:
@@ -236,32 +230,35 @@ class PrivateMessage(Database.Base):
             raise
 
     @staticmethod
-    def mark_as_read(db_session: Session, message_uid: UUID):
+    async def mark_as_read(db_session: AsyncSession, message_uid: UUID):
         """
-        Помечает сообщение как прочитанное.
+        Помечает сообщение как прочитанное асинхронно.
         """
         try:
-            message = db_session.query(PrivateMessage).filter(PrivateMessage.uid == str(message_uid)).first()
+            stmt = select(PrivateMessage).filter(PrivateMessage.uid == str(message_uid))
+            result = await db_session.execute(stmt)
+            message = result.scalar_one_or_none()
+            
             if message:
                 message.is_read = True
-                db_session.commit()
+                await db_session.commit()
             return message
         except Exception as e:
             logger.error(f"Error marking message as read: {e}")
-            db_session.rollback()
+            await db_session.rollback()
             raise
 
     @staticmethod
-    def get_dialogs(db_session: Session, current_user_uid: UUID):
-        """Получаем список диалогов с последним сообщением"""
+    async def get_dialogs(db_session: AsyncSession, current_user_uid: UUID):
+        """Получаем список диалогов с последним сообщением асинхронно"""
         try:
             # Подзапрос для получения последних сообщений
             subquery = (
-                db_session.query(
+                select(
                     func.greatest(PrivateMessage.sender_uid, PrivateMessage.receiver_uid).label("dialog_id"),
                     func.max(PrivateMessage.created_at).label("last_message_time")
                 )
-                .filter(
+                .where(
                     or_(
                         PrivateMessage.sender_uid == current_user_uid,
                         PrivateMessage.receiver_uid == current_user_uid
@@ -272,8 +269,8 @@ class PrivateMessage(Database.Base):
             )
 
             # Основной запрос для получения диалогов
-            dialogs = (
-                db_session.query(
+            stmt = (
+                select(
                     PrivateMessage,
                     subquery.c.last_message_time
                 )
@@ -284,34 +281,46 @@ class PrivateMessage(Database.Base):
                         PrivateMessage.created_at == subquery.c.last_message_time
                     )
                 )
-                .options(joinedload(PrivateMessage.sender), joinedload(PrivateMessage.receiver))
-                .all()
+                .options(
+                    joinedload(PrivateMessage.sender), 
+                    joinedload(PrivateMessage.receiver)
+                )
             )
+            
+            result = await db_session.execute(stmt)
+            dialogs = result.all()
 
-            result = []
+            formatted_dialogs = []
             for dialog, last_message_time in dialogs:
                 partner_id = (
                     dialog.receiver_uid if dialog.sender_uid == current_user_uid
                     else dialog.sender_uid
                 )
 
-                result.append({
+                # Подсчет непрочитанных сообщений
+                unread_stmt = (
+                    select(func.count())
+                    .where(
+                        PrivateMessage.sender_uid == partner_id,
+                        PrivateMessage.receiver_uid == current_user_uid,
+                        PrivateMessage.is_read == False
+                    )
+                )
+                unread_result = await db_session.execute(unread_stmt)
+                unread_count = unread_result.scalar()
+
+                formatted_dialogs.append({
                     "partner_id": str(partner_id),
                     "last_message": dialog.text,
                     "last_message_time": last_message_time.isoformat(),
-                    "unread_count": db_session.query(PrivateMessage)
-                        .filter(
-                            PrivateMessage.sender_uid == partner_id,
-                            PrivateMessage.receiver_uid == current_user_uid,
-                            PrivateMessage.is_read == False
-                        ).count(),
+                    "unread_count": unread_count,
                     "partner": {
                         "username": dialog.sender.username if dialog.sender_uid == partner_id else dialog.receiver.username,
                         "avatar": dialog.sender.avatar if dialog.sender_uid == partner_id else dialog.receiver.avatar
                     }
                 })
 
-            return result
+            return formatted_dialogs
         except Exception as e:
             logger.error(f"Error fetching dialogs: {e}")
             raise

@@ -59,7 +59,7 @@ async def handle_send_private_message(data: dict, sender_uid: UUID, db_session: 
         }
 
         # Создаем сообщение в БД
-        formatted_message = PrivateMessage.create_private_message(db_session, message_data)
+        formatted_message = await PrivateMessage.create_private_message(db_session, message_data)
         formatted_message['frontId'] = data.get('frontId')
         
         # Отправляем сообщение всем устройствам отправителя
@@ -92,7 +92,7 @@ async def handle_mark_as_read(data: dict, user_uid: UUID, db_session: Session):
             raise ValueError("Отсутствует message_uid")
 
         # Помечаем сообщение как прочитанное в базе данных
-        message = PrivateMessage.mark_as_read(db_session, message_uid)
+        message = await PrivateMessage.mark_as_read(db_session, message_uid)
         if not message:
             raise ValueError(f"Сообщение с UID {message_uid} не найдено")
 
@@ -122,7 +122,7 @@ async def handle_get_conversation(data: dict, user_uid: UUID, db_session: Sessio
             raise ValueError("Отсутствует other_user_uid в запросе")
 
         # Получаем историю переписки из базы данных
-        messages = PrivateMessage.get_conversation(
+        messages = await PrivateMessage.get_conversation(
             db_session, 
             user1_uid=user_uid,
             user2_uid=UUID(other_user_uid)

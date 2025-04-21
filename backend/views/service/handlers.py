@@ -55,7 +55,7 @@ async def refresh_tokens(request: Request, db_session=None):
         # Обновление записи о токене через метод модели
         logger.info("Обновление записи о токене в базе данных.")
         try:
-            UserDevice.update_token(
+            await UserDevice.update_token(
                 db_session=db_session,
                 old_token=refresh_token,
                 new_token=new_refresh_token,

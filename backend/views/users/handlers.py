@@ -175,7 +175,7 @@ async def login(request: Request, response: Response, db_session=None):
         tokens = generate_tokens(str(user.uid))
 
         client_metadata = extract_client_metadata(request)
-        UserDevice.create(
+        await UserDevice.create(
             db_session=db_session,
             user_uid=str(user.uid),
             token=tokens['refresh'],
@@ -242,7 +242,7 @@ async def logout(request: Request, response: Response, db_session=None):
             return {"status": "ok", "message": "Already logged out"}
 
         try:
-            UserDevice.deactivate_token(db_session, refresh_token)
+            await UserDevice.deactivate_token(db_session, refresh_token)
             logger.info("Токен успешно деактивирован")
         except ValueError:
             logger.warning("Токен уже деактивирован или отсутствует")

@@ -155,7 +155,7 @@ async def delete_penalty(penalty_id: int, response: Response, db_session = None)
 
 @get_session
 async def get_user_rooms(target_uid: UUID, request: Request, db_session = None):
-    rooms = Room.get_rooms_by_owner(
+    rooms = await Room.get_rooms_by_owner(
         db=db_session,
         owner_uid=target_uid
     )

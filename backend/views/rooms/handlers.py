@@ -11,7 +11,7 @@ logger = setup_logger(__name__)
 async def get_rooms(db_session=None):
     try:
         logger.info("Fetching all active rooms")
-        rooms = Room.get_all_active_rooms(db_session)
+        rooms = await Room.get_all_active_rooms(db_session)
         logger.debug(f"Found {len(rooms)} active rooms")
         return {"status": "ok", "rooms": [room.__dict__ for room in rooms]}
     except Exception as e:
@@ -26,7 +26,7 @@ async def create_room(request: Request, response: Response, db_session = None):
         user = request.state.user  # Получаем данные пользователя из middleware
         logger.info(f"Creating new room for user {user['user_uid']}")
 
-        new_room = Room.create_room(db_session, room_data, owner_uid=UUID(user["user_uid"]))
+        new_room = await Room.create_room(db_session, room_data, owner_uid=UUID(user["user_uid"]))
         logger.info(f"Room created successfully: {new_room.uid}")
         return {"status": "ok", "room": new_room.__dict__}
     except Exception as e:
@@ -42,7 +42,7 @@ async def get_room(room_uid: UUID, request: Request, db_session=None):
         user = request.state.user  # Получаем данные пользователя из middleware
         logger.info(f"Fetching room with UID: {room_uid}")
 
-        room = Room.get_room_by_uid(db_session, room_uid)
+        room = await Room.get_room_by_uid(db_session, room_uid)
         if not room:
             logger.warning(f"Room not found: {room_uid}")
             raise HTTPException(status_code=404, detail="Room not found")
@@ -55,12 +55,12 @@ async def get_room(room_uid: UUID, request: Request, db_session=None):
 
 
 @get_session
-def update_room(room_uid: UUID, room_data: dict, request: Request, db_session=None):
+async def update_room(room_uid: UUID, room_data: dict, request: Request, db_session=None):
     try:
         user = request.state.user  # Получаем данные пользователя из middleware
         logger.info(f"Updating room with UID: {room_uid}")
 
-        room = Room.get_room_by_uid(db_session, room_uid)
+        room = await Room.get_room_by_uid(db_session, room_uid)
         if not room:
             logger.warning(f"Room not found: {room_uid}")
             raise HTTPException(status_code=404, detail="Room not found")
@@ -69,7 +69,7 @@ def update_room(room_uid: UUID, room_data: dict, request: Request, db_session=No
             logger.warning(f"User {user['uid']} is not the owner of room {room_uid}")
             raise HTTPException(status_code=403, detail="You are not the owner of this room")
 
-        updated_room = Room.update_room(db_session, room_uid, room_data)
+        updated_room = await Room.update_room(db_session, room_uid, room_data)
         logger.info(f"Room updated successfully: {room_uid}")
         return {"status": "ok", "room": updated_room.__dict__}
     except Exception as e:
@@ -78,12 +78,12 @@ def update_room(room_uid: UUID, room_data: dict, request: Request, db_session=No
 
 
 @get_session
-def delete_room(room_uid: UUID, request: Request, db_session=None):
+async def delete_room(room_uid: UUID, request: Request, db_session=None):
     try:
         user = request.state.user  # Получаем данные пользователя из middleware
         logger.info(f"Deleting room with UID: {room_uid}")
 
-        room = Room.get_room_by_uid(db_session, room_uid)
+        room = await Room.get_room_by_uid(db_session, room_uid)
         if not room:
             logger.warning(f"Room not found: {room_uid}")
             raise HTTPException(status_code=404, detail="Room not found")
@@ -92,7 +92,7 @@ def delete_room(room_uid: UUID, request: Request, db_session=None):
             logger.warning(f"User {user['uid']} is not the owner of room {room_uid}")
             raise HTTPException(status_code=403, detail="You are not the owner of this room")
 
-        Room.delete_room(db_session, room_uid)
+        await Room.delete_room(db_session, room_uid)
         logger.info(f"Room deleted successfully: {room_uid}")
         return {"status": "ok", "message": "Room deleted successfully"}
     except Exception as e:

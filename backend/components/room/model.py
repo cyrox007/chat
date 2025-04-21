@@ -1,9 +1,10 @@
 from typing import List, Optional
 from uuid import uuid4
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, select
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import Database
 
@@ -28,17 +29,26 @@ class Room(Database.Base):
     messages = relationship("Message", back_populates="room")
 
     @staticmethod
-    def get_all_active_rooms(db: Session) -> List["Room"]:
+    async def get_all_active_rooms(db: AsyncSession) -> List["Room"]:
         """Получить все активные комнаты."""
-        return db.query(Room).filter(Room.is_active == True).all()
+        result = await db.execute(
+            select(Room).where(Room.is_active == True)
+        )
+        return result.scalars().all()
     
     @staticmethod
-    def get_room_by_uid(db: Session, room_uid: UUID) -> Optional["Room"]:
+    async def get_room_by_uid(db: AsyncSession, room_uid: UUID) -> Optional["Room"]:
         """Получить комнату по UID."""
-        return db.query(Room).filter(Room.uid == room_uid, Room.is_active == True).first()
+        result = await db.execute(
+            select(Room).where(
+                Room.uid == room_uid,
+                Room.is_active == True
+            )
+        )
+        return result.scalars().first()
     
     @staticmethod
-    def create_room(db: Session, room_data: dict, owner_uid: UUID) -> "Room":
+    async def create_room(db: AsyncSession, room_data: dict, owner_uid: UUID) -> "Room":
         """Создать новую комнату."""
         new_room = Room(
             name=room_data.get("name"),
@@ -49,42 +59,57 @@ class Room(Database.Base):
             owner_uid=owner_uid
         )
         db.add(new_room)
-        db.commit()
-        db.refresh(new_room)
+        await db.commit()
+        await db.refresh(new_room)
         return new_room
     
     @staticmethod
-    def update_room(db: Session, room_uid: UUID, update_data: dict) -> Optional["Room"]:
+    async def update_room(db: AsyncSession, room_uid: UUID, update_data: dict) -> Optional["Room"]:
         """Обновить данные комнаты."""
-        room = db.query(Room).filter(Room.uid == room_uid, Room.is_active == True).first()
+        result = await db.execute(
+            select(Room).where(
+                Room.uid == room_uid,
+                Room.is_active == True
+            )
+        )
+        room = result.scalars().first()
         if not room:
             return None
 
         for key, value in update_data.items():
             setattr(room, key, value)
 
-        db.commit()
-        db.refresh(room)
+        await db.commit()
+        await db.refresh(room)
         return room
     
     @staticmethod
-    def delete_room(db: Session, room_uid: UUID) -> bool:
+    async def delete_room(db: AsyncSession, room_uid: UUID) -> bool:
         """Мягкое удаление комнаты."""
-        room = db.query(Room).filter(Room.uid == room_uid, Room.is_active == True).first()
+        result = await db.execute(
+            select(Room).where(
+                Room.uid == room_uid,
+                Room.is_active == True
+            )
+        )
+        room = result.scalars().first()
         if not room:
             return False
 
         room.is_active = False
-        db.commit()
+        await db.commit()
         return True
     
     @staticmethod
-    def get_rooms_by_owner(db: Session, owner_uid: UUID) -> List["Room"]:
-        """Получить все активные комнаты, созданные конкретным пользователем."""
-        return db.query(Room).filter(
-            Room.owner_uid == owner_uid,
-            Room.is_active == True
-        ).all()
+    async def get_rooms_by_owner(db: AsyncSession, owner_uid: UUID) -> List["Room"]:
+        """Получить комнаты владельца."""
+        result = await db.execute(
+            select(Room).where(
+                Room.owner_uid == owner_uid,
+                Room.is_active == True
+            )
+        )
+        return result.scalars().all()
 
 class RoomMember(Database.Base):
     __tablename__ = "room_members"
@@ -100,25 +125,31 @@ class RoomMember(Database.Base):
     user = relationship("User", back_populates="memberships")
 
     @staticmethod
-    def add_member(db: Session, room_uid: str, user_uid: str, role: str = "member") -> "RoomMember":
+    async def add_member(db: AsyncSession, room_uid: str, user_uid: str, role: str = "member") -> "RoomMember":
         """Добавить пользователя в комнату."""
-        member = RoomMember(room_uid=room_uid, user_uid=user_uid, role=role)
+        member = RoomMember(
+            room_uid=room_uid,
+            user_uid=user_uid,
+            role=role
+        )
         db.add(member)
-        db.commit()
-        db.refresh(member)
+        await db.commit()
+        await db.refresh(member)
         return member
 
     @staticmethod
-    def remove_member(db: Session, room_uid: str, user_uid: str) -> bool:
+    async def remove_member(db: AsyncSession, room_uid: str, user_uid: str) -> bool:
         """Удалить пользователя из комнаты."""
-        member = (
-            db.query(RoomMember)
-            .filter(RoomMember.room_uid == room_uid, RoomMember.user_uid == user_uid)
-            .first()
+        result = await db.execute(
+            select(RoomMember).where(
+                RoomMember.room_uid == room_uid,
+                RoomMember.user_uid == user_uid
+            )
         )
+        member = result.scalars().first()
         if not member:
             return False
 
-        db.delete(member)
-        db.commit()
+        await db.delete(member)
+        await db.commit()
         return True
