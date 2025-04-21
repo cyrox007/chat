@@ -4,8 +4,9 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from fastapi.middleware.cors import CORSMiddleware
-from utils.csrf import validate_csrf_token
 from middlewares import csrf_middleware, error_handling_middleware
+
+from settings import config
 
 def create_app() -> FastAPI:
     from views.csrf import routers as csrf_routes
@@ -23,7 +24,7 @@ def create_app() -> FastAPI:
     # Добавляем CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173"],
+        allow_origins=config.FRONTEND_URL,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"]

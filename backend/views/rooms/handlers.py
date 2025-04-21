@@ -1,4 +1,4 @@
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Response, status
 from components.decorators.db import get_session
 from components.room.model import Room
 from uuid import UUID
@@ -20,7 +20,8 @@ async def get_rooms(db_session=None):
 
 
 @get_session
-async def create_room(room_data: dict, request: Request, db_session=None):
+async def create_room(request: Request, response: Response, db_session = None):
+    room_data = await request.json()
     try:
         user = request.state.user  # Получаем данные пользователя из middleware
         logger.info(f"Creating new room for user {user['user_uid']}")
@@ -30,7 +31,9 @@ async def create_room(room_data: dict, request: Request, db_session=None):
         return {"status": "ok", "room": new_room.__dict__}
     except Exception as e:
         logger.error(f"Error creating room: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        #raise HTTPException(status_code=500, detail="Internal server error")
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {"status": "error", "message": "Internal server error"}
 
 
 @get_session
