@@ -79,9 +79,8 @@
 			accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx" :disabled="isDisabled" />
 
 		<!-- Панель выбора эмодзи -->
-		<div v-if="isEmojiPickerVisible" class="emoji-picker-container">
-			<Picker :data="emojiIndex" set="twitter" @select="insertEmoji" />
-		</div>
+		<EmojiPicker @emoji-selected="insertEmoji" :is-show="isEmojiPickerVisible" />
+
 		<div v-if="isDisabled" class="mute-notification">
             <p>Вы не можете отправлять сообщения.</p>
         </div>
@@ -90,10 +89,7 @@
 
 <script setup>
 import { ref, defineProps, defineEmits, defineExpose, onUnmounted } from 'vue';
-import { useStore } from 'vuex';
-import data from "emoji-mart-vue-fast/data/all.json";
-import "emoji-mart-vue-fast/css/emoji-mart.css";
-import { Picker, EmojiIndex } from "emoji-mart-vue-fast/src";
+import EmojiPicker from './EmojiPicker.vue';
 import imageCompression from 'browser-image-compression';
 
 const emit = defineEmits(['send-message']);
@@ -109,8 +105,6 @@ const props = defineProps({
     }
 });
 
-const store = useStore();
-
 // Состояния
 const messageInput = ref('');
 const isRecording = ref(false);
@@ -124,7 +118,7 @@ const audioContext = ref(null);
 const analyser = ref(null);
 const audioLevel = ref(0);
 const isAudioRecorded = ref(false);
-const emojiIndex = new EmojiIndex(data);
+
 const replyTo = ref(null);
 
 // Флаг для переключения между записью голоса и видео
@@ -312,7 +306,7 @@ const toggleEmojiPicker = () => {
 
 // Вставка эмодзи в текстовое поле
 const insertEmoji = (emoji) => {
-	messageInput.value += emoji.native || emoji;
+	messageInput.value += emoji; // Теперь emoji - это строка, а не объект
 	isEmojiPickerVisible.value = false;
 };
 
