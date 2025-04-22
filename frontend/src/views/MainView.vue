@@ -246,6 +246,12 @@ watch(
 	color: white; /* Белый текст */
 	box-shadow: var(--shadow-light); /* Добавляем легкую тень */
 }
+@media screen and (max-width: 400px) {
+	.chat-window-header h2 {
+		font-size: 1.15rem;
+	}
+}
+
 
 .chat-window-header button {
 	background: none;
@@ -297,9 +303,22 @@ watch(
 	width: 100%;
 	background: var(--bg-light);
 	display: flex;
+	flex-direction: column;
 	align-items: center;
 	justify-content: center;
 	color: var(--text-light);
+}
+
+.placeholder i {
+	font-size: 3rem;
+	margin-bottom: 15px;
+	color: var(--primary-color);
+}
+
+@media screen and (max-width: 370px) {
+	.placeholder {
+		font-size: 15px;
+	}
 }
 
 /* Адаптивные стили для чата */
