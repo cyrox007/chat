@@ -21,7 +21,7 @@
 				<thead>
 					<tr>
 						<th @click="sortBy('id')">
-							ID
+							UUID
 							<i :class="sortIcon('id')"></i>
 						</th>
 						<th @click="sortBy('username')">
@@ -45,23 +45,23 @@
 				</thead>
 				<tbody>
 					<tr v-for="user in users" :key="user.id">
-						<td>{{ user.id }}</td>
+						<td>{{ user.uid }}</td>
 						<td>{{ user.username }}</td>
 						<td>{{ user.email }}</td>
 						<td>{{ formatDate(user.created_at) }}</td>
 						<td>
 							<span :class="`role-badge ${user.role}`">
-								{{ userRoleNames[user.role] || user.role }}
+								{{ userRoleNames[user.global_role] || user.global_role }}
 							</span>
 						</td>
 						<td class="actions">
 							<button class="btn-edit" @click="editUser(user)" title="Редактировать">
 								<i class="fas fa-edit"></i>
 							</button>
-							<button class="btn-ban" @click="toggleBanUser(user)"
+							<!-- <button class="btn-ban" @click="toggleBanUser(user)"
 								:title="user.is_banned ? 'Разблокировать' : 'Заблокировать'">
 								<i :class="user.is_banned ? 'fas fa-unlock' : 'fas fa-ban'"></i>
-							</button>
+							</button> -->
 						</td>
 					</tr>
 					<tr v-if="users.length === 0">
@@ -102,7 +102,7 @@
 		</div>
 
 		<!-- Модальное окно редактирования -->
-		<UserEditModal v-if="editingUser" :user="editingUser" @close="closeEditModal" @save="saveUserChanges" />
+		<!-- <UserEditModal v-if="editingUser" :user="editingUser" @close="closeEditModal" @save="saveUserChanges" /> -->
 	</div>
 </template>
 
@@ -111,6 +111,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useStore } from 'vuex';
 
 import ProfileService from '@/API/Admin/ProfileService';
+import router from '@/router';
 
 const store = useStore();
 
@@ -239,14 +240,14 @@ const formatDate = (dateString) => {
 
 // Работа с пользователями
 const editUser = (user) => {
-	editingUser.value = { ...user };
+	router.push(`/admin/profile/${user.uid}`)
 };
 
 const closeEditModal = () => {
 	editingUser.value = null;
 };
 
-const saveUserChanges = async (updatedUser) => {
+/* const saveUserChanges = async (updatedUser) => {
 	try {
 		await store.dispatch('admin/updateUser', updatedUser);
 		fetchUsers();
@@ -255,7 +256,7 @@ const saveUserChanges = async (updatedUser) => {
 		console.error('Ошибка обновления пользователя:', error);
 		alert('Не удалось обновить данные пользователя');
 	}
-};
+}; */
 
 const toggleBanUser = async (user) => {
 	if (confirm(`Вы уверены, что хотите ${user.is_banned ? 'разблокировать' : 'заблокировать'} пользователя ${user.username}?`)) {
