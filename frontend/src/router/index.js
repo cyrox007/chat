@@ -1,26 +1,27 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { useStore } from 'vuex';
 
 const router = createRouter({
 	history: createWebHistory(import.meta.env.BASE_URL),
 	routes: [
 		{
-            path: '/login',
-            name: 'login',
-            component: () => import('../views/LoginView.vue'),
-            meta: {
-                title: "Авторизация",
-                requestGuest: true // Разрешить доступ только неавторизованным пользователям
-            }
-        },
+			path: '/login',
+			name: 'login',
+			component: () => import('../views/LoginView.vue'),
+			meta: {
+				title: "Авторизация",
+				requestGuest: true // Разрешить доступ только неавторизованным пользователям
+			}
+		},
 		{
-            path: '/registration',
-            name: 'registration',
-            component: () => import('../views/RegistrationView.vue'),
-            meta: {
-                title: "Регистрация",
-                requestGuest: true // Разрешить доступ только неавторизованным пользователям
-            }
-        },
+			path: '/registration',
+			name: 'registration',
+			component: () => import('../views/RegistrationView.vue'),
+			meta: {
+				title: "Регистрация",
+				requestGuest: true // Разрешить доступ только неавторизованным пользователям
+			}
+		},
 		{
 			path: '/',
 			name: 'chats',
@@ -63,7 +64,8 @@ const router = createRouter({
 			component: () => import('../views/AdminPanel/AdminProfileView.vue'),
 			meta: {
 				title: "Профиль",
-				requestAuth: true
+				requestAuth: true,
+				requiresAdmin: true
 			}
 		},
 		{
@@ -72,18 +74,19 @@ const router = createRouter({
 			component: () => import('../views/AdminPanel/AdminProfileList.vue'),
 			meta: {
 				title: "Список пользователей",
-				requestAuth: true
+				requestAuth: true,
+				requiresAdmin: true
 			}
 		},
 		// Маршрут для 404 ошибки (не найдено)
-        {
-            path: '/:pathMatch(.*)*',
-            name: 'NotFound',
-            component: () => import('../views/NotFoundView.vue'),
-            meta: {
-                title: "Страница не найдена"
-            }
-        }
+		{
+			path: '/:pathMatch(.*)*',
+			name: 'NotFound',
+			component: () => import('../views/NotFoundView.vue'),
+			meta: {
+				title: "Страница не найдена"
+			}
+		}
 		/*{
 			path: '/settings',
 			name: 'settings',
@@ -115,24 +118,39 @@ const router = createRouter({
 });
 
 // Навигация и проверка аутентификации остаются прежними
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
 	document.title = to.meta.title || 'По умолчанию';
 
-	if (to.matched.some(record => record.meta.requestAuth)) {
-		if (localStorage.getItem('access_token')) {
-			next();
-		} else {
-			next({ name: 'login' });
+	const store = useStore();
+	const isAuthenticated = localStorage.getItem('access_token');
+	const userRole = store.getters['getUser']?.global_role; 
+
+	// Проверка для гостевых маршрутов
+	if (to.matched.some(record => record.meta.requestGuest)) {
+		if (isAuthenticated) {
+			return next({ name: 'chats' });
 		}
-	} else if (to.matched.some(record => record.meta.requestGuest)) {
-		if (localStorage.getItem('access_token')) {
-			next({ name: 'chats' });
-		} else {
-			next();
-		}
-	} else {
-		next();
+		return next();
 	}
+
+	// Проверка для защищенных маршрутов
+	if (to.matched.some(record => record.meta.requestAuth)) {
+		if (!isAuthenticated) {
+			return next({ name: 'login' });
+		}
+
+		// Дополнительная проверка для админских маршрутов
+		if (to.matched.some(record => record.meta.requiresAdmin)) {
+			if (userRole !== 'admin' && userRole !== 'superadmin') {
+				// Можно перенаправить на главную или показать страницу "Доступ запрещен"
+				return next({ name: 'chats' });
+			}
+		}
+
+		return next();
+	}
+
+	next();
 });
 
 export default router;
