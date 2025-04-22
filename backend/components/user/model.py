@@ -1,24 +1,22 @@
 # Стандартные библиотеки Python
 from enum import Enum
 import re
-from typing import List
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 # Внешние зависимости
 from fastapi import HTTPException, status
-from sqlalchemy import Column, Index, Integer, String, DateTime, Boolean, ForeignKey, UniqueConstraint, select
+from sqlalchemy import Column, Index, Integer, String, DateTime, Boolean, ForeignKey, UniqueConstraint, and_, func, or_, select
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Session, relationship
+from sqlalchemy.orm import relationship, selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta, timezone
 
 # Локальные модули
 from database import Database
-from components.room.model import Room
-from components.message.model import Message
 from components.user.exceptions import UserValidationError
-from utils.logger import setup_logger  # Централизованная утилита логирования
+from utils.logger import setup_logger
 
 # Создаем логгер
 logger = setup_logger(__name__)
@@ -357,6 +355,128 @@ class User(Database.Base):
         await db_session.refresh(user)
         
         return user
+    
+    @staticmethod
+    async def get_users(
+        db_session: AsyncSession,
+        page: int = 1,
+        per_page: int = 10,
+        search: Optional[str] = None,
+        sort_by: str = "created_at",
+        sort_dir: str = "desc",
+        role_filter: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        is_verified: Optional[bool] = None,
+        include_relations: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Получение списка пользователей с пагинацией, фильтрацией и сортировкой
+        
+        :param db_session: Асинхронная сессия SQLAlchemy
+        :param page: Номер страницы (начиная с 1)
+        :param per_page: Количество записей на странице
+        :param search: Строка для поиска по username, email, имени, фамилии
+        :param sort_by: Поле для сортировки (поддерживаются поля модели User)
+        :param sort_dir: Направление сортировки (asc/desc)
+        :param role_filter: Фильтр по роли (global_role)
+        :param is_active: Фильтр по активности
+        :param is_verified: Фильтр по верификации
+        :param include_relations: Включать ли связанные данные
+        :return: Словарь с данными и метаданными пагинации
+        """
+        # Базовый запрос
+        query = select(User).where(User.deleted_at == None)  # Исключаем удаленных
+        
+        # Добавляем загрузку отношений при необходимости
+        if include_relations:
+            query = query.options(
+                selectinload(User.owned_rooms),
+                selectinload(User.memberships),
+                selectinload(User.penalties),
+                selectinload(User.relationships)
+            )
+        
+        # Применяем поиск
+        if search:
+            search = f"%{search.lower()}%"
+            query = query.where(
+                or_(
+                    func.lower(User.username).ilike(search),
+                    func.lower(User.email).ilike(search),
+                    func.lower(User.first_name).ilike(search),
+                    func.lower(User.last_name).ilike(search),
+                    func.lower(User.phone).ilike(search),
+                    func.cast(User.uid, String).ilike(search)
+                )
+            )
+        
+        # Применяем фильтры
+        filters = []
+        if role_filter:
+            filters.append(User.global_role == role_filter)
+        if is_active is not None:
+            filters.append(User.is_active == is_active)
+        if is_verified is not None:
+            filters.append(User.is_verified == is_verified)
+        
+        if filters:
+            query = query.where(and_(*filters))
+        
+        # Применяем сортировку
+        sort_field = getattr(User, sort_by, User.created_at)  # По умолчанию сортировка по дате создания
+        if sort_dir.lower() == "desc":
+            query = query.order_by(sort_field.desc())
+        else:
+            query = query.order_by(sort_field.asc())
+        
+        # Получаем общее количество (для пагинации)
+        count_query = query.with_only_columns(func.count()).order_by(None)
+        total = (await db_session.execute(count_query)).scalar_one()
+        
+        # Применяем пагинацию
+        query = query.offset((page - 1) * per_page).limit(per_page)
+        
+        # Выполняем запрос
+        result = await db_session.execute(query)
+        users = result.scalars().unique().all()
+        
+        # Сериализация результатов
+        users_data = []
+        for user in users:
+            user_data = {
+                "uid": str(user.uid),
+                "username": user.username,
+                "email": user.email,
+                "phone": user.phone,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "avatar": user.avatar,
+                "global_role": user.global_role,
+                "rating": user.rating,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "is_active": user.is_active,
+                "is_verified": user.is_verified,
+                "city": user.city,
+                "country": user.country,
+                "last_online": user.last_online.isoformat() if user.last_online else None,
+                "stats": {
+                    "rooms_owned": len(user.owned_rooms) if include_relations else None,
+                    "penalties": len(user.penalties) if include_relations else None
+                }
+            }
+            users_data.append(user_data)
+        
+        return {
+            "data": users_data,
+            "meta": {
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": (total + per_page - 1) // per_page,
+                "sort_by": sort_by,
+                "sort_dir": sort_dir
+            }
+        }
 
 # Модель Penalty
 class Penalty(Database.Base):

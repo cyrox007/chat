@@ -22,6 +22,13 @@ def install(app: FastAPI):
         dependencies=[Depends(auth_middle)]
     )
     router.add_api_route(
+        '/users',
+        methods=['GET'],
+        status_code=status.HTTP_200_OK,
+        endpoint=handlers.get_users,
+        dependencies=[Depends(auth_middle)]
+    )
+    router.add_api_route(
         '/users/{target_uid}/rooms',
         methods=['GET'],
         status_code=status.HTTP_200_OK,

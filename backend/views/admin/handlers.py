@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import HTTPException, Request, Response, status
 from utils.file_handler import save_file
@@ -154,7 +155,57 @@ async def delete_penalty(penalty_id: int, response: Response, db_session = None)
         return {'status': 'error', 'message': 'Неожиданная ошибка'}
 
 @get_session
-async def get_user_rooms(target_uid: UUID, request: Request, db_session = None):
+async def get_users(
+    response: Response, 
+    db_session = None,
+    page: int = 1,
+    per_page: int = 10,
+    search: Optional[str] = None,
+    sort_by: str = "created_at",
+    sort_dir: str = "desc",
+    role_filter: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    is_verified: Optional[bool] = None
+):
+    """ Получение списка пользователей с пагинацией, фильтрацией и сортировкой """
+    try:
+        users_data = await User.get_users(
+            db_session=db_session,
+            page=page,
+            per_page=per_page,
+            search=search,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            role_filter=role_filter,
+            is_active=is_active,
+            is_verified=is_verified
+        )
+
+        return {
+            "status": "ok",
+            "users": users_data['data'],
+            "meta": {
+                "total": users_data['meta']['total'],
+                "page": page,
+                "per_page": per_page,
+                "total_pages": (users_data['meta']['total'] + per_page - 1) // per_page,
+                "sort_by": sort_by,
+                "sort_dir": sort_dir
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error in get_users: {str(e)}")
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {
+            "status": "error",
+            "message": "Произошла ошибка при получении списка пользователей",
+            "details": str(e)
+        }
+    #response.status_code = status.HTTP_200_OK #иной статус код в случае ошибок {'status': 'error', 'message': 'Произошла какая-то ошибка'}
+    return {'status': 'ok', 'users': []}
+
+@get_session
+async def get_user_rooms(target_uid: UUID, db_session = None):
     rooms = await Room.get_rooms_by_owner(
         db=db_session,
         owner_uid=target_uid
@@ -163,7 +214,7 @@ async def get_user_rooms(target_uid: UUID, request: Request, db_session = None):
     return {'status': 'ok', "rooms": rooms}
 
 @get_session
-async def get_user_penalties(target_uid: UUID, request: Request, db_session = None):
+async def get_user_penalties(target_uid: UUID, db_session = None):
     penalties = await Penalty.get_user_penalties(
         db_session=db_session,
         user_uid=target_uid
