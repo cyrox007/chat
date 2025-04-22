@@ -38,6 +38,7 @@
 						{{ profileData.first_name || profileData.last_name ? `${profileData.first_name} ${profileData.last_name} (${profileData.username})` : profileData.username }}
 					</h1>
 					<p class="profile-email">{{ profileData.email }}</p>
+					<p v-if="profileData.global_role != 'user'" class="profile-email">{{ profileData.global_role }}</p>
 				</div>
 				<UserStatus v-if="!isCurrentUser" :userId="route.params.uid" />
 				<div class="profile-actions">

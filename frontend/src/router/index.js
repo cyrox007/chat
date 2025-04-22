@@ -66,6 +66,15 @@ const router = createRouter({
 				requestAuth: true
 			}
 		},
+		{
+			path: '/admin/profiles',
+			name: 'AdminProfileList',
+			component: () => import('../views/AdminPanel/AdminProfileList.vue'),
+			meta: {
+				title: "Список пользователей",
+				requestAuth: true
+			}
+		},
 		// Маршрут для 404 ошибки (не найдено)
         {
             path: '/:pathMatch(.*)*',
