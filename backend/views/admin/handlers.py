@@ -191,7 +191,7 @@ async def update_user(target_uid: UUID, request: Request, response: Response, db
             }
 
         # Проверка существования пользователя
-        user = db_session.query(User).filter(User.uid == target_uid).first()
+        user = await User.get_user_by_uid(db_session, target_uid)
         if not user:
             response.status_code = status.HTTP_404_NOT_FOUND
             return {

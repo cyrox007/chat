@@ -66,10 +66,7 @@ async def refresh_tokens(request: Request, db_session=None):
             logger.error(f"Ошибка при обновлении токена в базе данных: {e}")
             
             # Проверяем, существует ли новый токен
-            existing_record = db_session.query(UserDevice).filter_by(
-                token=new_refresh_token, 
-                is_active=True
-            ).first()
+            existing_record = await UserDevice.find_active_by_token(db_session, new_access_token)
             
             if existing_record:
                 logger.info(f"Новый токен {new_refresh_token} уже существует. Возвращаем существующий токен.")

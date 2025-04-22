@@ -321,16 +321,16 @@ async def get_user_statuses(request: Request, response: Response, db_session = N
     try:
         # Получаем данные из запроса
         data: dict = await request.json()
-        user_ids = data.get('user_ids')
+        user_uids = data.get('user_ids')
 
         # Проверяем, что user_ids существует и является списком
-        if not user_ids or not isinstance(user_ids, list):
+        if not user_uids or not isinstance(user_uids, list):
             response.status_code = status.HTTP_400_BAD_REQUEST
             #raise HTTPException(status_code=400, detail="Invalid or missing 'user_ids' in request")
             return {"status": "error", "message": "Invalid or missing 'user_ids' in request"}
 
         # Получаем пользователей из базы данных
-        users = db_session.query(User).filter(User.uid.in_(user_ids)).all()
+        users = await User.get_users_by_uids(db_session, user_uids)
 
         # Формируем статусы пользователей
         statuses = {
