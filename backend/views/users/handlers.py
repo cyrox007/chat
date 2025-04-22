@@ -257,7 +257,7 @@ async def logout(request: Request, response: Response, db_session=None):
 
 
 @get_session
-async def get_users_by_uids(request: Request, response: Response, db_session=None):
+async def get_users_by_uids(request: Request, response: Response, db_session = None):
     """Получение данных о пользователях по их user_uid."""
     logger.info("Начало обработки запроса на получение данных пользователей")
     try:
@@ -272,23 +272,10 @@ async def get_users_by_uids(request: Request, response: Response, db_session=Non
             return {"status": "error", "message": "Получен некорректный или пустой список user_uids"}
 
         # Получаем пользователей из базы данных
-        users = db_session.query(User).filter(User.uid.in_(user_uids)).all()
+        users_list = await User.get_users_by_uids(db_session, user_uids)
 
-        # Формируем ответ
-        users_data = [
-            {
-                "uid": user.uid,
-                "username": user.username,
-                "email": user.email,
-                "phone": user.phone,
-                "avatar": user.avatar,
-                "last_online": user.last_online.isoformat() if user.last_online else None,
-            }
-            for user in users
-        ]
-
-        logger.info(f"Данные успешно получены для {len(users)} пользователей")
-        return {"status": "ok", "users": users_data}
+        logger.info(f"Данные успешно получены для {len(users_list)} пользователей")
+        return {"status": "ok", "users": users_list}
 
     except Exception as e:
         logger.error(f"Неожиданная ошибка при получении данных пользователей: {str(e)}")
