@@ -30,21 +30,21 @@
 		</div>
 
 		<!-- Индикатор записи голоса или видео -->
-		<div v-if="isRecording || isVideoRecording" class="recording-area">
+		<div v-if="isRecording" class="recording-area">
 			<div class="recording-indicator">
-				{{ isRecording ? 'Запись голоса...' : 'Запись видео...' }}
-				<div class="audio-level-bar" v-if="isRecording">
+				<div class="audio-level-bar">
 					<div class="audio-level-fill" :style="{ width: `${audioLevel * 100}%` }"></div>
 				</div>
 			</div>
-			<button class="stop-record-button" @click="stopRecordingOrVideo">
+			<button class="stop-record-button" @click="stopRecording">
 				<i class="fas fa-stop"></i>
 			</button>
 		</div>
 
 		<!-- Поле ввода текста -->
-		<div class="input-container" v-if="!isRecording && !isAudioRecorded && !isVideoRecording">
-			<input type="text" v-model="messageInput" placeholder="Введите сообщение" @keydown.enter="prepareMessage" :disabled="isDisabled" />
+		<div class="input-container" v-if="!isRecording && !isAudioRecorded">
+			<input type="text" v-model="messageInput" placeholder="Введите сообщение" @keydown.enter="prepareMessage"
+				:disabled="isDisabled" />
 			<button class="emoji-button" @click="toggleEmojiPicker">
 				<i class="fas fa-smile"></i>
 			</button>
@@ -52,9 +52,10 @@
 				<i class="fas fa-paperclip"></i>
 			</button>
 			<!-- Кнопка записи голоса/видео или отправки -->
-			<button class="record-button" @click="toggleRecordingType" @mousedown="startRecording"
-				@mouseup="stopRecordingOrVideo" v-if="messageInput.trim() === '' && selectedFiles.length === 0">
-				<i :class="isRecordingTypeVoice ? 'fas fa-microphone' : 'fas fa-video'"></i>
+			<button class="record-button" @mousedown="startRecording" @mouseup="stopRecording"
+				@touchstart="startRecording" @touchend="stopRecording"
+				v-if="messageInput.trim() === '' && selectedFiles.length === 0">
+				<i class="fas fa-microphone"></i>
 			</button>
 			<button class="send-button" @click="prepareMessage" v-else>
 				<i class="fas fa-paper-plane"></i>
@@ -82,8 +83,8 @@
 		<EmojiPicker @emoji-selected="insertEmoji" :is-show="isEmojiPickerVisible" />
 
 		<div v-if="isDisabled" class="mute-notification">
-            <p>Вы не можете отправлять сообщения.</p>
-        </div>
+			<p>Вы не можете отправлять сообщения.</p>
+		</div>
 	</div>
 </template>
 
@@ -95,20 +96,19 @@ import imageCompression from 'browser-image-compression';
 const emit = defineEmits(['send-message']);
 
 const props = defineProps({
-    replyTo: {
-        type: Object,
-        default: null,
-    },
+	replyTo: {
+		type: Object,
+		default: null,
+	},
 	isDisabled: {
-        type: Boolean,
-        default: false,
-    }
+		type: Boolean,
+		default: false,
+	}
 });
 
 // Состояния
 const messageInput = ref('');
 const isRecording = ref(false);
-const isVideoRecording = ref(false);
 const recordedVoice = ref(null);
 const mediaRecorder = ref(null);
 const selectedFiles = ref([]);
@@ -118,7 +118,6 @@ const audioContext = ref(null);
 const analyser = ref(null);
 const audioLevel = ref(0);
 const isAudioRecorded = ref(false);
-
 const replyTo = ref(null);
 
 // Флаг для переключения между записью голоса и видео
@@ -229,58 +228,58 @@ const toggleRecordingType = () => {
 
 // Запуск записи голоса
 const startRecording = async () => {
-	if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-		try {
-			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-			audioContext.value = new (window.AudioContext || window.webkitAudioContext)();
-			analyser.value = audioContext.value.createAnalyser();
-			analyser.value.fftSize = 256;
-			const source = audioContext.value.createMediaStreamSource(stream);
-			source.connect(analyser.value);
+	if (isRecording.value) return;
 
-			mediaRecorder.value = new MediaRecorder(stream);
-			recordedVoice.value = [];
-			mediaRecorder.value.ondataavailable = (event) => {
-				if (event.data.size > 0) {
-					recordedVoice.value.push(event.data);
-				}
-			};
-			mediaRecorder.value.onstop = () => {
-				stream.getTracks().forEach(track => track.stop());
-				if (recordedVoice.value.length > 0) {
-					const voiceBlob = new Blob(recordedVoice.value, { type: 'audio/webm' });
-					voiceUrl.value = URL.createObjectURL(voiceBlob);
-					isAudioRecorded.value = true;
-				}
-				audioContext.value.close();
-			};
-			mediaRecorder.value.start(100);
-			isRecording.value = true;
-			updateAudioLevel();
-		} catch (error) {
-			console.error('Ошибка доступа к микрофону:', error);
-		}
-	} else {
-		console.error('Ваш браузер не поддерживает запись аудио.');
+	try {
+		const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+		audioContext.value = new (window.AudioContext || window.webkitAudioContext)();
+		analyser.value = audioContext.value.createAnalyser();
+		analyser.value.fftSize = 256;
+		const source = audioContext.value.createMediaStreamSource(stream);
+		source.connect(analyser.value);
+
+		mediaRecorder.value = new MediaRecorder(stream);
+		recordedVoice.value = [];
+
+		mediaRecorder.value.ondataavailable = (event) => {
+			if (event.data.size > 0) {
+				recordedVoice.value.push(event.data);
+			}
+		};
+
+		mediaRecorder.value.onstop = () => {
+			stream.getTracks().forEach(track => track.stop());
+			if (recordedVoice.value.length > 0) {
+				const voiceBlob = new Blob(recordedVoice.value, { type: 'audio/webm' });
+				voiceUrl.value = URL.createObjectURL(voiceBlob);
+				isAudioRecorded.value = true;
+			}
+			audioContext.value?.close();
+		};
+
+		mediaRecorder.value.start(100);
+		isRecording.value = true;
+		updateAudioLevel();
+	} catch (error) {
+		console.error('Ошибка доступа к микрофону:', error);
+		alert('Не удалось получить доступ к микрофону');
 	}
 };
 
 // Остановка записи
-const stopRecordingOrVideo = () => {
-	if (isRecording.value) {
+const stopRecording = () => {
+	if (isRecording.value && mediaRecorder.value) {
 		mediaRecorder.value.stop();
 		isRecording.value = false;
-	}
-	if (isVideoRecording.value) {
-		// Логика остановки записи видео
-		isVideoRecording.value = false;
 	}
 };
 
 // Обновление уровня громкости
 const updateAudioLevel = () => {
 	if (!analyser.value) return;
+
 	const dataArray = new Uint8Array(analyser.value.frequencyBinCount);
+
 	const update = () => {
 		if (isRecording.value) {
 			analyser.value.getByteFrequencyData(dataArray);
@@ -289,6 +288,7 @@ const updateAudioLevel = () => {
 			requestAnimationFrame(update);
 		}
 	};
+
 	update();
 };
 
@@ -351,8 +351,8 @@ const focusInput = () => {
 };
 
 const truncate = (text, length) => {
-  if (!text) return '';
-  return text.length > length ? text.slice(0, length) + '...' : text;
+	if (!text) return '';
+	return text.length > length ? text.slice(0, length) + '...' : text;
 };
 
 defineExpose({
@@ -472,7 +472,7 @@ onUnmounted(() => {
 
 /* Блок для отображения записанного аудио */
 .audio-preview {
-	margin-bottom: 10px;
+	/* margin-bottom: 10px; */
 	display: flex;
 	align-items: center; /* Выравнивание по вертикали */
 	justify-content: space-between; /* Распределяет элементы по краям */
@@ -497,7 +497,8 @@ onUnmounted(() => {
 	cursor: pointer;
 	font-size: 20px;
 	color: var(--primary-color);
-	margin-left: 5px; /* Отступ между кнопками */
+	margin-left: 5px;
+	/* Отступ между кнопками */
 }
 
 .remove-audio {
@@ -531,7 +532,8 @@ onUnmounted(() => {
 	border: 1px solid var(--primary-color);
 	border-radius: 20px;
 	font-size: 16px;
-	height: 40px; /* Установим фиксированную высоту */
+	height: 40px;
+	/* Установим фиксированную высоту */
 }
 
 .input-container button {
@@ -568,6 +570,7 @@ onUnmounted(() => {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	gap: 10px;
 	height: 40px; /* Соответствует высоте текстового поля */
 }
 
@@ -577,6 +580,17 @@ onUnmounted(() => {
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	height: 30px;
+}
+
+.stop-record-button {
+	cursor: pointer;
+	background: transparent;
+	border: 1px solid var(--primary-color);
+	color: var(--primary-color);
+	width: 30px;
+	height: 30px;
+	font-size: 1.15rem;
 }
 
 /* Кнопка записи */
@@ -586,8 +600,7 @@ onUnmounted(() => {
 	cursor: pointer;
 	font-size: 20px;
 	color: var(--primary-color);
-	margin-left: 10px;
-	/* Отступ между индикатором и кнопкой */
+	margin-left: 10px; /* Отступ между индикатором и кнопкой */
 }
 
 /* Анимация уровня громкости */
@@ -597,6 +610,7 @@ onUnmounted(() => {
 	background-color: #ddd;
 	border-radius: 5px;
 	overflow: hidden;
+	height: 100%;
 }
 
 .audio-level-fill {
@@ -608,25 +622,32 @@ onUnmounted(() => {
 /* Панель выбора эмодзи */
 .emoji-picker-container {
 	position: absolute;
-	bottom: 75px; /* Выравнивание относительно поля ввода */
+	bottom: 75px;
+	/* Выравнивание относительно поля ввода */
 
 	left: 0;
 	right: 0;
 	width: 338px;
-	/* max-height: 300px; */ /* Максимальная высота */
-	overflow-y: auto; /* Вертикальная прокрутка */
+	/* max-height: 300px; */
+	/* Максимальная высота */
+	overflow-y: auto;
+	/* Вертикальная прокрутка */
 	background-color: var(--bg-light);
 	border: 1px solid var(--primary-color);
 	border-radius: 10px;
-	z-index: 1000; /* Убедитесь, что панель отображается поверх других элементов */
+	z-index: 1000;
+	/* Убедитесь, что панель отображается поверх других элементов */
 }
+
 .file-preview .file-item .file-name {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	overflow: hidden;
 	white-space: nowrap;
-    max-width: 150px; /* Ограничиваем максимальную ширину */
+	max-width: 150px;
+	/* Ограничиваем максимальную ширину */
 }
+
 /* Стили для блока цитаты */
 .reply-preview {
 	background: rgba(var(--primary-color-rgb), 0.1);
@@ -666,6 +687,7 @@ onUnmounted(() => {
 		margin-bottom: 6px;
 	}
 }
+
 .message-composer.disabled {
 	opacity: 0.6;
 	pointer-events: none;
