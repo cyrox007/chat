@@ -1,5 +1,6 @@
-from sqlalchemy import UUID as SQLAUUID, Column, String, ForeignKey, DateTime, Boolean
+from sqlalchemy import UUID, Column, String, ForeignKey, DateTime, Boolean
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.future import select
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.exc import IntegrityError
@@ -21,7 +22,7 @@ class UserDevice(Database.Base):
     token = Column(String, unique=True, nullable=False)
     ip_address = Column(String, nullable=False)
     user_agent = Column(String, nullable=False)
-    device_info = Column(String, nullable=True)
+    device_info = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
     is_active = Column(Boolean, default=True)

@@ -7,17 +7,32 @@
 			</div>
 		</div>
 
-		<div class="charts-row">
+		<div class="charts-grid">
 			<div class="chart-container">
-				<h4>По моделям</h4>
+				<h4>Браузеры</h4>
 				<div class="chart-wrapper">
-					<canvas ref="modelsChart"></canvas>
+					<canvas ref="browsersChart"></canvas>
 				</div>
 			</div>
+
 			<div class="chart-container">
-				<h4>По типам</h4>
+				<h4>Операционные системы</h4>
+				<div class="chart-wrapper">
+					<canvas ref="osChart"></canvas>
+				</div>
+			</div>
+
+			<div class="chart-container">
+				<h4>Типы устройств</h4>
 				<div class="chart-wrapper">
 					<canvas ref="typesChart"></canvas>
+				</div>
+			</div>
+
+			<div class="chart-container">
+				<h4>Бренды</h4>
+				<div class="chart-wrapper">
+					<canvas ref="brandsChart"></canvas>
 				</div>
 			</div>
 		</div>
@@ -33,74 +48,77 @@ const props = defineProps({
 		type: Object,
 		required: true,
 		default: () => ({
-			by_model: [],
-			by_type: [],
+			browsers: [],
+			os: [],
+			device_types: [],
+			brands: [],
 			active_now: 0
 		})
 	}
 });
 
-const modelsChart = ref(null);
+const browsersChart = ref(null);
+const osChart = ref(null);
 const typesChart = ref(null);
-let modelsChartInstance = null;
+const brandsChart = ref(null);
+
+let browsersChartInstance = null;
+let osChartInstance = null;
 let typesChartInstance = null;
+let brandsChartInstance = null;
+
+const chartColors = [
+	'#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+	'#9966FF', '#FF9F40', '#8AC24A', '#F06292',
+	'#00ACC1', '#7E57C2', '#EC407A', '#AB47BC'
+];
+
+const initChart = (chartRef, data, title) => {
+	if (!chartRef.value || !data || data.length === 0) return null;
+
+	const ctx = chartRef.value.getContext('2d');
+	return new Chart(ctx, {
+		type: 'doughnut',
+		data: {
+			labels: data.map(item => item.name || 'Unknown'),
+			datasets: [{
+				data: data.map(item => item.count),
+				backgroundColor: chartColors.slice(0, data.length),
+				borderWidth: 1
+			}]
+		},
+		options: {
+			responsive: true,
+			maintainAspectRatio: false,
+			plugins: {
+				legend: {
+					position: 'right',
+					labels: {
+						boxWidth: 12,
+						padding: 20
+					}
+				},
+				title: {
+					display: false,
+					text: title
+				}
+			},
+			cutout: '60%'
+		}
+	});
+};
 
 const initCharts = () => {
 	// Destroy previous instances
-	if (modelsChartInstance) modelsChartInstance.destroy();
-	if (typesChartInstance) typesChartInstance.destroy();
+	[browsersChartInstance, osChartInstance, typesChartInstance, brandsChartInstance].forEach(
+		chart => chart && chart.destroy()
+	);
 
-	// Models chart
-	if (props.data.by_model.length > 0) {
-		modelsChartInstance = new Chart(modelsChart.value.getContext('2d'), {
-			type: 'pie',
-			data: {
-				labels: props.data.by_model.map(item => item.device || 'Unknown'),
-				datasets: [{
-					data: props.data.by_model.map(item => item.count),
-					backgroundColor: [
-						'#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
-						'#9966FF', '#FF9F40', '#8AC24A', '#F06292'
-					]
-				}]
-			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				plugins: {
-					legend: {
-						position: 'bottom'
-					}
-				}
-			}
-		});
-	}
-
-	// Types chart
-	if (props.data.by_type.length > 0) {
-		typesChartInstance = new Chart(typesChart.value.getContext('2d'), {
-			type: 'doughnut',
-			data: {
-				labels: props.data.by_type.map(item => item.type || 'Unknown'),
-				datasets: [{
-					data: props.data.by_type.map(item => item.count),
-					backgroundColor: [
-						'#FF9F40', '#9966FF', '#FFCD56', '#4CAF50',
-						'#2196F3', '#9C27B0', '#00BCD4'
-					]
-				}]
-			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				plugins: {
-					legend: {
-						position: 'bottom'
-					}
-				}
-			}
-		});
-	}
+	// Initialize new charts
+	browsersChartInstance = initChart(browsersChart, props.data.browsers, 'Браузеры');
+	osChartInstance = initChart(osChart, props.data.os, 'Операционные системы');
+	typesChartInstance = initChart(typesChart, props.data.device_types, 'Типы устройств');
+	brandsChartInstance = initChart(brandsChart, props.data.brands, 'Бренды');
 };
 
 onMounted(initCharts);
@@ -111,7 +129,7 @@ watch(() => props.data, initCharts, { deep: true });
 .devices-chart {
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
+	gap: 20px;
 	height: 100%;
 }
 
@@ -126,6 +144,7 @@ watch(() => props.data, initCharts, { deep: true });
 	padding: 8px 16px;
 	background: #f5f5f5;
 	border-radius: 8px;
+	min-width: 200px;
 }
 
 .stat-item h4 {
@@ -141,27 +160,29 @@ watch(() => props.data, initCharts, { deep: true });
 	color: #333;
 }
 
-.charts-row {
-	display: flex;
-	gap: 16px;
+.charts-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+	gap: 20px;
 	height: calc(100% - 60px);
 }
 
 .chart-container {
-	flex: 1;
 	display: flex;
 	flex-direction: column;
 	background: white;
 	border-radius: 8px;
 	padding: 16px;
 	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+	height: 300px;
 }
 
 .chart-container h4 {
-	margin: 0 0 8px 0;
+	margin: 0 0 12px 0;
 	font-size: 14px;
 	text-align: center;
 	color: #444;
+	font-weight: 500;
 }
 
 .chart-wrapper {
@@ -173,5 +194,21 @@ watch(() => props.data, initCharts, { deep: true });
 canvas {
 	width: 100% !important;
 	height: 100% !important;
+}
+
+@media (max-width: 1400px) {
+	.charts-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+@media (max-width: 768px) {
+	.charts-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.chart-container {
+		height: 250px;
+	}
 }
 </style>

@@ -1,5 +1,6 @@
 # Стандартные библиотеки Python
 from json import JSONDecodeError
+import json
 from uuid import UUID
 
 # Внешние зависимости
@@ -46,11 +47,11 @@ def extract_client_metadata(request: Request):
     ip_address = request.client.host
     user_agent = request.headers.get("User-Agent", "")
     parsed_user_agent = parse_user_agent(user_agent)
-    logger.info(f"Метаданные клиента извлечены: IP={ip_address}, User-Agent={user_agent}")
+    logger.info(f"Метаданные клиента извлечены: IP={ip_address}, User-Agent={parsed_user_agent}")
     return {
         "ip_address": ip_address,
         "user_agent": user_agent,
-        "device_info": parsed_user_agent["device"],
+        "device_info": parsed_user_agent,
     }
 
 

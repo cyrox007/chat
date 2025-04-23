@@ -77,43 +77,74 @@ async def get_dashboard_stats(db_session):
         "count": count
     } for country, city, count in geo_stats]
     
-    # 4. Устройства (из UserDevice)
-    device_stats = await db_session.execute(
-        select(
-            func.coalesce(
-                # Просто используем device_info как строку, если он не JSON
-                func.cast(UserDevice.device_info, String),
-                func.substring(UserDevice.user_agent, 1, 50)
-            ).label('device_name'),
-            func.count(UserDevice.id)
-        )
+    # 4. Статистика по устройствам
+    # Сначала получаем все активные устройства
+    active_devices = await db_session.execute(
+        select(UserDevice)
         .where(UserDevice.is_active == True)
-        .group_by('device_name')
-        .order_by(func.count(UserDevice.id).desc())
-        .limit(20)
     )
-    devices_data = [{
-        "device": device_name if device_name else "Unknown",
-        "count": count
-    } for device_name, count in device_stats]
-
-    # 4.1. Распределение по типам устройств
-    # Поскольку у нас в данных только "Other", упрощаем запрос
-    device_type_stats = await db_session.execute(
-        select(
-            func.coalesce(
-                func.cast("other", String),  # Используем строковый литерал
-                func.cast("unknown", String)
-            ).label('device_type'),
-            func.count(UserDevice.id)
-        )
-        .where(UserDevice.is_active == True)
-        .group_by('device_type')
+    
+    # Собираем статистику вручную
+    device_stats = {
+        "by_browser": {},
+        "by_os": {},
+        "by_device_type": {},
+        "by_brand": {}
+    }
+    
+    for device in active_devices.scalars():
+        try:
+            # Парсим device_info в зависимости от формата
+            if device.device_info is None:
+                continue
+                
+            if isinstance(device.device_info, str):
+                # Пробуем распарсить строку как JSON
+                try:
+                    if device.device_info.startswith('"') and device.device_info.endswith('"'):
+                        # Убираем экранированные кавычки
+                        device_data = json.loads(device.device_info[1:-1])
+                    else:
+                        device_data = json.loads(device.device_info)
+                except json.JSONDecodeError:
+                    # Если не JSON, создаем минимальную структуру
+                    device_data = {"value": device.device_info}
+            else:
+                # Уже словарь
+                device_data = device.device_info
+            
+            # Анализируем данные устройства
+            browser = device_data.get('browser', 'Unknown')
+            os_name = device_data.get('os', 'Unknown')
+            device_type = device_data.get('device_type', 'Other')
+            brand = device_data.get('brand', 'Unknown')
+            
+            # Обновляем статистику
+            device_stats["by_browser"][browser] = device_stats["by_browser"].get(browser, 0) + 1
+            device_stats["by_os"][os_name] = device_stats["by_os"].get(os_name, 0) + 1
+            device_stats["by_device_type"][device_type] = device_stats["by_device_type"].get(device_type, 0) + 1
+            device_stats["by_brand"][brand] = device_stats["by_brand"].get(brand, 0) + 1
+            
+        except Exception as e:
+            logger.error(f"Error parsing device info: {e}")
+            continue
+    
+    # Преобразуем статистику в удобный для отображения формат
+    devices_data = {
+        "browsers": [{"name": k, "count": v} for k, v in device_stats["by_browser"].items()],
+        "os": [{"name": k, "count": v} for k, v in device_stats["by_os"].items()],
+        "device_types": [{"name": k, "count": v} for k, v in device_stats["by_device_type"].items()],
+        "brands": [{"name": k, "count": v} for k, v in device_stats["by_brand"].items()],
+    }
+    
+    # 4.1. Активные устройства (по последним подключениям)
+    active_devices_last_hour = await db_session.scalar(
+        select(func.count(UserDevice.id))
+        .where(and_(
+            UserDevice.is_active == True,
+            UserDevice.expires_at >= datetime.utcnow()
+        ))
     )
-    device_types_data = [{
-        "type": "Other",  # Приводим к читаемому виду
-        "count": count
-    } for device_type, count in device_type_stats]
     
     # 4.2. Активные устройства (по последним подключениям)
     active_devices_last_hour = await db_session.scalar(
@@ -229,8 +260,7 @@ async def get_dashboard_stats(db_session):
         "gender_stats": gender_data,
         "geo_stats": geo_data,
         "devices_stats": {
-            "by_model": devices_data,
-            "by_type": device_types_data,
+            **devices_data,
             "active_now": active_devices_last_hour
         },
         "activity_stats": activity_data,

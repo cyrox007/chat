@@ -53,9 +53,11 @@ const stats = ref({
 	new_today: 0,
 	gender_data: [],
 	geo_data: [],
-	devices_data: {
-		by_model: [],
-		by_type: [],
+	devices_stats: {
+		browsers: [],
+		os: [],
+		device_types: [],
+		brands: [],
 		active_now: 0
 	},
 	activity_data: [],
