@@ -13,10 +13,8 @@ from components.decorators.db import get_session
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import JSON, String, case, func, select, and_, extract, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import String, func, select, and_, extract
 from datetime import datetime, timedelta
-from collections import defaultdict
 
 from socket_manager import private_manager
 
