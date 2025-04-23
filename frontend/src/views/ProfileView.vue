@@ -1,22 +1,10 @@
 <template>
-	<AvatarUploadModal
-		v-if="isAvatarUploadModalOpen"
-		@close="toggleAvatarUploadModal"
-		@upload="handleSuccessfulUpdate"
-		:is-modal-open="isAvatarUploadModalOpen"
-		:user_uid="route.params.uid"
-	/>
-	<EditProfileForm
-		:modalShow="isEditProfileModalOpen"
-		:user="profileData || {}"
-		@close="toggleEditProfileModal"
-		@save="handleProfileUpdate"
-	/>
-	<ProfileModalForAdmin 
-		:show-modal="isModerationModalOpen"
-		:user-uid="route.params.uid" 
-		@close="toggleModerationModal"
-	/>
+	<AvatarUploadModal v-if="isAvatarUploadModalOpen" @close="toggleAvatarUploadModal" @upload="handleSuccessfulUpdate"
+		:is-modal-open="isAvatarUploadModalOpen" :user_uid="route.params.uid" />
+	<EditProfileForm :modalShow="isEditProfileModalOpen" :user="profileData || {}" @close="toggleEditProfileModal"
+		@save="handleProfileUpdate" />
+	<ProfileModalForAdmin :show-modal="isModerationModalOpen" :user-uid="route.params.uid"
+		@close="toggleModerationModal" />
 	<div class="user-profile">
 		<transition name="fade" v-if="isLoading">
 			<Loader :message="'Загрузка профиля...'" />
@@ -30,27 +18,27 @@
 			<!-- Шапка профиля -->
 			<div class="profile-header">
 				<div class="profile-avatar-container" @click="canEditProfile && toggleAvatarUploadModal()">
-					<img :src="apiBaseUrl + profileData.avatar || '/images/default-avatar.png'" alt="Аватар пользователя" class="profile-avatar" />
+					<img :src="apiBaseUrl + profileData.avatar || '/images/default-avatar.png'"
+						alt="Аватар пользователя" class="profile-avatar" />
 				</div>
-				
+
 				<div class="profile-info">
 					<h1 class="profile-name">
-						{{ profileData.first_name || profileData.last_name ? `${profileData.first_name} ${profileData.last_name} (${profileData.username})` : profileData.username }}
+						{{ profileData.first_name || profileData.last_name ? `${profileData.first_name}
+						${profileData.last_name} (${profileData.username})` : profileData.username }}
 					</h1>
 					<p class="profile-email">{{ profileData.email }}</p>
 					<p v-if="profileData.global_role != 'user'" class="profile-email">{{ profileData.global_role }}</p>
 				</div>
 				<UserStatus v-if="!isCurrentUser" :userId="route.params.uid" />
 				<div class="profile-actions">
-					<button
-						v-if="!isCurrentUser && isModeratorOrAdmin"
-						@click="openAdminPanel"
-						class="admin-panel-btn"
-						>
+					<button v-if="!isCurrentUser && isModeratorOrAdmin" @click="openAdminPanel" class="admin-panel-btn">
 						Открыть в админпанели
 					</button>
-					<button v-if="canEditProfile" @click="toggleEditProfileModal" class="edit-profile-btn">Редактировать профиль</button>
-					<button v-if="!isCurrentUser" @click="openChatWithUser" class="message-button">Отправить сообщение</button>
+					<button v-if="canEditProfile" @click="toggleEditProfileModal" class="edit-profile-btn">Редактировать
+						профиль</button>
+					<button v-if="!isCurrentUser" @click="openChatWithUser" class="message-button">Отправить
+						сообщение</button>
 				</div>
 				<div class="moderation-actions" v-if="isModeratorOrAdmin && route.params.uid != currentUser.uid">
 					<button @click="toggleModerationModal">Назначить наказание</button>
@@ -85,7 +73,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watchEffect } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watchEffect, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 
@@ -138,7 +126,7 @@ const canEditProfile = computed(() => {
 });
 
 const openChatWithUser = () => {
-	store.dispatch('messenger/setActiveDialog', user.value.uid);
+	store.dispatch('messenger/setActiveDialog', route.params.uid);
 	router.push('/messenger');
 };
 
@@ -179,7 +167,7 @@ const toggleEditProfileModal = async () => {
 };
 
 const toggleModerationModal = () => {
-  	isModerationModalOpen.value = !isModerationModalOpen.value;
+	isModerationModalOpen.value = !isModerationModalOpen.value;
 };
 
 const handleProfileUpdate = async (updatedData) => {
@@ -233,16 +221,6 @@ const openAdminPanel = () => {
 	router.push(`/admin/profile/${route.params.uid}`);
 };
 
-/* const assignPunishment = async (punishmentData) => {
-	try {
-		await UsersServices.assignPunishment(route.params.uid, punishmentData);
-		alert("Наказание назначено");
-		closeModerationModal();
-	} catch (error) {
-		console.error("Ошибка при назначении наказания:", error);
-	}
-}; */
-
 onMounted(async () => {
 	const profileUid = route.params.uid || currentUser.value?.uid;
 
@@ -260,17 +238,25 @@ onMounted(async () => {
 
 	// Загружаем данные пользователя
 	await loadUserData(profileUid);
-	//await store.dispatch('fetchUserStatuses', [profileUid]);
-	
-	/* setInterval(async () => {
-		await store.dispatch('fetchUserStatuses', [profileUid]);
-	}, 60000); */ // Каждую минуту
 });
 
 watchEffect(() => {
 	const profileUid = route.params.uid;
 	if (profileUid) {
 		loadUserData(profileUid);
+	}
+});
+watch(() => route.params.uid, (newUid) => {
+	if (newUid) {
+		store.dispatch('messenger/subscribeToStatuses', [newUid]);
+	}
+}, { immediate: true });
+
+// Отписываемся при размонтировании
+onUnmounted(() => {
+	const profileUid = route.params.uid;
+	if (profileUid) {
+		store.dispatch('messenger/unsubscribeFromStatuses', [profileUid]);
 	}
 });
 </script>
@@ -292,7 +278,8 @@ watchEffect(() => {
 	align-items: center;
 	justify-content: space-between;
 	margin-bottom: 20px;
-	flex-wrap: wrap; /* Для адаптации на маленьких экранах */
+	flex-wrap: wrap;
+	/* Для адаптации на маленьких экранах */
 }
 
 .profile-avatar-container {
@@ -301,7 +288,8 @@ watchEffect(() => {
 	width: 120px;
 	height: 120px;
 	margin-right: 20px;
-	flex-shrink: 0; /* Предотвращаем сжатие аватара */
+	flex-shrink: 0;
+	/* Предотвращаем сжатие аватара */
 }
 
 .profile-avatar {
@@ -315,7 +303,8 @@ watchEffect(() => {
 
 .profile-info {
 	flex: 1;
-	min-width: 0; /* Предотвращаем переполнение текста */
+	min-width: 0;
+	/* Предотвращаем переполнение текста */
 }
 
 .profile-name {
@@ -360,6 +349,7 @@ watchEffect(() => {
 .message-button:hover {
 	background: var(--primary-color-hover);
 }
+
 .profile-details {
 	margin-top: 20px;
 }
@@ -373,12 +363,14 @@ watchEffect(() => {
 
 .profile-detail-label {
 	font-weight: bold;
-	min-width: 100px; /* Фиксированная ширина для выравнивания */
+	min-width: 100px;
+	/* Фиксированная ширина для выравнивания */
 }
 
 .profile-detail-value {
 	color: var(--profile-details-color);
-	word-break: break-word; /* Для длинного текста */
+	word-break: break-word;
+	/* Для длинного текста */
 }
 
 .error-message {

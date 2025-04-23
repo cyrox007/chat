@@ -20,14 +20,14 @@
 			<!-- Изображения -->
 			<div v-else-if="message.content_type === 'image'" class="image-list">
 				<div v-for="(image, index) in message.media_metadata.files" :key="index" class="image-item">
-					<img :src="image.url" alt="Изображение" class="message-image" />
+					<img :src="apiBaseUrl + image.url" alt="Изображение" class="message-image" />
 				</div>
 			</div>
 
 			<!-- Видео -->
 			<div v-else-if="message.content_type === 'video'" class="video-container">
 				<video controls class="message-video">
-					<source :src="message.media_metadata.files[0].url" type="video/mp4" />
+					<source :src="apiBaseUrl + message.media_metadata.files[0].url" type="video/mp4" />
 					Ваш браузер не поддерживает видео.
 				</video>
 			</div>
@@ -35,14 +35,14 @@
 			<!-- Аудио -->
 			<div v-else-if="message.content_type === 'audio'" class="audio-container">
 				<audio controls class="message-audio">
-					<source :src="message.media_metadata.files[0].url" type="audio/mpeg" />
+					<source :src="apiBaseUrl + message.media_metadata.files[0].url" type="audio/mpeg" />
 					Ваш браузер не поддерживает аудио.
 				</audio>
 			</div>
 
 			<div v-else-if="message.content_type === 'voice'" class="audio-container">
 				<audio controls class="message-audio">
-					<source :src="message.media_metadata.voice"/>
+					<source :src="apiBaseUrl + message.media_metadata.voice"/>
 				</audio>
 			</div>
 
@@ -50,12 +50,12 @@
 			<div v-else-if="message.content_type === 'file'" class="file-list">
 				<div v-for="(file, index) in message.media_metadata.files" :key="index" class="file-item">
 					<span v-if="isImage(file)" class="file-thumbnail">
-						<img :src="file.url" alt="Thumbnail" />
+						<img :src="apiBaseUrl + file.url" alt="Thumbnail" />
 					</span>
 					<span v-else class="file-icon">
 						<i :class="getFileIcon(file.name)"></i>
 					</span>
-					<a :href="file.url" target="_blank" class="file-link">{{ file.name }}</a>
+					<a :href="apiBaseUrl + file.url" target="_blank" class="file-link">{{ file.name }}</a>
 				</div>
 			</div>
 
@@ -77,6 +77,8 @@ const props = defineProps({
 		required: true,
 	},
 });
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 // Усечение текста
 const truncate = (text, length) => {

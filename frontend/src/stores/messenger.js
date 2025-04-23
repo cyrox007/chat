@@ -7,6 +7,8 @@ export default {
 		conversations: {},
 		unreadCounts: {},
 		notifications: [],
+		onlineStatuses: {}, // { [userId]: boolean }
+		statusSubscriptions: new Set()
 	},
 	getters: {
 		getConversation: (state) => (userId) => state.conversations[userId] || [],
@@ -14,7 +16,9 @@ export default {
 		getActiveDialog: (state) => state.activeDialog,
 		isConnected: (state) => state.isConnected,
 		getNotifications: (state) => state.notifications,
-    	hasUnreadNotifications: (state) => state.notifications.length > 0,
+		hasUnreadNotifications: (state) => state.notifications.length > 0,
+		isUserOnline: (state) => (userId) => state.onlineStatuses[userId] || false,
+		getOnlineStatuses: (state) => state.onlineStatuses
 	},
 	mutations: {
 		SET_SOCKET(state, socket) {
@@ -34,18 +38,18 @@ export default {
 				state.conversations[userId] = [];
 			}
 			state.conversations[userId].push(message);
-	
+
 			// Увеличиваем счетчик непрочитанных, если это не активный диалог
 			if (state.activeDialog !== userId) {
 				state.unreadCounts[userId] = (state.unreadCounts[userId] || 0) + 1;
-		
+
 				// Добавляем уведомление
 				state.notifications.push({
-				  uid: message.uid,
-				  sender: message.sender,
-				  content: message.content,
-				  timestamp: message.timestamp,
-				  userId: userId,
+					uid: message.uid,
+					sender: message.sender,
+					content: message.content,
+					timestamp: message.timestamp,
+					userId: userId,
 				});
 			}
 		},
@@ -67,6 +71,21 @@ export default {
 				}
 			}
 		},
+		UPDATE_ONLINE_STATUS(state, { userId, isOnline }) {
+			state.onlineStatuses[userId] = isOnline;
+		},
+		UPDATE_STATUS_SUBSCRIPTIONS(state, { userIds, subscribe }) {
+			userIds.forEach(userId => {
+				if (subscribe) {
+					state.statusSubscriptions.add(userId);
+				} else {
+					state.statusSubscriptions.delete(userId);
+				}
+			});
+		},
+		CLEAR_STATUS_SUBSCRIPTIONS(state) {
+			state.statusSubscriptions.clear();
+		}
 	},
 	actions: {
 		async connectMessenger({ commit, state, rootGetters }) {
@@ -166,6 +185,12 @@ export default {
 					});
 					break;
 
+				case 'status_update':
+					Object.entries(data.statuses).forEach(([userId, isOnline]) => {
+						commit('UPDATE_ONLINE_STATUS', { userId, isOnline });
+					});
+					break;
+
 				default:
 					console.warn('Неизвестный тип сообщения мессенджера:', data.type);
 			}
@@ -228,5 +253,32 @@ export default {
 		clearNotifications({ commit }) {
 			commit('CLEAR_NOTIFICATIONS');
 		},
+		subscribeToStatuses({ commit, state }, userIds) {
+			if (state.socket?.readyState === WebSocket.OPEN) {
+				state.socket.send(JSON.stringify({
+					action: 'subscribe_status',
+					userIds: Array.from(userIds)
+				}));
+				commit('UPDATE_STATUS_SUBSCRIPTIONS', { userIds, subscribe: true });
+			}
+		},
+
+		// Отписка от статусов
+		unsubscribeFromStatuses({ commit, state }, userIds) {
+			if (state.socket?.readyState === WebSocket.OPEN) {
+				state.socket.send(JSON.stringify({
+					action: 'unsubscribe_status',
+					userIds: Array.from(userIds)
+				}));
+				commit('UPDATE_STATUS_SUBSCRIPTIONS', { userIds, subscribe: false });
+			}
+		},
+
+		// При подключении восстанавливаем подписки
+		restoreStatusSubscriptions({ state, dispatch }) {
+			if (state.statusSubscriptions.size > 0) {
+				dispatch('subscribeToStatuses', [...state.statusSubscriptions]);
+			}
+		}
 	}
 };

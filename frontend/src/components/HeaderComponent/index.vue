@@ -119,13 +119,13 @@ const navigation = computed(() => {
 		},
 	];
 
-	/* if (isAdmin.value) {
-		baseNavigation.splice(4, 0, {
+	if (isAdmin.value) {
+		baseNavigation.splice(3, 0, {
 			path: '/admin',
 			label: 'Админка',
 			icon: 'fa-user-shield',
 		});
-	} */
+	}
 
 	return baseNavigation;
 });

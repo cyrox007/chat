@@ -13,7 +13,7 @@
 						@click="openConversation(dialog.partner_id)">
 						<div class="user-avatar-container">
 							<div class="user-avatar">
-								<img :src="dialog.partner.avatar || '/images/default-avatar.png'" alt="User Avatar" />
+								<img :src="apiBaseUrl + dialog.partner.avatar || '/images/default-avatar.png'" alt="User Avatar" />
 							</div>
 							<span class="status-indicator" :class="getStatusClass(dialog.partner_id)"></span>
 						</div>
@@ -41,7 +41,7 @@
 				</div>
 				<div class="user-info">
 					<router-link :to="`/profile/${activeDialog}`" class="profile-link">
-						<img :src="activeDialogUser.avatar || '/images/default-avatar.png'" alt="User Avatar" />
+						<img :src="apiBaseUrl + activeDialogUser.avatar || '/images/default-avatar.png'" alt="User Avatar" />
 					</router-link>
 					<div>
 						<router-link :to="`/profile/${activeDialog}`" class="username-link">
@@ -83,6 +83,7 @@ const messagesContainer = ref(null);
 const observerTargets = ref([]);
 const isMobile = ref(window.innerWidth < 768);
 const dialogs = ref([]);
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 // Текущий пользователь
 const currentUser = computed(() => {
