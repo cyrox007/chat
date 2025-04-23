@@ -32,7 +32,7 @@ defineProps({
 
 <style scoped>
 .rooms-table {
-	background: white;
+	background: var(--sidebar-bg-light);
 	border-radius: 8px;
 	padding: 20px;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
