@@ -1,8 +1,9 @@
 from uuid import UUID
 from datetime import datetime
 from fastapi import WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from components.user.model import User
 from components.message.model import PrivateMessage
 from components.decorators.db import get_session
 from utils.logger import setup_logger
@@ -13,14 +14,15 @@ logger = setup_logger(__name__)
 # Инициализация менеджера подключений
 # private_manager = ConnectionManager()
 
-async def initialize_messenger_connection(websocket: WebSocket, user_uid: UUID):
+async def initialize_messenger_connection(websocket: WebSocket, user_uid: UUID, db_session: AsyncSession):
     """
     Инициализирует соединение для мессенджера.
     """
     await private_manager.connect_to_messenger(websocket, user_uid)
+    await User.update_last_online(db_session, user_uid)
     logger.info(f"User {user_uid} connected to messenger from a new device")
 
-async def handle_private_messages(websocket: WebSocket, user_uid: UUID, db_session: Session):
+async def handle_private_messages(websocket: WebSocket, user_uid: UUID, db_session: AsyncSession):
     """
     Обрабатывает входящие приватные сообщения.
     """
@@ -45,7 +47,7 @@ async def handle_private_messages(websocket: WebSocket, user_uid: UUID, db_sessi
         logger.info(f"User {user_uid} disconnected from messenger")
         private_manager.disconnect(websocket, None)
 
-async def handle_send_private_message(data: dict, sender_uid: UUID, db_session: Session):
+async def handle_send_private_message(data: dict, sender_uid: UUID, db_session: AsyncSession):
     """
     Обрабатывает отправку нового приватного сообщения.
     """
@@ -82,7 +84,7 @@ async def handle_send_private_message(data: dict, sender_uid: UUID, db_session: 
         for websocket in private_manager.user_connections.get(str(sender_uid), []):
             await private_manager.send_to_user(str(sender_uid), error_message)
 
-async def handle_mark_as_read(data: dict, user_uid: UUID, db_session: Session):
+async def handle_mark_as_read(data: dict, user_uid: UUID, db_session: AsyncSession):
     """
     Помечает сообщение как прочитанное.
     """
@@ -111,7 +113,7 @@ async def handle_mark_as_read(data: dict, user_uid: UUID, db_session: Session):
     except Exception as e:
         logger.error(f"Ошибка при обработке отметки сообщения как прочитанного: {e}")
 
-async def handle_get_conversation(data: dict, user_uid: UUID, db_session: Session, websocket: WebSocket):
+async def handle_get_conversation(data: dict, user_uid: UUID, db_session: AsyncSession, websocket: WebSocket):
     """
     Возвращает переписку с другим пользователем.
     Отправляет историю переписки только на то устройство, которое запросило её.
@@ -152,7 +154,7 @@ async def handle_get_conversation(data: dict, user_uid: UUID, db_session: Sessio
         await private_manager.send_to_specific_user(websocket, error_message)
 
 @get_session
-async def handle_messenger_connection(websocket: WebSocket, user, db_session=None):
+async def handle_messenger_connection(websocket: WebSocket, user, db_session: AsyncSession = None):
     """
     Основной обработчик подключения к мессенджеру.
     """
@@ -160,7 +162,7 @@ async def handle_messenger_connection(websocket: WebSocket, user, db_session=Non
         user_uid = UUID(user["user_uid"])
         
         # Инициализация соединения
-        await initialize_messenger_connection(websocket, user_uid)
+        await initialize_messenger_connection(websocket, user_uid, db_session)
         
         # Обработка входящих сообщений
         await handle_private_messages(websocket, user_uid, db_session)
