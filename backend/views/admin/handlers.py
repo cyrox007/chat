@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import HTTPException, Request, Response, status
+from components.device.model import UserDevice
 from utils.file_handler import save_file
 from components.room.model import Room
 from utils.logger import setup_logger
@@ -12,7 +13,187 @@ from components.decorators.db import get_session
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy import JSON, String, case, func, select, and_, extract, text
+from sqlalchemy.dialects.postgresql import JSONB
+from datetime import datetime, timedelta
+from collections import defaultdict
+
+from socket_manager import private_manager
+
 logger = setup_logger(__name__)
+
+
+
+async def get_dashboard_stats(db_session):
+    """Сбор статистики из БД и веб-сокетов"""
+    
+    # 1. Основные счетчики (асинхронные запросы)
+    total_users = await db_session.scalar(
+        select(func.count(User.id)).where(User.deleted_at == None)
+    )
+    
+    today = datetime.utcnow().date()
+    new_today = await db_session.scalar(
+        select(func.count(User.id)).where(
+            and_(
+                User.created_at >= today,
+                User.deleted_at == None
+            )
+        )
+    )
+    
+    active_rooms = await db_session.scalar(
+        select(func.count(Room.id)).where(Room.is_active == True)
+    )
+    
+    # 2. Статистика по полу (из профилей)
+    gender_stats = await db_session.execute(
+        select(
+            User.gender,
+            func.count(User.id)
+        )
+        .where(User.gender != None)
+        .group_by(User.gender)
+    )
+    gender_data = [{"gender": g, "count": c} for g, c in gender_stats]
+    
+    # 3. География (города/страны)
+    geo_stats = await db_session.execute(
+        select(
+            User.country,
+            User.city,
+            func.count(User.id)
+        )
+        .where(and_(
+            User.country != None,
+            User.deleted_at == None
+        ))
+        .group_by(User.country, User.city)
+        .order_by(func.count(User.id).desc())
+        .limit(20)
+    )
+    geo_data = [{
+        "country": country, 
+        "city": city, 
+        "count": count
+    } for country, city, count in geo_stats]
+    
+    # 4. Устройства (из UserDevice)
+    device_stats = await db_session.execute(
+        select(
+            func.coalesce(
+                # Просто используем device_info как строку, если он не JSON
+                func.cast(UserDevice.device_info, String),
+                func.substring(UserDevice.user_agent, 1, 50)
+            ).label('device_name'),
+            func.count(UserDevice.id)
+        )
+        .where(UserDevice.is_active == True)
+        .group_by('device_name')
+        .order_by(func.count(UserDevice.id).desc())
+        .limit(20)
+    )
+    devices_data = [{
+        "device": device_name if device_name else "Unknown",
+        "count": count
+    } for device_name, count in device_stats]
+
+    # 4.1. Распределение по типам устройств
+    # Поскольку у нас в данных только "Other", упрощаем запрос
+    device_type_stats = await db_session.execute(
+        select(
+            func.coalesce(
+                func.cast("other", String),  # Используем строковый литерал
+                func.cast("unknown", String)
+            ).label('device_type'),
+            func.count(UserDevice.id)
+        )
+        .where(UserDevice.is_active == True)
+        .group_by('device_type')
+    )
+    device_types_data = [{
+        "type": "Other",  # Приводим к читаемому виду
+        "count": count
+    } for device_type, count in device_type_stats]
+    
+    # 4.2. Активные устройства (по последним подключениям)
+    active_devices_last_hour = await db_session.scalar(
+        select(func.count(UserDevice.id))
+        .where(and_(
+            UserDevice.is_active == True,
+            UserDevice.expires_at >= datetime.utcnow()
+        ))
+    )
+    
+    # 5. Активность по часам (последние 24 часа)
+    hours_ago = datetime.utcnow() - timedelta(hours=24)
+    activity_by_hour = await db_session.execute(
+        select(
+            extract('hour', User.last_online),
+            func.count(User.id)
+        )
+        .where(User.last_online >= hours_ago)
+        .group_by(extract('hour', User.last_online))
+    )
+    activity_data = [{
+        "hour": int(hour), 
+        "count": count
+    } for hour, count in activity_by_hour]
+    
+    # 7. Последние зарегистрированные
+    recent_users = await db_session.execute(
+        select(User)
+        .where(User.deleted_at == None)
+        .order_by(User.created_at.desc())
+        .limit(5)
+    )
+    recent_users_data = [{
+        "id": u.id,
+        "username": u.username,
+        "created_at": u.created_at.isoformat()
+    } for u in recent_users.scalars()]
+    
+    # 8. Онлайн пользователи (из веб-сокетов)
+    online_users = private_manager.online_users_count
+    
+    return {
+        "total_users": total_users,
+        "online_users": online_users,
+        "active_rooms": active_rooms,
+        "new_today": new_today,
+        "gender_stats": gender_data,
+        "geo_stats": geo_data,
+        "devices_stats": {
+            "by_model": devices_data,
+            "by_type": device_types_data,
+            "active_now": active_devices_last_hour
+        },
+        "activity_stats": activity_data,
+        "popular_rooms": [],
+        "recent_users": recent_users_data
+    }
+
+@get_session
+async def dashboard_stats(db_session = None):
+    """
+    Получение статистики для админ-панели
+    """
+    stats = await get_dashboard_stats(db_session)
+    return {
+        'status': 'ok',
+        'stats': {
+            "total_users": stats.get("total_users", 0),
+            "online_users": stats.get("online_users", 0),
+            "active_rooms": stats.get("active_rooms", 0),
+            "new_today": stats.get("new_today", 0),
+            "gender_data": stats.get("gender_stats", []),
+            "geo_data": stats.get("geo_stats", []),
+            "devices_data": stats.get("devices_stats", {}),
+            "activity_data": stats.get("activity_stats", []),
+            "popular_rooms": stats.get("popular_rooms", []),
+            "recent_users": stats.get("recent_users", [])
+        }
+    }
 
 @get_session
 async def assign_penalty(request: Request, response: Response, db_session=None):

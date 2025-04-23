@@ -24,6 +24,16 @@ class ConnectionManager:
         # Время последней активности
         self.user_last_seen: Dict[UUID, datetime] = {}
 
+    @property
+    def active_connections(self) -> Dict[UUID, List[WebSocket]]:
+        """Возвращает словарь активных соединений пользователей"""
+        return self.user_connections
+
+    @property
+    def online_users_count(self) -> int:
+        """Возвращает количество уникальных онлайн пользователей"""
+        return len(self.user_connections)
+
     async def connect_to_room(self, websocket: WebSocket, room_uid: UUID, user_uid: UUID):
         """Подключение к комнатному чату"""
         if room_uid not in self.room_connections:

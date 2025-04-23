@@ -6,12 +6,12 @@ from sqlalchemy.orm import Session
 from components.message.model import PrivateMessage
 from components.decorators.db import get_session
 from utils.logger import setup_logger
-from socket_manager.manager import ConnectionManager
+from socket_manager import private_manager
 
 logger = setup_logger(__name__)
 
 # Инициализация менеджера подключений
-private_manager = ConnectionManager()
+# private_manager = ConnectionManager()
 
 async def initialize_messenger_connection(websocket: WebSocket, user_uid: UUID):
     """

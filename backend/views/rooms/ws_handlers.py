@@ -1,6 +1,5 @@
 # System
 import base64
-import mimetypes
 import os
 from pathlib import Path
 from uuid import UUID
@@ -9,6 +8,7 @@ import uuid
 
 # Other
 from fastapi import WebSocket, WebSocketDisconnect
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Custom
 from components.user.model import Penalty
@@ -18,13 +18,13 @@ from components.decorators.db import get_session
 from utils.logger import setup_logger
 from utils.file_handler import save_file
 from settings import config
-from socket_manager.manager import ConnectionManager
+from socket_manager import room_manager as manager
 
 # Создаем логгер для этого модуля
 logger = setup_logger(__name__)
 
 # Init ws manager
-manager = ConnectionManager()
+# manager = ConnectionManager()
 
 # Ограничение длянниы имени файла
 MAX_FILENAME_LENGTH = 255
@@ -84,7 +84,7 @@ async def process_incoming_messages(websocket: WebSocket, room_uid: UUID, user_u
         logger.info("WebSocket отключен")
         manager.disconnect(websocket, room_uid)
 
-async def handle_text_message(data: dict, room_uid: UUID, user_uid: UUID, db_session):    
+async def handle_text_message(data: dict, room_uid: UUID, user_uid: UUID, db_session: AsyncSession):  
     content = data.get("content")
     if not content:
         logger.warning("Получено пустое текстовое сообщение")
@@ -251,16 +251,12 @@ async def handle_audio_message(data: dict, room_uid: UUID, user_uid: UUID, db_se
         logger.error(f"Ошибка при обработке аудио: {e}")
 
 @get_session
-async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user, db_session=None):
+async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user, db_session: AsyncSession = None):
     try:
-        # Инициализация соединения
         room_uid = UUID(room_uid)
         user_uid = UUID(user["user_uid"])
         await initialize_websocket(websocket, db_session, room_uid, user_uid)
-
-        # Обработка входящих сообщений
         await process_incoming_messages(websocket, room_uid, user_uid, db_session)
-
     except Exception as e:
         logger.error(f"Ошибка WebSocket: {e}")
         await websocket.close(code=1011, reason="Internal server error")

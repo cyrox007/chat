@@ -8,6 +8,13 @@ def install(app: FastAPI):
     router = APIRouter(prefix='/admin')
 
     router.add_api_route(
+        '/dashboard/stats',
+        methods=['GET'],
+        status_code=status.HTTP_200_OK,
+        endpoint=handlers.dashboard_stats,
+        dependencies=[Depends(auth_middle)]
+    )
+    router.add_api_route(
         '/penalties/assign',
         methods=['POST'],
         status_code=status.HTTP_201_CREATED,

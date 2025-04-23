@@ -1,4 +1,6 @@
 from typing import List, Optional
+from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Boolean, and_, desc, asc, func, or_
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,12 +8,11 @@ from sqlalchemy.orm import relationship, joinedload
 from sqlalchemy.future import select
 from datetime import datetime
 from uuid import uuid4
+from utils.logger import setup_logger
 from database import Database
-from components.room.model import Room
 
 # Configure the logger
-import logging
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 class Message(Database.Base):
     __tablename__ = "messages"
@@ -42,10 +43,12 @@ class Message(Database.Base):
         """Форматирует сообщение для отправки клиенту"""
         if not msg:
             return None
-            
+
+        # Если сообщение уже словарь (например, из кеша), возвращаем его как есть
         if isinstance(msg, dict):
             return msg
-        
+
+        # Форматируем данные сообщения
         formatted = {
             "type": "message",
             "uid": str(msg.uid),
@@ -54,21 +57,22 @@ class Message(Database.Base):
             "media_metadata": msg.media_metadata,
             "sender": {
                 "uid": str(msg.author_uid),
-                "username": msg.author.username if msg.author else "Unknown",
-                "avatar": msg.author.avatar if msg.author else None
+                "username": getattr(msg.author, "username", "Unknown"),
+                "avatar": getattr(msg.author, "avatar", None),
             },
             "room_uid": str(msg.room_uid),
-            "created_at": msg.created_at.isoformat()
+            "created_at": msg.created_at.isoformat(),
         }
 
+        # Добавляем информацию о сообщении-ответе, если требуется
         if include_reply_details and msg.reply_to:
             formatted["reply_to"] = {
                 "uid": str(msg.reply_to.uid),
                 "content": msg.reply_to.text,
                 "sender": {
                     "uid": str(msg.reply_to.author_uid),
-                    "name": msg.reply_to.author.username if msg.reply_to.author else "Unknown"
-                }
+                    "name": getattr(msg.reply_to.author, "username", "Unknown"),
+                },
             }
 
         return formatted
@@ -79,6 +83,7 @@ class Message(Database.Base):
         Создает новое сообщение и сохраняет его в базу данных асинхронно.
         """
         try:
+            # Создаем новый объект Message
             new_message = Message(
                 content_type=message_data.get("content_type", "text"),
                 text=message_data.get("content"),
@@ -93,7 +98,12 @@ class Message(Database.Base):
             await db_session.commit()
             await db_session.refresh(new_message)
 
+            # Загружаем связанные объекты
+            await db_session.refresh(new_message, attribute_names=["author", "reply_to"])
+
+            # Форматируем сообщение
             return Message.format_message(new_message)
+
         except Exception as e:
             logger.error(f"Error creating message: {e}")
             await db_session.rollback()
@@ -152,10 +162,10 @@ class PrivateMessage(Database.Base):
         """Форматирует приватное сообщение для отправки клиенту"""
         if not msg:
             return None
-            
+
         if isinstance(msg, dict):
             return msg
-        
+
         formatted = {
             "type": "private_message",
             "uid": str(msg.uid),
@@ -171,8 +181,8 @@ class PrivateMessage(Database.Base):
         if include_sender_details and msg.sender:
             formatted["sender"] = {
                 "uid": str(msg.sender.uid),
-                "username": msg.sender.username,
-                "avatar": msg.sender.avatar
+                "username": getattr(msg.sender, "username", "Unknown"),
+                "avatar": getattr(msg.sender, "avatar", None)
             }
 
         return formatted
@@ -194,7 +204,9 @@ class PrivateMessage(Database.Base):
 
             db_session.add(new_message)
             await db_session.commit()
-            await db_session.refresh(new_message)
+
+            # Явно загружаем связанные объекты
+            await db_session.refresh(new_message, attribute_names=["sender", "receiver"])
 
             return PrivateMessage.format_message(new_message)
         except Exception as e:
