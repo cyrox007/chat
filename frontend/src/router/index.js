@@ -59,25 +59,43 @@ const router = createRouter({
 			}
 		},
 		{
-			path: '/admin/profile/:uid',
-			name: 'AdminProfileView',
-			component: () => import('../views/AdminPanel/AdminProfileView.vue'),
+			path: '/admin',
+			name: 'AdminDashboard',
+			component: () => import('../views/AdminLayout.vue'),
 			meta: {
-				title: "Профиль",
 				requestAuth: true,
 				requiresAdmin: true
-			}
+			},
+			children: [
+				{
+					path: '',
+					name: 'AdminDashboardHome',
+					component: () => import('../views/AdminPanel/DashboardView.vue'),
+					meta: { title: 'Админ панель - Консоль' }
+				},
+				{
+					path: '/admin/profile/:uid',
+					name: 'AdminProfileView',
+					component: () => import('../views/AdminPanel/AdminProfileView.vue'),
+					meta: {
+						title: "Админ панель - Профиль",
+						requestAuth: true,
+						requiresAdmin: true
+					}
+				},
+				{
+					path: '/admin/profiles',
+					name: 'AdminProfileList',
+					component: () => import('../views/AdminPanel/AdminProfileList.vue'),
+					meta: {
+						title: "Админ панель - Список пользователей",
+						requestAuth: true,
+						requiresAdmin: true
+					}
+				},
+			]
 		},
-		{
-			path: '/admin/profiles',
-			name: 'AdminProfileList',
-			component: () => import('../views/AdminPanel/AdminProfileList.vue'),
-			meta: {
-				title: "Список пользователей",
-				requestAuth: true,
-				requiresAdmin: true
-			}
-		},
+
 		// Маршрут для 404 ошибки (не найдено)
 		{
 			path: '/:pathMatch(.*)*',
@@ -95,24 +113,6 @@ const router = createRouter({
 				title: "Настройки",
 				requestAuth: true
 			}
-		},
-		{
-			path: '/admin',
-			name: 'admin',
-			component: () => import('../views/AdminView.vue'),
-			meta: {
-				title: "Админка",
-				requestAuth: true
-			}
-		},
-		{
-			path: '/logout',
-			name: 'logout',
-			component: () => import('../views/LogoutView.vue'),
-			meta: {
-				title: "Выход",
-				requestAuth: true
-			}
 		} */
 	]
 });
@@ -123,7 +123,7 @@ router.beforeEach(async (to, from, next) => {
 
 	const store = useStore();
 	const isAuthenticated = localStorage.getItem('access_token');
-	const userRole = store.getters['getUser']?.global_role; 
+	const userRole = store.getters['getUser']?.global_role;
 
 	// Проверка для гостевых маршрутов
 	if (to.matched.some(record => record.meta.requestGuest)) {
