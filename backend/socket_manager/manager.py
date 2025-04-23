@@ -1,7 +1,8 @@
 import asyncio
+from collections import defaultdict
 from datetime import datetime
 from uuid import UUID
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Set, Tuple, Optional
 from fastapi import WebSocket
 
 from components.user.model import User
@@ -23,6 +24,9 @@ class ConnectionManager:
 
         # Время последней активности
         self.user_last_seen: Dict[UUID, datetime] = {}
+
+        # Добавляем систему подписок
+        self.status_subscriptions: Dict[UUID, Set[UUID]] = defaultdict(set)
 
     @property
     def active_connections(self) -> Dict[UUID, List[WebSocket]]:
@@ -164,13 +168,31 @@ class ConnectionManager:
         # Обновляем last_online в базе данных
         await User.update_last_online(db_session, user_uid)
 
-    async def check_user_activity(self):
-        """Периодическая проверка активности пользователей"""
-        while True:
-            current_time = datetime.now()
-            for user_uid, last_seen in list(self.user_last_seen.items()):
-                if (current_time - last_seen).total_seconds() > 30:
-                    # Считаем пользователя оффлайн
-                    del self.user_last_seen[user_uid]
-                    #asyncio.create_task(self.broadcast_user_status(user_uid, "offline"))
-            await asyncio.sleep(10)  # Проверяем каждые 10 секунд
+    async def subscribe_to_status(self, subscriber_uid: UUID, target_uids: List[UUID]):
+        """Подписаться на статусы пользователей"""
+        for target_uid in target_uids:
+            self.status_subscriptions[target_uid].add(subscriber_uid)
+        
+        # Отправляем текущие статусы
+        current_statuses = {}
+        for target_uid in target_uids:
+            current_statuses[str(target_uid)] = target_uid in self.user_connections
+        
+        await self.send_to_user(subscriber_uid, {
+            "type": "status_update",
+            "statuses": current_statuses
+        })
+
+    async def unsubscribe_from_status(self, subscriber_uid: UUID, target_uids: List[UUID]):
+        """Отписаться от статусов пользователей"""
+        for target_uid in target_uids:
+            if subscriber_uid in self.status_subscriptions[target_uid]:
+                self.status_subscriptions[target_uid].remove(subscriber_uid)
+
+    async def broadcast_status_update(self, user_uid: UUID, is_online: bool):
+        """Разослать обновление статуса всем подписчикам"""
+        for subscriber_uid in self.status_subscriptions.get(user_uid, set()):
+            await self.send_to_user(subscriber_uid, {
+                "type": "status_update",
+                "statuses": {str(user_uid): is_online}
+            })

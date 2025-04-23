@@ -37,6 +37,13 @@ async def handle_private_messages(websocket: WebSocket, user_uid: UUID, db_sessi
                 await handle_mark_as_read(data, user_uid, db_session)
             elif action == "get_conversation":
                 await handle_get_conversation(data, user_uid, db_session, websocket)
+            elif action == "subscribe_status":
+                target_uids = [UUID(uid) for uid in data.get("userIds", [])]
+                await private_manager.subscribe_to_status(user_uid, target_uids)
+                
+            elif action == "unsubscribe_status":
+                target_uids = [UUID(uid) for uid in data.get("userIds", [])]
+                await private_manager.unsubscribe_from_status(user_uid, target_uids)
             else:
                 logger.warning(f"Unknown action: {action}")
 
