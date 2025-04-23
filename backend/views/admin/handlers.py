@@ -8,6 +8,7 @@ from utils.file_handler import save_file
 from components.room.model import Room
 from utils.logger import setup_logger
 from components.user.model import Penalty, User
+from components.message.model import Message
 from components.decorators.db import get_session
 
 from datetime import datetime
@@ -16,7 +17,7 @@ from uuid import UUID
 from sqlalchemy import String, func, select, and_, extract
 from datetime import datetime, timedelta
 
-from socket_manager import private_manager
+from socket_manager import private_manager, room_manager
 
 logger = setup_logger(__name__)
 
@@ -40,7 +41,7 @@ async def get_dashboard_stats(db_session):
         )
     )
     
-    active_rooms = await db_session.scalar(
+    total_rooms = await db_session.scalar(
         select(func.count(Room.id)).where(Room.is_active == True)
     )
     
@@ -137,6 +138,72 @@ async def get_dashboard_stats(db_session):
         "hour": int(hour), 
         "count": count
     } for hour, count in activity_by_hour]
+
+    # 6. Популярные комнаты (комбинированный рейтинг)
+    week_ago = datetime.utcnow() - timedelta(days=7)
+    
+    # Получаем базовую статистику по комнатам из БД
+    room_stats = await db_session.execute(
+        select(
+            Room.id,
+            Room.name,
+            func.count(Message.uid).label('messages_count'),
+            func.max(Message.created_at).label('last_message_time')
+        )
+        .join(Message, Message.room_uid == Room.uid)
+        .where(Message.created_at >= week_ago)
+        .group_by(Room.id)
+    )
+    
+    # Преобразуем в словарь для удобства
+    room_stats_dict = {
+        room_id: {
+            "name": name,
+            "messages_count": messages_count,
+            "last_message_time": last_message_time
+        }
+        for room_id, name, messages_count, last_message_time in room_stats
+    }
+    
+    # Получаем текущие подключения из менеджера WebSocket
+    active_rooms = {}
+    for room_uid, connections in room_manager.room_connections.items():
+        active_users = len({user_id for _, user_id in connections})
+        if room_uid in room_stats_dict:
+            active_rooms[room_uid] = {
+                **room_stats_dict[room_uid],
+                "active_users": active_users
+            }
+    
+    # Вычисляем рейтинг популярности для каждой комнаты
+    popular_rooms = []
+    for room_uid, stats in active_rooms.items():
+        # Коэффициент активности (сообщения за неделю)
+        activity_score = min(stats["messages_count"] / 10, 10)  # Нормализуем
+        
+        # Коэффициент "свежести" (0-1, где 1 = сообщение было только что)
+        freshness_score = 0
+        if stats["last_message_time"]:
+            hours_since_last = (datetime.utcnow() - stats["last_message_time"]).total_seconds() / 3600
+            freshness_score = 1 / (1 + hours_since_last / 24)  # Полураспад за 24 часа
+        
+        # Коэффициент онлайн-участников
+        online_score = min(stats["active_users"] / 5, 5)  # Нормализуем
+        
+        # Общий рейтинг (можно регулировать веса)
+        popularity_score = 0.5 * activity_score + 0.3 * online_score + 0.2 * freshness_score
+        
+        popular_rooms.append({
+            "id": room_uid,
+            "name": stats["name"],
+            "popularity_score": round(popularity_score, 2),
+            "active_users": stats["active_users"],
+            "messages_last_week": stats["messages_count"],
+            "last_activity": stats["last_message_time"].isoformat() if stats["last_message_time"] else None
+        })
+    
+    # Сортируем по рейтингу
+    popular_rooms_sorted = sorted(popular_rooms, key=lambda x: x["popularity_score"], reverse=True)[:5]
     
     # 7. Последние зарегистрированные
     recent_users = await db_session.execute(
@@ -157,7 +224,7 @@ async def get_dashboard_stats(db_session):
     return {
         "total_users": total_users,
         "online_users": online_users,
-        "active_rooms": active_rooms,
+        "active_rooms": total_rooms,
         "new_today": new_today,
         "gender_stats": gender_data,
         "geo_stats": geo_data,
@@ -167,7 +234,7 @@ async def get_dashboard_stats(db_session):
             "active_now": active_devices_last_hour
         },
         "activity_stats": activity_data,
-        "popular_rooms": [],
+        "popular_rooms": popular_rooms_sorted,
         "recent_users": recent_users_data
     }
 
