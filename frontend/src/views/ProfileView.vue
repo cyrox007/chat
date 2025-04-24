@@ -111,18 +111,12 @@ const isCurrentUser = computed(() => {
 	return !profileUid || profileUid === currentUser.value?.uid;
 });
 
-const isModeratorOrAdmin = computed(() => {
-	return ['admin', 'moderator', 'superadmin'].includes(currentUser.value?.global_role);
-});
+const isModeratorOrAdmin = computed(() => hasAccess(['admin', 'moderator', 'superadmin']));
 
 // Проверка прав на редактирование профиля
 const canEditProfile = computed(() => {
-	if (isCurrentUser.value) {
-		return true; // Текущий пользователь всегда может редактировать свой профиль
-	}
-
-	const userRole = currentUser.value?.global_role;
-	return ['admin', 'moderator', 'superadmin'].includes(userRole); // Модераторы и администраторы могут редактировать чужие профили
+	if (isCurrentUser.value) return true;
+	return hasAccess(['admin', 'moderator', 'superadmin']);
 });
 
 const openChatWithUser = () => {

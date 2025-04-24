@@ -26,6 +26,7 @@
 </template>
 
 <script setup>
+import { hasAccess } from '@/utils/accessControl';
 import { defineProps, defineEmits, computed } from 'vue';
 
 const props = defineProps({
@@ -66,7 +67,7 @@ const emitCreateChatModal = () => {
 
 // Вычисляемое свойство для проверки прав на создание чата
 const canCreateChat = computed(() => {
-	const isModeratorOrHigher = ['moderator', 'admin', 'superadmin'].includes(props.userRole);
+	const isModeratorOrHigher = hasAccess(['moderator', 'admin', 'superadmin']);
 	const hasSufficientRating = props.userRating >= 500; // Например, минимальный рейтинг 50
 	return isModeratorOrHigher || hasSufficientRating;
 });
