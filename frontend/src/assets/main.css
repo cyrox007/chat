@@ -36,7 +36,7 @@
     --sidebar-bg-light: rgba(255, 255, 255, 0.9);
     --primary-color: #a4146c;
 	--primary-color-hover: #c25091;
-    --background-image: url('./images/bg.png');
+    --background-image: url('./images/bg.webp');
 
     /* Тени для светлой темы */
     --shadow-light: 0px 2px 4px rgba(0, 0, 0, 0.1);
@@ -46,7 +46,7 @@
 
 /* Темная тема */
 .dark-theme {
-    --background-image: url('./images/bg-dark.png');
+    --background-image: url('./images/bg-dark.webp');
     --bg-light: #15252b;
     --text-light: #ffffff;
     --sidebar-bg-light: rgba(50, 50, 50, 0.9);
