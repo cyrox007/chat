@@ -129,7 +129,8 @@ async def check_username(request: Request, db_session=None):
     username = data.get("username")
     if not username:
         raise HTTPException(status_code=400, detail="Username is required")
-    is_unique = not User.get_user_by_credentials(db_session, username)
+    
+    is_unique = not await User.get_user_by_credentials(db_session, username)
     return {"isUnique": is_unique}
 
 @get_session
@@ -138,7 +139,7 @@ async def check_email(request: Request, db_session=None):
     email = data.get("email")
     if not email:
         raise HTTPException(status_code=400, detail="Email is required")
-    is_unique = not User.get_user_by_credentials(db_session, email)
+    is_unique = not await User.get_user_by_credentials(db_session, email)
     return {"isUnique": is_unique}
 
 @get_session
@@ -147,7 +148,7 @@ async def check_phone(request: Request, db_session=None):
     phone = data.get("phone")
     if not phone:
         raise HTTPException(status_code=400, detail="Phone is required")
-    is_unique = not User.get_user_by_credentials(db_session, phone)
+    is_unique = not await User.get_user_by_credentials(db_session, phone)
     return {"isUnique": is_unique}
 
 @get_session
