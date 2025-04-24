@@ -213,12 +213,18 @@ class User(Database.Base):
         elif len(phone_digits) == 12 and phone_digits.startswith('375'):
             possible_phones.extend([f"+{phone_digits}", phone_digits])
 
+        # Формируем условия запроса
+        conditions = [
+            cls.email.ilike(normalized),
+            cls.username.ilike(normalized)
+        ]
+        
+        # Добавляем условие для телефона, только если есть варианты
+        if possible_phones:
+            conditions.append(cls.phone.in_(possible_phones))
+        
         # Единый запрос
-        query = select(cls).where(
-            (cls.email.ilike(normalized)) |
-            (cls.phone.in_(possible_phones)) |
-            (cls.username.ilike(normalized))
-        )
+        query = select(cls).where(or_(*conditions))
         
         result = await db_session.execute(query)
         user = result.scalars().first()
