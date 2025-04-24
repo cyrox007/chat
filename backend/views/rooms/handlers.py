@@ -42,13 +42,13 @@ async def get_room(room_uid: UUID, request: Request, db_session=None):
         user = request.state.user  # Получаем данные пользователя из middleware
         logger.info(f"Fetching room with UID: {room_uid}")
 
-        room = await Room.get_room_by_uid(db_session, room_uid)
+        room = await Room.get_room_with_details(db_session, room_uid)
         if not room:
             logger.warning(f"Room not found: {room_uid}")
             raise HTTPException(status_code=404, detail="Room not found")
 
-        logger.info(f"Room fetched successfully: {room.uid}")
-        return {"status": "ok", "room": room.__dict__}
+        logger.info(f"Room fetched successfully: {room['uid']}")
+        return {"status": "ok", "room": room}
     except Exception as e:
         logger.error(f"Error fetching room: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")

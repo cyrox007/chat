@@ -80,6 +80,8 @@ import { useStore } from 'vuex';
 import UsersServices from '@/API/UsersService';
 import CSRFService from '@/API/CSRFService';
 
+import { hasAccess } from '@/utils/accessControl';
+
 import Loader from '@/components/Loader/index.vue'
 import Rating from "@/components/Rating/Rating.vue";
 import UserStatus from "@/components/UserStatus/index.vue"

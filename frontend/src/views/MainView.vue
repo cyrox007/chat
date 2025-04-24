@@ -1,53 +1,42 @@
 <template>
-	<CreateRoomModal :isShow="isCreateRoomeModalShow" @close="handleOpenCreateChatModal" @create-room-complete="loadRooms"/>
+	<CreateRoomModal :isShow="isCreateRoomeModalShow" @close="handleOpenCreateChatModal"
+		@create-room-complete="loadRooms" />
 	<main class="chat-window">
-		<LeftSidebar 
-			:class="{ active: isLeftSidebarActive }" 
-			@close="closeLeftSidebar" 
-			:rooms="rooms"
-			@switch-room="switchRoom" 
-			:userRole="currentUser.global_role"
-    		:userRating="currentUser.rating"
-    		@open-create-chat-modal="handleOpenCreateChatModal"/>
-		
+		<LeftSidebar :class="{ active: isLeftSidebarActive }" @close="closeLeftSidebar" :rooms="rooms"
+			@switch-room="switchRoom" :userRole="currentUser.global_role" :userRating="currentUser.rating"
+			@open-create-chat-modal="handleOpenCreateChatModal" />
+
 		<div class="chat-content">
 			<header class="chat-window-header">
-				<button class="toggle-left-sidebar" aria-label="Открыть/закрыть левый сайдбар" @click="toggleLeftSidebar">
+				<button class="toggle-left-sidebar" aria-label="Открыть/закрыть левый сайдбар"
+					@click="toggleLeftSidebar">
 					<i class="fas fa-comments"></i>
 				</button>
 				<h2>{{ currentRoom?.name || 'Нет выбранной комнаты' }}</h2>
-				<button class="toggle-right-sidebar" aria-label="Открыть/закрыть правый сайдбар" @click="toggleRightSidebar"
-					:disabled="!currentRoom?.id">
+				<button class="toggle-right-sidebar" aria-label="Открыть/закрыть правый сайдбар"
+					@click="toggleRightSidebar" :disabled="!currentRoom?.id">
 					<i class="fas fa-info-circle"></i>
 				</button>
 			</header>
-			<div v-if="currentRoom?.id && !isLoading" class="chat-container">
-				<section id="chat-messages" ref="chatMessages" class="chat-window-body" >
-					<Message 
-						v-for="(msg, index) in messages" 
-						:key="msg.uid || msg.tempId"
-						:message="msg"
-						:ref="index === messages.length - 1 ? 'lastMessage' : null"
-						@reply="handleMessageReply"
-					/>
+			<div v-if="currentRoom?.uid && !isLoading" class="chat-container">
+				<section id="chat-messages" ref="chatMessages" class="chat-window-body">
+					<Message v-for="(msg, index) in messages" :key="msg.uid || msg.tempId" :message="msg"
+						:ref="index === messages.length - 1 ? 'lastMessage' : null" @reply="handleMessageReply" />
 				</section>
-				<MessageComposer 
-					ref="messageComposer"
-					@send-message="handleSendMessage"
-					:isDisabled="isUserMuted"
-				/>
+				<MessageComposer ref="messageComposer" @send-message="handleSendMessage" :isDisabled="isUserMuted" />
 			</div>
 			<section v-else-if="!isLoading" class="placeholder">
 				<i class="fas fa-comments"></i>
 				<p>Выберите комнату, чтобы начать общение.</p>
 			</section>
 		</div>
-		
+
 		<Loader :isLoading="isLoading" />
-		<RightSidebar v-if="currentRoom?.id && !isLoading" :class="{ active: isRightSidebarActive }"
-			@close="closeRightSidebar" :roomInfo="currentRoom" :users="connectedUsers" />
+		<RightSidebar v-if="currentRoom?.uid && !isLoading" :class="{ active: isRightSidebarActive }"
+			@close="closeRightSidebar" :roomInfo="currentRoom" :users="connectedUsers"
+			@moderator-changed="handleModeratorChange" @user-banned="handleBanUser" />
 	</main>
-	
+
 </template>
 
 <script setup>
@@ -108,8 +97,8 @@ const loadRooms = async () => {
 
 // Обработчик ответа на сообщение
 const handleMessageReply = (message) => {
-  messageComposer.value?.setReply(message);
-  scrollToBottom();
+	messageComposer.value?.setReply(message);
+	scrollToBottom();
 };
 
 // Модифицированная функция отправки сообщения
@@ -131,6 +120,31 @@ const handleSendMessage = async (messageData) => {
 	};
 
 	store.dispatch('chat/sendMessage', messagePayload);
+};
+
+const handleModeratorChange = async ({ userId, isModerator }) => {
+	try {
+		await store.dispatch('chat/sendModeratorAction', {
+			target_user_uid: userId,
+			action: isModerator ? 'add_moderator' : 'remove_moderator'
+		});
+	} catch (error) {
+		console.error('Ошибка при изменении статуса модератора:', error);
+		// Можно показать уведомление об ошибке
+	}
+};
+
+// Обработчик блокировки пользователя
+const handleBanUser = async (userId) => {
+	try {
+		await store.dispatch('chat/sendBanAction', {
+			target_user_uid: userId,
+			reason: 'Нарушение правил чата'
+		});
+	} catch (error) {
+		console.error('Ошибка при блокировке пользователя:', error);
+		// Можно показать уведомление об ошибке
+	}
 };
 
 // Функция для переключения комнаты
@@ -180,13 +194,13 @@ const handleOpenCreateChatModal = () => {
 }
 
 const scrollToBottom = async () => {
-    await nextTick(); // Ждём обновления DOM
-    const chatMessages = document.getElementById('chat-messages');
-    if (chatMessages) {
-        //console.log('Scrolling to bottom...');
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-        console.log('New scrollTop:', chatMessages.scrollTop);
-    }
+	await nextTick(); // Ждём обновления DOM
+	const chatMessages = document.getElementById('chat-messages');
+	if (chatMessages) {
+		//console.log('Scrolling to bottom...');
+		chatMessages.scrollTop = chatMessages.scrollHeight;
+		console.log('New scrollTop:', chatMessages.scrollTop);
+	}
 };
 
 // Загрузка данных при монтировании
@@ -218,22 +232,25 @@ watch(
 <style scoped>
 .chat-window {
 	height: calc(100vh - (54px + 5px));
-	
+
 	width: 100%;
 	flex: 0 0 100%;
 	display: flex;
 	flex-direction: row;
 	flex-wrap: nowrap;
 	overflow-x: hidden;
-	background-color: var(--bg-light); /* Используем переменную для фона */
+	background-color: var(--bg-light);
+	/* Используем переменную для фона */
 	color: var(--text-light);
 }
+
 .chat-content {
 	display: flex;
 	flex-direction: column;
 	width: 100%;
 	background-color: var(--bg-light);
 }
+
 .chat-window-header {
 	max-height: 40px;
 	height: 40px;
@@ -241,11 +258,16 @@ watch(
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	background-color: var(--primary-color); /* Используем основной цвет */
-	border-bottom: 1px solid var(--primary-color); /* Используем основной цвет */
-	color: white; /* Белый текст */
-	box-shadow: var(--shadow-light); /* Добавляем легкую тень */
+	background-color: var(--primary-color);
+	/* Используем основной цвет */
+	border-bottom: 1px solid var(--primary-color);
+	/* Используем основной цвет */
+	color: white;
+	/* Белый текст */
+	box-shadow: var(--shadow-light);
+	/* Добавляем легкую тень */
 }
+
 @media screen and (max-width: 400px) {
 	.chat-window-header h2 {
 		font-size: 1.15rem;
@@ -257,16 +279,19 @@ watch(
 	background: none;
 	border: none;
 	cursor: pointer;
-	color: white; /* Белый текст */
-	transition: color 0.2s ease; /* Плавное изменение цвета */
+	color: white;
+	/* Белый текст */
+	transition: color 0.2s ease;
+	/* Плавное изменение цвета */
 }
 
 .chat-window-header button:hover {
-	color: var(--primary-color-hover); /* Цвет при наведении */
+	color: var(--primary-color-hover);
+	/* Цвет при наведении */
 }
 
 .chat-window-header button:disabled {
-	cursor:auto;
+	cursor: auto;
 	opacity: 0.8;
 }
 
@@ -275,7 +300,8 @@ watch(
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
-	background-color: var(--bg-light); /* Используем переменную для фона */
+	background-color: var(--bg-light);
+	/* Используем переменную для фона */
 }
 
 .chat-window-body {
@@ -291,7 +317,8 @@ watch(
 
 /* Стили для компонента ввода данных */
 .message-composer {
-	flex-shrink: 0; /* Предотвращает сжатие компонента */
+	flex-shrink: 0;
+	/* Предотвращает сжатие компонента */
 	padding: 10px;
 	background-color: var(--bg-light);
 	border-top: 1px solid var(--primary-color);

@@ -19,9 +19,18 @@ export default {
 		isConnected: (state) => state.isConnected,
 		getMessages: (state) => state.messages,
 		unreadReplies: (state) => state.unreadReplies,
-  		hasUnreadReplies: (state) => state.unreadReplies.length > 0,
+		hasUnreadReplies: (state) => state.unreadReplies.length > 0,
 		isUserMuted: (state) => !!state.muteStatus && state.muteStatus.status === 'muted',
 		getMuteDetails: (state) => state.muteStatus?.details || null,
+		isCurrentUserOwner: (state) => {
+			return state.currentRoom?.owner_uid === state.currentUser?.uid;
+		},
+		isCurrentUserModerator: (state) => {
+			return state.currentRoom?.moderators?.includes(state.currentUser?.uid) || false;
+		},
+		canManageUsers: (state, getters) => {
+			return getters.isCurrentUserOwner || getters.isCurrentUserModerator;
+		}
 	},
 	mutations: {
 		setCurrentRoom(state, room) {
@@ -57,6 +66,30 @@ export default {
 		clearMuteStatus(state) {
 			state.muteStatus = null;
 		},
+		addModerator(state, userUid) {
+			if (state.currentRoom && !state.currentRoom.moderators.includes(userUid)) {
+				if (!state.currentRoom.moderators) {
+					state.currentRoom.moderators = [];
+				}
+				state.currentRoom.moderators.push(userUid);
+			}
+		},
+
+		removeModerator(state, userUid) {
+			if (state.currentRoom && state.currentRoom.moderators) {
+				state.currentRoom.moderators = state.currentRoom.moderators.filter(uid => uid !== userUid);
+			}
+		},
+
+		removeUser(state, userUid) {
+			state.connectedUsers = state.connectedUsers.filter(user => user.uid !== userUid);
+		},
+
+		updateModerators(state, moderators) {
+			if (state.currentRoom) {
+				state.currentRoom.moderators = moderators;
+			}
+		}
 	},
 	actions: {
 		async fetchUserData({ commit }, userUids) {
@@ -132,21 +165,21 @@ export default {
 			switch (data.type) {
 				case 'message':
 					commit('addMessage', data);
-					
+
 					if (currentRoute !== '/') {
 
 						if (data.reply_to?.sender?.uid === currentUserId) {
 							const reply = {
-							  uid: data.uid,
-							  sender: data.sender,
-							  content: data.content,
-							  room_uid: data.room_uid,
-							  timestamp: new Date(data.created_at || new Date())
+								uid: data.uid,
+								sender: data.sender,
+								content: data.content,
+								room_uid: data.room_uid,
+								timestamp: new Date(data.created_at || new Date())
 							};
-							
+
 							commit('ADD_UNREAD_REPLY', reply);
 							dispatch('playNotificationSound');
-						  }
+						}
 					}
 					break;
 
@@ -173,6 +206,38 @@ export default {
 				case 'ping':
 					if (state.socket) {
 						state.socket.send(JSON.stringify({ type: 'pong' }));
+					}
+					break;
+
+				case 'moderators_updated':
+					commit('updateModerators', data.moderators);
+					break;
+
+				case 'user_banned':
+					if (data.target_user_uid === currentUserId) {
+						// Показать уведомление, что пользователь заблокирован
+						commit('setMuteStatus', {
+							status: 'banned',
+							details: {
+								reason: data.reason,
+								expires_at: data.expires_at
+							}
+						});
+					}
+					commit('removeUser', data.target_user_uid);
+					break;
+
+				case 'moderator_added':
+					commit('addModerator', data.target_user_uid);
+					if (data.target_user_uid === currentUserId) {
+						// Показать уведомление о назначении модератором
+					}
+					break;
+
+				case 'moderator_removed':
+					commit('removeModerator', data.target_user_uid);
+					if (data.target_user_uid === currentUserId) {
+						// Показать уведомление о снятии прав модератора
 					}
 					break;
 
@@ -216,10 +281,10 @@ export default {
 		playNotificationSound() {
 			// Используем путь из public, а не из assets
 			const audio = new Audio('/sounds/chat_notification.mp3');
-		
+
 			// Предварительная загрузка и обработка ошибок
 			audio.preload = 'auto';
-		
+
 			// Обработка событий загрузки
 			audio.addEventListener('canplaythrough', () => {
 				// Когда аудио готово к воспроизведению
@@ -227,14 +292,65 @@ export default {
 					console.error('Ошибка воспроизведения звука:', e);
 				});
 			});
-		
+
 			// Обработка ошибок загрузки
 			audio.addEventListener('error', (e) => {
 				console.error('Ошибка загрузки аудио:', e);
 			});
-		
+
 			// Начинаем загрузку
 			audio.load();
-		}
+		},
+		async sendModeratorAction({ commit, state }, { target_user_uid, action }) {
+			try {
+				if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
+					throw new Error('WebSocket не подключен');
+				}
+
+				const message = {
+					type: 'moderator_action',
+					target_user_uid,
+					action, // 'add_moderator' или 'remove_moderator'
+					room_uid: state.currentRoom?.uid,
+					timestamp: new Date().toISOString()
+				};
+
+				state.socket.send(JSON.stringify(message));
+
+				// Локальное обновление для мгновенного отклика
+				if (action === 'add_moderator') {
+					commit('addModerator', target_user_uid);
+				} else {
+					commit('removeModerator', target_user_uid);
+				}
+			} catch (error) {
+				console.error('Ошибка при отправке действия модератора:', error);
+				throw error;
+			}
+		},
+
+		async sendBanAction({ commit, state }, { target_user_uid, reason }) {
+			try {
+				if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
+					throw new Error('WebSocket не подключен');
+				}
+
+				const message = {
+					type: 'ban_user',
+					target_user_uid,
+					reason,
+					room_uid: state.currentRoom?.uid,
+					timestamp: new Date().toISOString()
+				};
+
+				state.socket.send(JSON.stringify(message));
+
+				// Локальное удаление пользователя
+				commit('removeUser', target_user_uid);
+			} catch (error) {
+				console.error('Ошибка при отправке действия блокировки:', error);
+				throw error;
+			}
+		},
 	}
 };

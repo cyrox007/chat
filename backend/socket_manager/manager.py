@@ -196,3 +196,57 @@ class ConnectionManager:
                 "type": "status_update",
                 "statuses": {str(user_uid): is_online}
             })
+
+    def get_user_connection(self, room_uid: UUID, user_uid: UUID) -> Optional[WebSocket]:
+        """Получить соединение пользователя в конкретной комнате"""
+        if room_uid not in self.room_connections:
+            return None
+            
+        for connection, uid in self.room_connections[room_uid]:
+            if uid == user_uid:
+                return connection
+        return None
+
+    async def disconnect_user_from_room(self, room_uid: UUID, user_uid: UUID):
+        """Принудительно отключить пользователя от комнаты"""
+        if room_uid not in self.room_connections:
+            return
+
+        # Находим все соединения пользователя в этой комнате
+        user_connections = [
+            (ws, uid) for ws, uid in self.room_connections[room_uid]
+            if uid == user_uid
+        ]
+
+        # Закрываем соединения
+        for connection, _ in user_connections:
+            try:
+                await connection.close(code=4001, reason="Banned from room")
+            except Exception as e:
+                logger.error(f"Ошибка при отключении пользователя {user_uid}: {e}")
+
+        # Удаляем из списка подключений
+        self.room_connections[room_uid] = [
+            conn for conn in self.room_connections[room_uid]
+            if conn[1] != user_uid
+        ]
+
+        if not self.room_connections[room_uid]:
+            del self.room_connections[room_uid]
+
+        logger.info(f"Пользователь {user_uid} отключен от комнаты {room_uid}")
+        await self.broadcast_user_list(room_uid)
+
+    async def broadcast_to_room_except(self, room_uid: UUID, message: dict, exclude_user: UUID = None):
+        """Отправить сообщение всем в комнате, кроме указанного пользователя"""
+        if room_uid not in self.room_connections:
+            return
+
+        for connection, user_uid in self.room_connections[room_uid]:
+            if exclude_user and user_uid == exclude_user:
+                continue
+                
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                logger.error(f"Ошибка при отправке сообщения в комнату {room_uid}: {e}")
