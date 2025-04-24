@@ -1,13 +1,11 @@
 <template>
-	<div class="message" 
-		:class="{ sent: message.isCurrentUser, received: !message.isCurrentUser }"
-		:data-message-id="message.uid"
-		:data-is-current-user="message.isCurrentUser"
-		:data-is-read="message.is_read">
+	<div class="message" :class="{ sent: message.isCurrentUser, received: !message.isCurrentUser }"
+		:data-message-id="message.uid" :data-is-current-user="message.isCurrentUser" :data-is-read="message.is_read">
 		<!-- Ответ на сообщение -->
 		<div v-if="message.reply_to" class="reply-preview">
 			<div class="reply-header">
 				<i class="fas fa-reply"></i> {{ message.reply_to.sender.name }}
+				<span class="reply-time">{{ replyTime }}</span>
 			</div>
 			<div class="reply-content">{{ truncate(message.reply_to.content, 50) }}</div>
 		</div>
@@ -42,7 +40,7 @@
 
 			<div v-else-if="message.content_type === 'voice'" class="audio-container">
 				<audio controls class="message-audio">
-					<source :src="apiBaseUrl + message.media_metadata.voice"/>
+					<source :src="apiBaseUrl + message.media_metadata.voice" />
 				</audio>
 			</div>
 
@@ -69,7 +67,7 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { formatUTCDate } from '@/utils/dateFormatter';
 
 const props = defineProps({
 	message: {
@@ -110,12 +108,20 @@ const getFileIcon = (fileName) => {
 };
 
 // Форматирование времени
-const formatTime = (date) => {
-	return new Date(date).toLocaleTimeString([], {
-		hour: "2-digit",
-		minute: "2-digit",
+const formatTime = (dateString) => {
+	return formatUTCDate(dateString, {
+		showSeconds: false,
+		showDate: false // В приватных сообщениях обычно показываем только время
 	});
 };
+// Добавляем форматирование даты для превью ответа (если нужно)
+const replyTime = computed(() => {
+	if (!props.message.reply_to) return '';
+	return formatUTCDate(props.message.reply_to.created_at, {
+		showSeconds: false,
+		showDate: true
+	});
+});
 </script>
 
 <style scoped>
@@ -214,5 +220,4 @@ const formatTime = (date) => {
 	text-decoration: none;
 	color: var(--primary-color);
 }
-
 </style>

@@ -97,6 +97,7 @@
 <script setup>
 import { defineProps, defineEmits, computed } from 'vue';
 import { useStore } from 'vuex';
+import { formatUTCDate } from '@/utils/dateFormatter';
 
 // Инициализируем хранилище
 const store = useStore();
@@ -113,11 +114,11 @@ const props = defineProps({
 });
 
 const currentUser = computed(() => {
-    return store.getters.getUser || {
-        uid: null,
-        username: 'Неизвестный пользователь',
-        avatar: '/images/default-avatar.png',
-    };
+	return store.getters.getUser || {
+		uid: null,
+		username: 'Неизвестный пользователь',
+		avatar: '/images/default-avatar.png',
+	};
 });
 
 // Проверка, является ли файл изображением
@@ -202,14 +203,10 @@ const safeMessage = computed(() => {
 // Форматируем дату для отображения
 const formattedTimestamp = computed(() => {
 	if (!safeMessage.value) return '';
-
-	let rawDate = safeMessage.value.created_at;
-	if (!rawDate.endsWith('Z')) {
-		rawDate += 'Z'; // Добавляем суффикс Z, если его нет
-	}
-	const utcDate = new Date(rawDate);
-
-	return `${utcDate.toLocaleDateString()} ${utcDate.toLocaleTimeString()}`;
+	return formatUTCDate(safeMessage.value.created_at, {
+		showSeconds: false,
+		showDate: true
+	});
 });
 
 // Вычисляем тип сообщения
@@ -217,7 +214,7 @@ const messageType = computed(() => {
 	if (!safeMessage.value) {
 		return 'loading'; // Если сообщение еще не загружено
 	}
-	
+
 	// Проверяем, является ли отправитель текущим пользователем
 	const isSender = safeMessage.value.sender.uid === currentUser.value.uid;
 
@@ -309,6 +306,7 @@ const truncate = (text, length) => {
 	color: #888;
 	font-style: italic;
 }
+
 /* Стили для кнопки ответа */
 .reply-button {
 	position: absolute;
@@ -366,5 +364,11 @@ const truncate = (text, length) => {
 /* Дополнительный отступ для сообщений с цитатой */
 .message.has-reply {
 	padding-top: 5px;
+}
+
+.reply-time {
+	margin-left: 5px;
+	font-size: 0.8em;
+	color: #777;
 }
 </style>
