@@ -1,37 +1,33 @@
 <template>
 	<div class="devices-chart">
-		<div class="devices-stats">
-			<div class="stat-item">
-				<h4>Активных устройств</h4>
-				<p class="stat-value">{{ data.active_now }}</p>
+		<div class="header">
+			<h4>Устройства</h4>
+			<div class="active-devices">
+				<span>Активных: </span>
+				<strong>{{ data.active_now }}</strong>
 			</div>
 		</div>
 
-		<div class="charts-grid">
-			<div class="chart-container">
-				<h4>Браузеры</h4>
-				<div class="chart-wrapper">
+		<div class="tabs">
+			<button v-for="tab in tabs" :key="tab.id" :class="{ active: activeTab === tab.id }"
+				@click="activeTab = tab.id">
+				{{ tab.label }}
+			</button>
+		</div>
+
+		<div class="chart-container">
+			<!-- Добавлен общий контейнер для всех графиков -->
+			<div class="chart-holder">
+				<div v-show="activeTab === 'browsers'" class="tab-content">
 					<canvas ref="browsersChart"></canvas>
 				</div>
-			</div>
-
-			<div class="chart-container">
-				<h4>Операционные системы</h4>
-				<div class="chart-wrapper">
+				<div v-show="activeTab === 'os'" class="tab-content">
 					<canvas ref="osChart"></canvas>
 				</div>
-			</div>
-
-			<div class="chart-container">
-				<h4>Типы устройств</h4>
-				<div class="chart-wrapper">
+				<div v-show="activeTab === 'types'" class="tab-content">
 					<canvas ref="typesChart"></canvas>
 				</div>
-			</div>
-
-			<div class="chart-container">
-				<h4>Бренды</h4>
-				<div class="chart-wrapper">
+				<div v-show="activeTab === 'brands'" class="tab-content">
 					<canvas ref="brandsChart"></canvas>
 				</div>
 			</div>
@@ -40,7 +36,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, nextTick } from 'vue';
 import Chart from 'chart.js/auto';
 
 const props = defineProps({
@@ -57,6 +53,14 @@ const props = defineProps({
 	}
 });
 
+const tabs = [
+	{ id: 'browsers', label: 'Браузеры' },
+	{ id: 'os', label: 'ОС' },
+	{ id: 'types', label: 'Типы' },
+	{ id: 'brands', label: 'Бренды' }
+];
+const activeTab = ref('browsers');
+
 const browsersChart = ref(null);
 const osChart = ref(null);
 const typesChart = ref(null);
@@ -67,23 +71,28 @@ let osChartInstance = null;
 let typesChartInstance = null;
 let brandsChartInstance = null;
 
-const chartColors = [
-	'#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
-	'#9966FF', '#FF9F40', '#8AC24A', '#F06292',
-	'#00ACC1', '#7E57C2', '#EC407A', '#AB47BC'
-];
+// Функция для вычисления оптимального размера шрифта
+const getFontSize = (dataLength) => {
+	if (dataLength > 8) return 9;
+	if (dataLength > 5) return 10;
+	return 11;
+};
 
-const initChart = (chartRef, data, title) => {
+const initChart = (chartRef, data) => {
 	if (!chartRef.value || !data || data.length === 0) return null;
 
 	const ctx = chartRef.value.getContext('2d');
 	return new Chart(ctx, {
-		type: 'doughnut',
+		type: 'pie',
 		data: {
 			labels: data.map(item => item.name || 'Unknown'),
 			datasets: [{
 				data: data.map(item => item.count),
-				backgroundColor: chartColors.slice(0, data.length),
+				backgroundColor: [
+					'#3a86ff', '#8338ec', '#ff006e', '#fb5607',
+					'#ffbe0b', '#4cc9f0', '#f72585', '#7209b7',
+					'#4361ee', '#3a0ca3', '#4895ef', '#4cc9f0'
+				],
 				borderWidth: 1
 			}]
 		},
@@ -94,121 +103,131 @@ const initChart = (chartRef, data, title) => {
 				legend: {
 					position: 'right',
 					labels: {
-						boxWidth: 12,
-						padding: 20
+						boxWidth: 10,
+						padding: 8,
+						font: {
+							size: getFontSize(data.length)
+						},
+						usePointStyle: true,
+						pointStyle: 'circle'
 					}
-				},
-				title: {
-					display: false,
-					text: title
 				}
 			},
-			cutout: '60%'
+			layout: {
+				padding: {
+					left: 5,
+					right: 5,
+					top: 5,
+					bottom: 5
+				}
+			}
 		}
 	});
 };
 
-const initCharts = () => {
-	// Destroy previous instances
+const initCharts = async () => {
+	// Ждем обновления DOM перед инициализацией
+	await nextTick();
+
 	[browsersChartInstance, osChartInstance, typesChartInstance, brandsChartInstance].forEach(
 		chart => chart && chart.destroy()
 	);
 
-	// Initialize new charts
-	browsersChartInstance = initChart(browsersChart, props.data.browsers, 'Браузеры');
-	osChartInstance = initChart(osChart, props.data.os, 'Операционные системы');
-	typesChartInstance = initChart(typesChart, props.data.device_types, 'Типы устройств');
-	brandsChartInstance = initChart(brandsChart, props.data.brands, 'Бренды');
+	browsersChartInstance = initChart(browsersChart, props.data.browsers);
+	osChartInstance = initChart(osChart, props.data.os);
+	typesChartInstance = initChart(typesChart, props.data.device_types);
+	brandsChartInstance = initChart(brandsChart, props.data.brands);
 };
 
 onMounted(initCharts);
 watch(() => props.data, initCharts, { deep: true });
+watch(activeTab, initCharts);
 </script>
 
 <style scoped>
 .devices-chart {
 	display: flex;
 	flex-direction: column;
-	gap: 20px;
 	height: 100%;
-}
-
-.devices-stats {
-	display: flex;
-	justify-content: center;
-	margin-bottom: 8px;
-}
-
-.stat-item {
-	text-align: center;
-	padding: 8px 16px;
-	background: #f5f5f5;
-	border-radius: 8px;
-	min-width: 200px;
-}
-
-.stat-item h4 {
-	margin: 0 0 4px 0;
-	font-size: 14px;
-	color: #666;
-}
-
-.stat-value {
-	margin: 0;
-	font-size: 20px;
-	font-weight: bold;
-	color: #333;
-}
-
-.charts-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-	gap: 20px;
-	height: calc(100% - 60px);
-}
-
-.chart-container {
-	display: flex;
-	flex-direction: column;
 	background: white;
 	border-radius: 8px;
 	padding: 16px;
 	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-	height: 300px;
 }
 
-.chart-container h4 {
-	margin: 0 0 12px 0;
+.header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 12px;
+}
+
+.header h4 {
+	margin: 0;
 	font-size: 14px;
-	text-align: center;
 	color: #444;
-	font-weight: 500;
+	font-weight: 600;
 }
 
-.chart-wrapper {
-	position: relative;
+.active-devices {
+	font-size: 13px;
+	color: #666;
+}
+
+.active-devices strong {
+	color: #3a86ff;
+	font-weight: 600;
+}
+
+.tabs {
+	display: flex;
+	gap: 4px;
+	margin-bottom: 12px;
+}
+
+.tabs button {
+	padding: 6px 12px;
+	background: #f5f5f5;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 12px;
+	color: #666;
+	transition: all 0.2s;
+}
+
+.tabs button:hover {
+	background: #e0e0e0;
+}
+
+.tabs button.active {
+	background: #3a86ff;
+	color: white;
+}
+
+.chart-container {
 	flex: 1;
 	min-height: 200px;
+	position: relative;
 }
 
-canvas {
+.chart-holder {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+}
+
+.tab-content {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+}
+
+.tab-content canvas {
 	width: 100% !important;
 	height: 100% !important;
-}
-
-@media (max-width: 1400px) {
-	.charts-grid {
-		grid-template-columns: 1fr 1fr;
-	}
-}
-
-@media (max-width: 768px) {
-	.charts-grid {
-		grid-template-columns: 1fr;
-	}
-
-	.chart-container {
-		height: 250px;
-	}
+	display: block;
 }
 </style>
