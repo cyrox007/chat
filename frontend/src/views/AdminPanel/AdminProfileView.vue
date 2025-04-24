@@ -8,7 +8,7 @@
 				<label :for="key">{{ field.label }}:</label>
 				<div class="info-display" v-if="!field.editing">
 					<template v-if="key === 'avatar'">
-						<img v-if="profile[key]" :src="profile[key].url" class="avatar-preview" alt="Аватар">
+						<img v-if="profile[key]" :src="apiBaseUrl + profile[key].url" class="avatar-preview" alt="Аватар">
 						<span v-else>Аватар не установлен</span>
 					</template>
 					<template v-else-if="key === 'rating'">
@@ -125,6 +125,7 @@ const currentUserRole = ref('admin'); // Здесь должно быть реа
 
 const penalties = ref([]);
 const newAvatar = ref(null);
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 // Состояния
 const profile = ref({
