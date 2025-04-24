@@ -152,6 +152,21 @@ class User(Database.Base):
                     logger.warning(f"Пользователь с таким телефоном уже существует: {phone}")
                     raise UserValidationError("Phone already exists")
 
+            # Преобразование даты рождения
+            dob = None
+            if date_of_birth:
+                if isinstance(date_of_birth, str):
+                    try:
+                        dob = datetime.strptime(date_of_birth, "%Y-%m-%d").date()
+                    except ValueError:
+                        logger.error(f"Неверный формат даты рождения: {date_of_birth}")
+                        raise UserValidationError("Invalid date format. Use YYYY-MM-DD")
+                elif isinstance(date_of_birth, (datetime.date, datetime.datetime)):
+                    dob = date_of_birth.date() if isinstance(date_of_birth, datetime.datetime) else date_of_birth
+                else:
+                    logger.error(f"Неподдерживаемый тип даты рождения: {type(date_of_birth)}")
+                    raise UserValidationError("Invalid date_of_birth type")
+
             # Выбор аватара по умолчанию
             if not avatar:
                 avatar = "/static/default_female.webp" if gender == 'female' else "/static/default_male.webp"
@@ -167,7 +182,7 @@ class User(Database.Base):
                 first_name=first_name,
                 last_name=last_name,
                 bio=bio,
-                date_of_birth=date_of_birth
+                date_of_birth=dob  # Используем преобразованную дату dob вместо date_of_birth
             )
             
             db_session.add(new_user)

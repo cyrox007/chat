@@ -82,7 +82,8 @@ async def register(request: Request, db_session=None):
             raise HTTPException(status_code=400, detail="Missing required fields")
 
         # Проверка уникальности имени пользователя
-        if User.get_user_by_credentials(db_session, username):
+        existing_user = await User.get_user_by_credentials(db_session, username)
+        if existing_user:
             logger.warning(f"Пользователь с таким username уже существует: {username}")
             raise HTTPException(status_code=409, detail="User already exists")
 
