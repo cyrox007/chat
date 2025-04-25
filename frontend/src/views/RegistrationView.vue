@@ -2,7 +2,7 @@
 	<div class="registration-container">
 		<div class="registration-form">
 			<h1>Регистрация</h1>
-			<span v-show="errorMessage">{{ errorMessage }}</span>
+			<span v-show="errorMessage" style="font-size: 13px; color: red; text-align: center;">{{ errorMessage }}</span>
 			<!-- Шаг 1: Основные данные -->
 			<form v-if="step === 1" @submit.prevent="validateStep1">
 				<BaseInput id="username" label="Имя пользователя" placeholder="Введите имя пользователя"
