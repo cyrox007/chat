@@ -58,57 +58,47 @@ class UserDevice(Database.Base):
 
     @classmethod
     async def update_token(cls, db_session: AsyncSession, old_token: str, new_token: str, 
-                          ip_address: str, user_agent: str, expires_in_days: int = 30):
+                        ip_address: str, user_agent: str, expires_in_days: int = 30):
         """
-        Асинхронно обновляет существующий токен устройства.
+        Асинхронно обновляет существующий токен устройства с улучшенной обработкой ошибок.
         """
-        logger.info(f"Начало обновления токена: старый токен={old_token}, новый токен={new_token}")
+        logger.info(f"Обновление токена: {old_token[:10]}... -> {new_token[:10]}...")
+        
         try:
-            # Ищем запись с old_token
-            stmt = select(cls).where(
-                cls.token == old_token, 
-                cls.is_active == True
-            ).with_for_update()
-            
-            result = await db_session.execute(stmt)
-            record = result.scalar_one_or_none()
-            
-            if not record:
-                logger.warning(f"Запись с токеном {old_token} не найдена или неактивна.")
-                raise ValueError("Token not found or inactive")
+            # 1. Быстрая проверка существования нового токена без блокировки
+            if (await db_session.execute(
+                select(cls.id).where(cls.token == new_token, cls.is_active == True)
+            )).scalar_one_or_none():
+                logger.info("Новый токен уже существует")
+                return None
 
-            logger.debug(f"Текущая запись перед обновлением: {record}")
+            # 2. Короткая транзакция для обновления
+            async with db_session.begin_nested():
+                # Получаем запись с блокировкой (но быстро)
+                record = (await db_session.execute(
+                    select(cls)
+                    .where(cls.token == old_token, cls.is_active == True)
+                    .with_for_update(skip_locked=True)  # Пропускаем заблокированные
+                    .limit(1)
+                )).scalar_one_or_none()
 
-            # Проверяем, существует ли новый токен
-            existing_stmt = select(cls).where(
-                cls.token == new_token,
-                cls.is_active == True
-            )
-            existing_result = await db_session.execute(existing_stmt)
-            existing_record = existing_result.scalar_one_or_none()
-            
-            if existing_record:
-                logger.info(f"Новый токен {new_token} уже существует. Пропускаем обновление.")
-                return existing_record
+                if not record:
+                    logger.warning("Токен не найден или неактивен")
+                    return None
 
-            # Обновляем данные
-            record.token = new_token
-            record.ip_address = ip_address
-            record.user_agent = user_agent
-            record.expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
-            await db_session.commit()
-
-            logger.info(f"Токен успешно обновлен: {record}")
+                # Обновляем данные
+                record.token = new_token
+                record.ip_address = ip_address
+                record.user_agent = user_agent
+                record.expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+                
+            logger.info("Токен успешно обновлен")
             return record
 
-        except IntegrityError as e:
-            await db_session.rollback()
-            logger.error(f"Конфликт при обновлении токена: {e}")
-            raise ValueError("Token update conflict")
         except Exception as e:
+            logger.error(f"Ошибка обновления токена: {type(e).__name__}: {str(e)}")
             await db_session.rollback()
-            logger.error(f"Ошибка при обновлении токена: {e}")
-            raise
+            raise ValueError("Token update failed") from e
 
     @classmethod
     async def deactivate_token(cls, db_session: AsyncSession, token: str):
