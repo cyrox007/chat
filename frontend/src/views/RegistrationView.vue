@@ -2,7 +2,7 @@
 	<div class="registration-container">
 		<div class="registration-form">
 			<h1>Регистрация</h1>
-
+			<span v-show="errorMessage">{{ errorMessage }}</span>
 			<!-- Шаг 1: Основные данные -->
 			<form v-if="step === 1" @submit.prevent="validateStep1">
 				<BaseInput id="username" label="Имя пользователя" placeholder="Введите имя пользователя"
@@ -13,9 +13,10 @@
 				<BaseInput id="email" label="Email" type="email" placeholder="Введите email" v-model="formData.email"
 					:error="emailError" :validationRules="(value) => !value ? 'Поле обязательно' : ''"
 					:asyncValidation="checkEmailUniqueness" />
-				
-				<BaseInput id="phone" label="Телефон" type="phone" placeholder="Введите номер телефона" v-model="formData.phone"
-					:error="phoneError" :validationRules="(value) => !value ? 'Поле обязательно' : ''"
+
+				<BaseInput id="phone" label="Телефон" type="phone" placeholder="Введите номер телефона"
+					v-model="formData.phone" :error="phoneError"
+					:validationRules="(value) => !value ? 'Поле обязательно' : ''"
 					:asyncValidation="checkPhoneUniqueness" />
 
 				<BaseInput id="password" label="Пароль" type="password" placeholder="Введите пароль"
@@ -33,16 +34,10 @@
 
 				<BaseInput id="last_name" label="Фамилия" placeholder="Введите фамилию" v-model="formData.last_name" />
 
-				<BaseSelect
-					id="gender"
-					label="Пол"
-					placeholder="Выберите пол"
-					v-model="formData.gender"
-					:options="[
-						{ value: 'male', label: 'Мужской' },
-						{ value: 'female', label: 'Женский' }
-					]"
-				/>
+				<BaseSelect id="gender" label="Пол" placeholder="Выберите пол" v-model="formData.gender" :options="[
+					{ value: 'male', label: 'Мужской' },
+					{ value: 'female', label: 'Женский' }
+				]" />
 
 				<BaseInput id="date_of_birth" label="Дата рождения" type="date" v-model="formData.date_of_birth" />
 
@@ -68,6 +63,8 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
+import { processFile } from '@/utils/fileUtils';
+
 import AuthService from '@/API/AuthService';
 import CSRFService from '@/API/CSRFService';
 
@@ -75,6 +72,7 @@ import BaseInput from "@/components/UI/BaseInput/index.vue";
 import BaseTextarea from "@/components/UI/BaseTextarea/index.vue";
 import BaseFileUpload from "@/components/UI/BaseFileUpload/index.vue";
 import BaseSelect from "@/components/UI/BaseSelect/index.vue"
+import { errorMessages } from 'vue/compiler-sfc';
 
 // Инициализация роутера
 const router = useRouter();
@@ -189,19 +187,19 @@ const checkPhoneUniqueness = async () => {
 
 	const phoneRegex = /^(?:\+7|8|\+375)\d{9,10}$/;
 	if (!phoneRegex.test(formData.value.phone)) {
-        phoneError.value = 'Неверный формат номера телефона.';
-        return;
-    }
+		phoneError.value = 'Неверный формат номера телефона.';
+		return;
+	}
 
 	try {
-		// Отправляем запрос на сервер для проверки уникальности email
-		const response = await AuthService.checkPhone(formData.value.email);
+		// Отправляем запрос на сервер для проверки уникальности phone
+		const response = await AuthService.checkPhone(formData.value.phone);
 
 		// Если email уже используется, устанавливаем сообщение об ошибке
 		if (!response.data.isUnique) {
 			phoneError.value = 'Номер телефона уже используется.';
 		} else {
-			phoneError.value = ''; // Очищаем ошибку, если email уникален
+			phoneError.value = ''; // Очищаем ошибку, если phone уникален
 		}
 	} catch (error) {
 		// Логируем ошибку и устанавливаем сообщение для пользователя
@@ -216,72 +214,100 @@ const checkPhoneUniqueness = async () => {
 	}
 }
 
-// Обработчик загрузки аватара
-/* const handleAvatarUpload = (event) => {
-	const file = event.target.files[0];
-	if (file) {
-		if (file.size > 10 * 1024 * 1024) {
-			avatarError.value = 'Файл слишком большой. Максимальный размер: 10 МБ.';
-			return;
-		}
-		convertImageToWebP(file).then((webpBlob) => {
-			formData.value.avatar = webpBlob;
-			previewAvatar.value = URL.createObjectURL(webpBlob);
-			avatarError.value = '';
-		}).catch((error) => {
-			avatarError.value = 'Ошибка обработки изображения.';
-			console.error('Ошибка конвертации в WebP:', error);
-		});
-	}
-};
-
-// Конвертация изображения в WebP
-const convertImageToWebP = (file) => {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = (e) => {
-			const img = new Image();
-			img.src = e.target.result;
-			img.onload = () => {
-				const canvas = document.createElement('canvas');
-				const ctx = canvas.getContext('2d');
-				canvas.width = img.width;
-				canvas.height = img.height;
-				ctx.drawImage(img, 0, 0);
-				canvas.toBlob(
-					(blob) => blob ? resolve(blob) : reject(new Error('Ошибка создания Blob')),
-					'image/webp',
-					0.75 // Качество сжатия
-				);
-			};
-			img.onerror = reject;
-		};
-		reader.onerror = reject;
-		reader.readAsDataURL(file);
-	});
-}; */
-
 // Обработчик регистрации
 const handleRegistration = async () => {
 	try {
-		// Создаем FormData для отправки
-		const formDataToSend = new FormData();
-		Object.keys(formData.value).forEach((key) => {
-			if (key === 'avatar' && formData.value[key]) {
-				formDataToSend.append(key, formData.value[key], 'avatar.webp');
-			} else {
-				formDataToSend.append(key, formData.value[key]);
-			}
-		});
+		// Подготовка данных для отправки
+		const registrationData = {
+			username: formData.value.username,
+			email: formData.value.email,
+			phone: formData.value.phone,
+			password: formData.value.password,
+			first_name: formData.value.first_name,
+			last_name: formData.value.last_name,
+			gender: formData.value.gender,
+			date_of_birth: formData.value.date_of_birth,
+			bio: formData.value.bio,
+		};
 
-		// Вызываем метод регистрации через AuthService
-		await AuthService.registration(formDataToSend);
+		// Обработка аватара
+		if (formData.value.avatar) {
+			const processedFile = await processFile(formData.value.avatar, {
+				maxWidth: 800,
+				quality: 0.7
+			});
+			registrationData.avatar = {
+				url: processedFile.base64,
+				type: processedFile.meta.type,
+				name: processedFile.meta.name,
+				size: processedFile.meta.size
+			};
+		}
 
-		// Перенаправляем пользователя на страницу авторизации
-		router.push({ name: 'login' });
+		// Отправка данных
+		const response = await AuthService.registration(registrationData);
+
+		// Успешная регистрация
+		if (response.data.status === "ok") {
+			router.push({ name: 'login' });
+			return;
+		}
+
+		// Обработка неожиданного ответа
+		errorMessage.value = "Неизвестная ошибка сервера";
+
 	} catch (error) {
-		errorMessage.value = 'Ошибка регистрации. Попробуйте снова.';
-		console.error('Ошибка при регистрации:', error);
+		// Очистка предыдущих ошибок
+		errorMessage.value = "";
+		usernameError.value = "";
+		emailError.value = "";
+		phoneError.value = "";
+
+		if (error.response) {
+			// Обработка структурированных ошибок от бэкенда
+			const { status, data } = error.response;
+
+			if (status === 400) {
+				// Валидационные ошибки
+				if (data.details?.missing_fields) {
+					errorMessage.value = "Заполните все обязательные поля";
+				} else if (data.details?.field === "date_of_birth") {
+					errorMessage.value = "Неверный формат даты рождения";
+				} else if (data.details?.avatar_error) {
+					avatarError.value = data.message || "Ошибка загрузки аватара";
+				}
+			}
+			else if (status === 409) {
+				// Конфликты уникальности
+				if (data.details?.conflict_fields) {
+					const conflicts = data.details.conflict_fields;
+
+					if (conflicts.username) {
+						usernameError.value = conflicts.username;
+					}
+					if (conflicts.email) {
+						emailError.value = conflicts.email;
+					}
+					if (conflicts.phone) {
+						phoneError.value = conflicts.phone;
+					}
+				}
+			}
+			else if (status === 500) {
+				// Серверные ошибки
+				errorMessage.value = data.message || "Ошибка сервера. Попробуйте позже.";
+			}
+
+			// Общее сообщение, если не найдена конкретная ошибка
+			if (!errorMessage.value && !usernameError.value &&
+				!emailError.value && !phoneError.value) {
+				errorMessage.value = data.message || "Произошла ошибка";
+			}
+		} else {
+			// Сетевые ошибки или ошибки без ответа
+			errorMessage.value = "Ошибка соединения с сервером";
+			console.error('Network error:', error);
+		}
 	}
 };
 
@@ -293,7 +319,7 @@ const goBackToStep1 = () => {
 // Запрос CSRF-токена при загрузке страницы
 onMounted(async () => {
 	try {
-		await CSRFService.getCSRF(); 
+		await CSRFService.getCSRF();
 	} catch (error) {
 		console.error('Failed to fetch CSRF token:', error);
 	}
@@ -353,13 +379,15 @@ button {
 .btn-secondary:hover {
 	background: #bbb;
 }
+
 span.link {
 	display: block;
 	text-align: center;
 	margin-top: 15px;
 }
+
 span.link a {
 	color: var(--primary-color);
-  	text-decoration: none;
+	text-decoration: none;
 }
 </style>

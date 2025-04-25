@@ -1,6 +1,8 @@
 # Стандартные библиотеки Python
+from datetime import datetime
 from json import JSONDecodeError
 import json
+from typing import Any, Dict
 from uuid import UUID
 
 # Внешние зависимости
@@ -57,72 +59,127 @@ def extract_client_metadata(request: Request):
 
 # Handlers
 @get_session
-async def register(request: Request, db_session=None):
+async def register(request: Request, response: Response, db_session=None):
     """
     Регистрация нового пользователя.
     """
     logger.info("Начало обработки запроса на регистрацию пользователя")
+    
     try:
-        # Извлечение данных из формы
-        form_data = await request.form()
-        username = form_data.get("username")
-        email = form_data.get("email")
-        phone = form_data.get('phone')
-        password = form_data.get("password")
-        first_name = form_data.get("first_name", "")
-        last_name = form_data.get("last_name", "")
-        gender = form_data.get("gender", "non-binary")
-        bio = form_data.get("bio", "")  # Поле "О себе"
-        date_of_birth = form_data.get("date_of_birth", None)  # Поле даты рождения
-        avatar_file: UploadFile = form_data.get("avatar")  # Файл аватара
-
-        # Валидация обязательных полей
-        if not username or not email or not password:
-            logger.warning("Отсутствуют обязательные поля")
-            raise HTTPException(status_code=400, detail="Missing required fields")
-
-        # Проверка уникальности имени пользователя
-        existing_user = await User.get_user_by_credentials(db_session, username)
-        if existing_user:
-            logger.warning(f"Пользователь с таким username уже существует: {username}")
-            raise HTTPException(status_code=409, detail="User already exists")
-
-        # Хэширование пароля
-        hashed_password = hash_password(password)
-
-        # Сохранение аватара (если загружен)
-        avatar_url = None
-        if avatar_file and avatar_file.filename:
-            avatar_url = save_uploaded_file(avatar_file)  # Сохраняем файл и получаем URL
+        # Извлекаем данные строго из JSON тела запроса
+        data: Dict[str, Any] = await request.json()
         
-        if date_of_birth == "":
-            date_of_birth = None
+        # Валидация обязательных полей
+        required_fields = ['username', 'email', 'phone', 'password']
+        if missing_fields := [
+            field for field in required_fields 
+            if field not in data or not data[field]
+        ]:
+            error_msg = f"Отсутствуют обязательные поля: {', '.join(missing_fields)}"
+            logger.warning(error_msg)
+            response.status_code = status.HTTP_400_BAD_REQUEST
+            return {
+                "status": "error",
+                "message": error_msg,
+                "details": {"missing_fields": missing_fields}
+            }
+
+        # Оптимизированная проверка уникальности
+        uniqueness_checks = {
+            'username': data['username'],
+            'email': data['email'],
+            'phone': data['phone']
+        }
+        
+        existing_fields = {}
+        for field, value in uniqueness_checks.items():
+            if user := await User.get_user_by_credentials(db_session, value):
+                existing_fields[field] = f"Пользователь с таким {field} уже существует"
+        
+        if existing_fields:
+            logger.warning(f"Конфликт уникальности: {existing_fields}")
+            response.status_code = status.HTTP_409_CONFLICT
+            return {
+                "status": "error",
+                "message": "Пользователь с такими данными уже существует",
+                "details": {"conflict_fields": existing_fields}
+            }
+
+        # Обработка аватара
+        avatar_url = None
+        if 'avatar' in data and data['avatar']:
+            try:
+                avatar_data = data['avatar']
+                if not {'url', 'type', 'size', 'name'}.issubset(avatar_data.keys()):
+                    raise ValueError("Неверный формат аватара: отсутствуют обязательные поля")
+                
+                avatar_url = save_file(avatar_data)
+            except Exception as e:
+                logger.error(f"Ошибка обработки аватара: {str(e)}")
+                response.status_code = status.HTTP_400_BAD_REQUEST
+                return {
+                    "status": "error",
+                    "message": "Некорректные данные аватара",
+                    "details": {"avatar_error": str(e)}
+                }
+
+        # Обработка даты рождения
+        date_of_birth = None
+        if dob_str := data.get('date_of_birth'):
+            try:
+                date_of_birth = datetime.strptime(dob_str, "%Y-%m-%d").date()
+            except ValueError:
+                logger.warning(f"Неверный формат даты рождения: {dob_str}")
+                response.status_code = status.HTTP_400_BAD_REQUEST
+                return {
+                    "status": "error",
+                    "message": "Неверный формат даты. Используйте YYYY-MM-DD",
+                    "details": {"field": "date_of_birth"}
+                }
 
         # Создание пользователя
-        new_user = await User.create_user(
+        if not (new_user := await User.create_user(
             db_session=db_session,
-            username=username,
-            email=email,
-            phone=phone,
-            password=hashed_password,
-            first_name=first_name,
-            last_name=last_name,
-            gender=gender,
-            avatar=avatar_url,  # Сохраняем путь к аватару
-            bio=bio,
+            username=data['username'],
+            email=data['email'],
+            phone=data['phone'],
+            password=hash_password(data['password']),
+            first_name=data.get('first_name'),
+            last_name=data.get('last_name'),
+            gender=data.get('gender'),
+            avatar=avatar_url,
+            bio=data.get('bio'),
             date_of_birth=date_of_birth
-        )
+        )):
+            error_msg = "Ошибка при создании пользователя в БД"
+            logger.error(error_msg)
+            response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+            return {
+                "status": "error",
+                "message": error_msg
+            }
 
-        if not new_user:
-            logger.error("Не удалось создать пользователя")
-            raise HTTPException(status_code=500, detail="Failed to create user")
-
-        logger.info(f"Пользователь успешно зарегистрирован: {username}")
-        return {"status": "ok", "message": "User registered successfully"}
+        logger.info(f"Успешная регистрация: {data['username']}")
+        return {
+            "status": "ok",
+            "message": "Пользователь успешно зарегистрирован",
+            "data": {
+                "user_id": str(new_user.uid),
+                "username": new_user.username,
+                "email": new_user.email,
+                "avatar": avatar_url
+            }
+        }
 
     except Exception as e:
-        logger.exception("Произошла ошибка при регистрации пользователя")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.exception("Ошибка при регистрации пользователя")
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {
+            "status": "error",
+            "message": "Внутренняя ошибка сервера",
+            "details": str(e)
+        }
+        
     
 @get_session
 async def check_username(request: Request, db_session=None):
