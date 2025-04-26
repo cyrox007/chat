@@ -110,7 +110,7 @@ async def register(request: Request, response: Response, db_session=None):
         if 'avatar' in data and data['avatar']:
             try:
                 avatar_data = data['avatar']
-                if not {'url', 'type', 'size', 'name'}.issubset(avatar_data.keys()):
+                if not {'name', 'size', 'type', 'url'}.issubset(avatar_data.keys()):
                     raise ValueError("Неверный формат аватара: отсутствуют обязательные поля")
                 
                 avatar_url = save_file(avatar_data)

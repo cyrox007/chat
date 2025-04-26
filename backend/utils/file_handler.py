@@ -33,11 +33,11 @@ def save_file(file_data: dict) -> str:
     """
     try:
         # Проверка формата входных данных
-        if not file_data.get("url") or ',' not in file_data["url"]:
+        if not file_data.get("url"):
             raise HTTPException(status_code=400, detail="Invalid file format")
 
         # Извлекаем MIME-тип и кодировку из Base64
-        mime_type, encoded_data = file_data["url"].split(',', 1)
+        encoded_data = file_data["url"]
         file_content = base64.b64decode(encoded_data)
 
         # Проверка размера файла
@@ -45,7 +45,7 @@ def save_file(file_data: dict) -> str:
             raise HTTPException(status_code=400, detail="File too large")
 
         # Извлекаем основной MIME-тип (удаляем data: и параметры)
-        mime_type_base = re.sub(r"^data:|;.*$", "", mime_type)
+        mime_type_base = re.sub(r"^data:|;.*$", "", file_data['type'])
         logger.debug(f"mime_type_base: {mime_type_base}")
         if not mime_type_base:
             raise HTTPException(status_code=400, detail="Invalid MIME type")
