@@ -1,8 +1,7 @@
 # Стандартные библиотеки Python
 from datetime import datetime
 from json import JSONDecodeError
-import json
-from typing import Any, Dict
+import re
 from uuid import UUID
 
 # Внешние зависимости
@@ -10,6 +9,7 @@ from fastapi import Depends, Request, HTTPException, Response, UploadFile, statu
 from fastapi.responses import JSONResponse
 
 # Локальные модули
+from components.user.exceptions import UserValidationError
 from services.auth_service import generate_tokens
 from components.decorators.db import get_session
 from components.device.model import UserDevice
@@ -60,125 +60,97 @@ def extract_client_metadata(request: Request):
 # Handlers
 @get_session
 async def register(request: Request, response: Response, db_session=None):
-    """
-    Регистрация нового пользователя.
-    """
-    logger.info("Начало обработки запроса на регистрацию пользователя")
+    """Регистрация нового пользователя с полной валидацией."""
+    logger.info("Начало обработки запроса на регистрацию")
     
     try:
-        # Извлекаем данные строго из JSON тела запроса
-        data: Dict[str, Any] = await request.json()
+        data = await request.json()
         
-        # Валидация обязательных полей
+        # Проверка обязательных полей
         required_fields = ['username', 'email', 'phone', 'password']
-        if missing_fields := [
-            field for field in required_fields 
-            if field not in data or not data[field]
-        ]:
-            error_msg = f"Отсутствуют обязательные поля: {', '.join(missing_fields)}"
-            logger.warning(error_msg)
-            response.status_code = status.HTTP_400_BAD_REQUEST
-            return {
-                "status": "error",
-                "message": error_msg,
-                "details": {"missing_fields": missing_fields}
-            }
+        if missing := [f for f in required_fields if not data.get(f)]:
+            response.status_code = 400
+            return {"error": f"Отсутствуют поля: {', '.join(missing)}"}
 
-        # Оптимизированная проверка уникальности
-        uniqueness_checks = {
-            'username': data['username'],
-            'email': data['email'],
-            'phone': data['phone']
-        }
-        
-        existing_fields = {}
-        for field, value in uniqueness_checks.items():
-            if user := await User.get_user_by_credentials(db_session, value):
-                existing_fields[field] = f"Пользователь с таким {field} уже существует"
-        
-        if existing_fields:
-            logger.warning(f"Конфликт уникальности: {existing_fields}")
-            response.status_code = status.HTTP_409_CONFLICT
-            return {
-                "status": "error",
-                "message": "Пользователь с такими данными уже существует",
-                "details": {"conflict_fields": existing_fields}
-            }
+        # Валидация email
+        if not re.match(r"[^@]+@[^@]+\.[^@]+", data['email']):
+            response.status_code = 400
+            return {"status": "error", "message": "Неверный формат email"}
+
+        # Валидация телефона
+        phone_pattern = r'^\+?(375\d{9}|7\d{10})$'
+        cleaned_phone = re.sub(r'[^\d+]', '', data['phone'])
+        if not re.fullmatch(phone_pattern, cleaned_phone):
+            response.status_code = 400
+            return {"status": "error", "message": "Неверный формат телефона"}
+
+        # Проверка уникальности
+        for field in ['username', 'email', 'phone']:
+            if await User.get_user_by_credentials(db_session, data[field]):
+                response.status_code = 409
+                return {"status": "error", "message": f"Пользователь с таким {field} уже существует"}
+
+        # Обработка даты рождения
+        dob = None
+        if dob_str := data.get('date_of_birth'):
+            try:
+                dob = datetime.strptime(dob_str, "%Y-%m-%d").date()
+            except ValueError:
+                response.status_code = 400
+                return {"status": "error", "message": "Неверный формат даты (ожидается YYYY-MM-DD)"}
 
         # Обработка аватара
         avatar_url = None
-        if 'avatar' in data and data['avatar']:
-            try:
-                avatar_data = data['avatar']
-                if not {'name', 'size', 'type', 'url'}.issubset(avatar_data.keys()):
-                    raise ValueError("Неверный формат аватара: отсутствуют обязательные поля")
-                
-                avatar_url = save_file(avatar_data)
-            except Exception as e:
-                logger.error(f"Ошибка обработки аватара: {str(e)}")
-                response.status_code = status.HTTP_400_BAD_REQUEST
-                return {
-                    "status": "error",
-                    "message": "Некорректные данные аватара",
-                    "details": {"avatar_error": str(e)}
-                }
 
-        # Обработка даты рождения
-        date_of_birth = None
-        if dob_str := data.get('date_of_birth'):
+        # 1. Если аватар не загружен — выбираем дефолтный по полу
+        if not data.get('avatar'):
+            avatar_url = (
+                "/static/default_female.webp" 
+                if data.get('gender', 'male') == 'female' 
+                else "/static/default_male.webp"
+            )
+        # 2. Если аватар загружен — сохраняем его
+        else:
+            avatar_data = data['avatar']
+            if not isinstance(avatar_data, dict) or not {'name', 'size', 'type', 'url'}.issubset(avatar_data.keys()):
+                response.status_code = 400
+                return {"status": "error", "message": "Неверный формат аватара"}
+            
             try:
-                date_of_birth = datetime.strptime(dob_str, "%Y-%m-%d").date()
-            except ValueError:
-                logger.warning(f"Неверный формат даты рождения: {dob_str}")
-                response.status_code = status.HTTP_400_BAD_REQUEST
-                return {
-                    "status": "error",
-                    "message": "Неверный формат даты. Используйте YYYY-MM-DD",
-                    "details": {"field": "date_of_birth"}
-                }
+                avatar_url = save_file(avatar_data)  # Ваша функция сохранения
+            except Exception as e:
+                logger.error(f"Ошибка загрузки аватара: {e}")
+                response.status_code = 400
+                return {"status": "error", "message": "Не удалось загрузить аватар"}
 
         # Создание пользователя
-        if not (new_user := await User.create_user(
+        user = await User.create_user(
             db_session=db_session,
             username=data['username'],
             email=data['email'],
             phone=data['phone'],
             password=hash_password(data['password']),
+            gender=data.get('gender', 'male'),
             first_name=data.get('first_name'),
             last_name=data.get('last_name'),
-            gender=data.get('gender'),
-            avatar=avatar_url,
             bio=data.get('bio'),
-            date_of_birth=date_of_birth
-        )):
-            error_msg = "Ошибка при создании пользователя в БД"
-            logger.error(error_msg)
-            response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-            return {
-                "status": "error",
-                "message": error_msg
-            }
-
-        logger.info(f"Успешная регистрация: {data['username']}")
+            date_of_birth=dob,
+            avatar=avatar_url
+        )
+        
         return {
             "status": "ok",
-            "message": "Пользователь успешно зарегистрирован",
-            "data": {
-                "user_id": str(new_user.uid),
-                "username": new_user.username,
-                "email": new_user.email,
-                "avatar": avatar_url
-            }
+            "user_id": str(user.uid),
+            "username": user.username
         }
 
+    except UserValidationError as e:
+        response.status_code = 400
+        return {"status": "error", "message": str(e)}
     except Exception as e:
-        logger.exception("Ошибка при регистрации пользователя")
-        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        return {
-            "status": "error",
-            "message": "Внутренняя ошибка сервера",
-            "details": str(e)
-        }
+        logger.exception("Ошибка при регистрации")
+        response.status_code = 500
+        return {"status": "error", "message": "Внутренняя ошибка сервера"}
         
     
 @get_session

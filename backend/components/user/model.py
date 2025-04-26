@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 # Локальные модули
 from database import Database
@@ -100,78 +100,16 @@ class User(Database.Base):
         gender: str = None,
         first_name: str = None,
         last_name: str = None,
-        bio=None,
-        date_of_birth=None,
+        bio: str = None,
+        date_of_birth: date = None,  # Ожидаем уже готовый datetime.date
         avatar: str = None  
-    ):
+    ) -> Optional["User"]:
         """
-        Создает нового пользователя в БД.
-        :param db_session: Асинхронная сессия БД
-        :param username: Логин пользователя
-        :param email: Почта пользователя
-        :param phone: Номер телефона
-        :param password: Хэшированный пароль
-        :param gender: Пол пользователя
-        :param first_name: Имя пользователя
-        :param last_name: Фамилия пользователя
-        :param avatar: Ссылка на аватар (необязательно)
-        :return: Созданный пользователь или None при ошибке
+        Только создает пользователя в БД. 
+        Все валидации должны быть выполнены в хэндлере!
         """
-        logger.info(f"Начало создания пользователя: {username}")
+        logger.info(f"Создание пользователя: {username}")
         try:
-            # Валидация email
-            if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-                logger.error(f"Неверный формат email: {email}")
-                raise UserValidationError("Invalid email format")
-
-            # Валидация телефона
-            phone_pattern = r'^\+?(375\d{9}|7\d{10})$'
-            cleaned_phone = re.sub(r'[^\d+]', '', phone)
-            if not re.fullmatch(phone_pattern, cleaned_phone):
-                logger.error(f"Неверный формат номера телефона: {phone}")
-                raise UserValidationError("Invalid phone number format")
-
-            # Проверка уникальности (асинхронная)
-            result = await db_session.execute(
-                select(cls).where(
-                    (cls.username == username) |
-                    (cls.email == email) |
-                    (cls.phone == phone)
-                )
-            )
-            existing_user = result.scalars().first()
-            
-            if existing_user:
-                if existing_user.username == username:
-                    logger.warning(f"Пользователь с таким username уже существует: {username}")
-                    raise UserValidationError("Username already exists")
-                if existing_user.email == email:
-                    logger.warning(f"Пользователь с такой почтой уже существует: {email}")
-                    raise UserValidationError("Email already exists")
-                if existing_user.phone == phone:
-                    logger.warning(f"Пользователь с таким телефоном уже существует: {phone}")
-                    raise UserValidationError("Phone already exists")
-
-            # Преобразование даты рождения
-            dob = None
-            if date_of_birth:
-                if isinstance(date_of_birth, str):
-                    try:
-                        dob = datetime.strptime(date_of_birth, "%Y-%m-%d").date()
-                    except ValueError:
-                        logger.error(f"Неверный формат даты рождения: {date_of_birth}")
-                        raise UserValidationError("Invalid date format. Use YYYY-MM-DD")
-                elif isinstance(date_of_birth, (datetime.date, datetime.datetime)):
-                    dob = date_of_birth.date() if isinstance(date_of_birth, datetime.datetime) else date_of_birth
-                else:
-                    logger.error(f"Неподдерживаемый тип даты рождения: {type(date_of_birth)}")
-                    raise UserValidationError("Invalid date_of_birth type")
-
-            # Выбор аватара по умолчанию
-            if not avatar:
-                avatar = "/static/default_female.webp" if gender == 'female' else "/static/default_male.webp"
-
-            # Создание пользователя
             new_user = cls(
                 username=username,
                 email=email,
@@ -182,24 +120,21 @@ class User(Database.Base):
                 first_name=first_name,
                 last_name=last_name,
                 bio=bio,
-                date_of_birth=dob  # Используем преобразованную дату dob вместо date_of_birth
+                date_of_birth=date_of_birth
             )
-            
             db_session.add(new_user)
             await db_session.commit()
-            await db_session.refresh(new_user)  # Обновляем объект после коммита
-            
-            logger.info(f"Пользователь успешно создан: {username}")
+            await db_session.refresh(new_user)
             return new_user
 
         except IntegrityError as e:
-            logger.exception(f"Ошибка целостности данных при создании пользователя: {username}")
+            logger.error(f"Ошибка целостности: {e}")
             await db_session.rollback()
-            return None
+            raise UserValidationError("Пользователь с такими данными уже существует") from e
         except Exception as e:
-            logger.exception(f"Неожиданная ошибка при создании пользователя: {e}")
+            logger.error(f"Ошибка при создании пользователя: {e}")
             await db_session.rollback()
-            return None
+            raise
 
     @classmethod
     async def get_user_by_credentials(cls, db_session: AsyncSession, identifier: str):
