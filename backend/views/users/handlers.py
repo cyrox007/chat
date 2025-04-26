@@ -70,7 +70,7 @@ async def register(request: Request, response: Response, db_session=None):
         required_fields = ['username', 'email', 'phone', 'password']
         if missing := [f for f in required_fields if not data.get(f)]:
             response.status_code = 400
-            return {"error": f"Отсутствуют поля: {', '.join(missing)}"}
+            return {"status": "error", "message": f"Отсутствуют поля: {', '.join(missing)}"}
 
         # Валидация email
         if not re.match(r"[^@]+@[^@]+\.[^@]+", data['email']):
