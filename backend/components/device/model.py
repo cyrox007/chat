@@ -1,3 +1,4 @@
+from psycopg2 import InterfaceError
 from sqlalchemy import UUID, Column, String, ForeignKey, DateTime, Boolean
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import JSONB
@@ -58,47 +59,62 @@ class UserDevice(Database.Base):
 
     @classmethod
     async def update_token(cls, db_session: AsyncSession, old_token: str, new_token: str, 
-                        ip_address: str, user_agent: str, expires_in_days: int = 30):
+                           ip_address: str, user_agent: str, expires_in_days: int = 30):
         """
-        Асинхронно обновляет существующий токен устройства с улучшенной обработкой ошибок.
+        Атомарное обновление токена с полной обработкой ошибок.
         """
-        logger.info(f"Обновление токена: {old_token[:10]}... -> {new_token[:10]}...")
-        
+        logger.info(
+            f"Обновление токена: {old_token[:10]}... -> {new_token[:10]}...")
+
         try:
-            # 1. Быстрая проверка существования нового токена без блокировки
-            if (await db_session.execute(
-                select(cls.id).where(cls.token == new_token, cls.is_active == True)
-            )).scalar_one_or_none():
-                logger.info("Новый токен уже существует")
-                return None
-
-            # 2. Короткая транзакция для обновления
-            async with db_session.begin_nested():
-                # Получаем запись с блокировкой (но быстро)
-                record = (await db_session.execute(
+            async with db_session.begin():  # Начинаем транзакцию
+                # 1. Блокируем запись для обновления
+                device = await db_session.execute(
                     select(cls)
-                    .where(cls.token == old_token, cls.is_active == True)
-                    .with_for_update(skip_locked=True)  # Пропускаем заблокированные
+                    .where(
+                        (cls.token == old_token) &
+                        (cls.is_active == True)
+                    )
+                    .with_for_update()  # Блокировка от конкурентного доступа
                     .limit(1)
-                )).scalar_one_or_none()
+                )
+                device = device.scalar_one_or_none()
 
-                if not record:
-                    logger.warning("Токен не найден или неактивен")
+                if not device:
+                    logger.warning(f"Устройство с токеном {old_token[:10]}... не найдено или неактивно")
                     return None
 
-                # Обновляем данные
-                record.token = new_token
-                record.ip_address = ip_address
-                record.user_agent = user_agent
-                record.expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
-                
-            logger.info("Токен успешно обновлен")
-            return record
+                # 2. Проверяем, не используется ли уже новый токен
+                if await db_session.execute(
+                    select(cls.id)
+                    .where(
+                        (cls.token == new_token) &
+                        (cls.is_active == True)
+                    )
+                    .limit(1)
+                ).scalar_one_or_none():
+                    logger.warning(f"Токен {new_token[:10]}... уже используется")
+                    return None
 
-        except Exception as e:
-            logger.error(f"Ошибка обновления токена: {type(e).__name__}: {str(e)}")
+                # 3. Обновляем данные устройства
+                device.token = new_token
+                device.ip_address = ip_address
+                device.user_agent = user_agent
+                device.expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+                device.updated_at = datetime.utcnow()
+
+                logger.info(f"Токен устройства {device.id} успешно обновлен")
+                return device
+
+        except InterfaceError as e:
+            logger.error(f"Ошибка соединения с БД при обновлении токена: {str(e)}")
             await db_session.rollback()
-            raise ValueError("Token update failed") from e
+            raise ValueError("Ошибка соединения с базой данных") from e
+            
+        except Exception as e:
+            logger.error(f"Неожиданная ошибка при обновлении токена: {str(e)}")
+            await db_session.rollback()
+            raise ValueError("Ошибка обновления токена") from e
 
     @classmethod
     async def deactivate_token(cls, db_session: AsyncSession, token: str):

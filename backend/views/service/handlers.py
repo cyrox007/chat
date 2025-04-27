@@ -49,8 +49,8 @@ async def refresh_tokens(request: Request, db_session=None):
         new_access_token = create_access_token({"user_uid": user_uid})
         new_refresh_token = create_refresh_token({"user_uid": user_uid})
 
-        logger.debug(f"Сгенерирован новый access_token: {new_access_token}")
-        logger.debug(f"Сгенерирован новый refresh_token: {new_refresh_token}")
+        #logger.debug(f"Сгенерирован новый access_token: {new_access_token}")
+        #logger.debug(f"Сгенерирован новый refresh_token: {new_refresh_token}")
 
         # Обновление записи о токене через метод модели
         logger.info("Обновление записи о токене в базе данных.")
