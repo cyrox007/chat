@@ -92,6 +92,24 @@ export default {
 		}
 	},
 	actions: {
+		async refreshToken({ commit, dispatch }) {
+			try {
+
+				const refreshResponse = await axios.get(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000' }/refresh`, {
+					withCredentials: true,
+				});
+				const { status, access_token } = refreshResponse.data;
+				
+				localStorage.setItem('access_token', access_token);
+
+				return true;
+			} catch (error) {
+				console.error('Ошибка обновления токена:', error);
+				// Если не удалось обновить токен, выполняем выход
+				dispatch('logout');
+				throw error;
+			}
+		},
 		async fetchUserData({ commit }, userUids) {
 			try {
 				await CSRFService.getCSRF();
@@ -130,10 +148,24 @@ export default {
 					commit('setConnectionStatus', true);
 				};
 
-				socket.onclose = (event) => {
+				socket.onclose = async (event) => {
 					console.log('WebSocket соединение закрыто', event);
 					commit('setConnectionStatus', false);
 					// Убрали автоматический реконнект
+
+					if (event.code === 1008 || event.code === 1006) {
+						console.log('Токен устарел, пытаемся обновить...');
+						try {
+							// Пытаемся обновить токен
+							await dispatch('chat/refreshToken', null, { root: true });
+							// После успешного обновления переподключаемся
+							await dispatch('connectSocket');
+						} catch (refreshError) {
+							console.error('Не удалось обновить токен:', refreshError);
+							// Если не удалось обновить токен, перенаправляем на страницу входа
+							// dispatch('auth/logout', null, { root: true });
+						}
+					}
 				};
 
 				socket.onerror = (error) => {
