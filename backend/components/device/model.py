@@ -1,14 +1,12 @@
-from psycopg2 import InterfaceError
-from sqlalchemy import UUID, Column, String, ForeignKey, DateTime, Boolean
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.future import select
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import relationship
+from typing import Optional, List
+from uuid import UUID, uuid4
 from datetime import datetime, timedelta
-import uuid
-from typing import Optional
+
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, select, and_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import InterfaceError, IntegrityError
+from sqlalchemy.orm import relationship
 
 from database import Database
 from utils.logger import setup_logger
@@ -18,8 +16,9 @@ logger = setup_logger(__name__)
 class UserDevice(Database.Base):
     __tablename__ = 'user_devices'
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_uid = Column(UUID(as_uuid=True), ForeignKey('users.uid'), nullable=False)
+    # Fields
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    user_uid = Column(PG_UUID(as_uuid=True), ForeignKey('users.uid'), nullable=False)
     token = Column(String, unique=True, nullable=False)
     ip_address = Column(String, nullable=False)
     user_agent = Column(String, nullable=False)
@@ -28,156 +27,215 @@ class UserDevice(Database.Base):
     expires_at = Column(DateTime, nullable=False)
     is_active = Column(Boolean, default=True)
 
-    # Связь с моделью User
+    # Relationships
     user = relationship("User", back_populates="refresh_tokens")
 
+    # Constants
+    DEFAULT_EXPIRATION_DAYS = 30
+
+    # Utility methods
+    @staticmethod
+    def _log_token(token: str) -> str:
+        """Логирование части токена для безопасности."""
+        return f"{token[:10]}..." if token else "empty_token"
+
     @classmethod
-    async def create(cls, db_session: AsyncSession, user_uid, token, ip_address, user_agent, 
-                    device_info: Optional[str] = None, expires_in_days: int = 30):
-        """
-        Асинхронно создает новую запись о токене устройства.
-        """
-        logger.info(f"Создание новой записи для токена устройства.")
+    async def _execute_scalar(cls, db_session: AsyncSession, query) -> Optional['UserDevice']:
+        """Универсальный метод выполнения запроса с возвратом одного результата."""
+        result = await db_session.execute(query)
+        return result.scalar_one_or_none()
+
+    # CRUD Operations
+    @classmethod
+    async def create(
+        cls,
+        db_session: AsyncSession,
+        user_uid: UUID,
+        token: str,
+        ip_address: str,
+        user_agent: str,
+        device_info: Optional[dict] = None,
+        expires_in_days: int = DEFAULT_EXPIRATION_DAYS
+    ) -> Optional['UserDevice']:
+        """Создает новую запись устройства пользователя."""
+        logger.info(f"Создание устройства для пользователя {user_uid}")
+
         try:
             expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
-            new_record = cls(
+            device = cls(
                 user_uid=user_uid,
                 token=token,
                 ip_address=ip_address,
                 user_agent=user_agent,
                 device_info=device_info,
-                expires_at=expires_at,
+                expires_at=expires_at
             )
-            db_session.add(new_record)
+
+            db_session.add(device)
             await db_session.commit()
-            logger.info(f"Запись успешно создана: {new_record}")
-            return new_record
+            logger.info(f"Устройство создано: {device.id}")
+            return device
+
+        except IntegrityError as e:
+            logger.error(f"Ошибка уникальности токена: {cls._log_token(token)}")
+            await db_session.rollback()
+            raise ValueError("Токен уже существует") from e
         except Exception as e:
-            logger.error(f"Ошибка при создании записи: {e}")
+            logger.error(f"Ошибка создания устройства: {str(e)}")
             await db_session.rollback()
             raise
 
     @classmethod
-    async def update_token(cls, db_session: AsyncSession, old_token: str, new_token: str, 
-                           ip_address: str, user_agent: str, expires_in_days: int = 30):
-        """
-        Атомарное обновление токена с полной обработкой ошибок.
-        """
-        logger.info(
-            f"Обновление токена: {old_token[:10]}... -> {new_token[:10]}...")
+    async def update_token(
+        cls,
+        db_session: AsyncSession,
+        old_token: str,
+        new_token: str,
+        ip_address: str,
+        user_agent: str,
+        expires_in_days: int = DEFAULT_EXPIRATION_DAYS
+    ) -> Optional['UserDevice']:
+        """Атомарное обновление токена устройства."""
+        logger.info(f"Обновление токена {cls._log_token(old_token)} -> {cls._log_token(new_token)}")
 
         try:
-            async with db_session.begin():  # Начинаем транзакцию
-                # 1. Блокируем запись для обновления
-                device = await db_session.execute(
-                    select(cls)
-                    .where(
-                        (cls.token == old_token) &
-                        (cls.is_active == True)
-                    )
-                    .with_for_update()  # Блокировка от конкурентного доступа
-                    .limit(1)
-                )
-                device = device.scalar_one_or_none()
-
+            async with db_session.begin():
+                # Получаем и блокируем устройство
+                device = await cls._get_and_lock_device(db_session, old_token)
                 if not device:
-                    logger.warning(f"Устройство с токеном {old_token[:10]}... не найдено или неактивно")
                     return None
 
-                # 2. Проверяем, не используется ли уже новый токен
-                if await db_session.execute(
-                    select(cls.id)
-                    .where(
-                        (cls.token == new_token) &
-                        (cls.is_active == True)
-                    )
-                    .limit(1)
-                ).scalar_one_or_none():
-                    logger.warning(f"Токен {new_token[:10]}... уже используется")
+                # Проверяем новый токен
+                if await cls._is_token_used(db_session, new_token):
                     return None
 
-                # 3. Обновляем данные устройства
-                device.token = new_token
-                device.ip_address = ip_address
-                device.user_agent = user_agent
-                device.expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
-                device.updated_at = datetime.utcnow()
-
-                logger.info(f"Токен устройства {device.id} успешно обновлен")
-                return device
+                # Обновляем данные
+                return cls._update_device(
+                    device,
+                    new_token,
+                    ip_address,
+                    user_agent,
+                    expires_in_days
+                )
 
         except InterfaceError as e:
-            logger.error(f"Ошибка соединения с БД при обновлении токена: {str(e)}")
-            await db_session.rollback()
-            raise ValueError("Ошибка соединения с базой данных") from e
-            
+            logger.error(f"Ошибка соединения: {str(e)}")
+            raise ValueError("Database connection error") from e
         except Exception as e:
-            logger.error(f"Неожиданная ошибка при обновлении токена: {str(e)}")
-            await db_session.rollback()
-            raise ValueError("Ошибка обновления токена") from e
-
-    @classmethod
-    async def deactivate_token(cls, db_session: AsyncSession, token: str):
-        """
-        Асинхронно деактивирует токен (например, при выходе пользователя).
-        """
-        logger.info(f"Начало деактивации токена: {token}")
-        try:
-            stmt = select(cls).where(
-                cls.token == token,
-                cls.is_active == True
-            )
-            result = await db_session.execute(stmt)
-            record = result.scalar_one_or_none()
-            
-            if not record:
-                logger.warning(f"Запись с токеном {token} не найдена или уже деактивирована.")
-                raise ValueError("Invalid or inactive token")
-
-            logger.debug(f"Текущая запись перед деактивацией: {record}")
-
-            # Деактивация токена
-            record.is_active = False
-            await db_session.commit()
-
-            logger.info(f"Токен успешно деактивирован: {record}")
-            return record
-        except Exception as e:
-            logger.error(f"Ошибка при деактивации токена: {e}")
-            await db_session.rollback()
+            logger.error(f"Ошибка обновления: {str(e)}")
             raise
 
     @classmethod
-    async def find_active_by_token(cls, db_session: AsyncSession, token: str):
-        """
-        Асинхронно находит активную запись по токену.
-        """
+    async def deactivate_token(
+        cls,
+        db_session: AsyncSession,
+        token: str
+    ) -> Optional['UserDevice']:
+        """Деактивирует устройство по токену."""
+        logger.info(f"Деактивация устройства {cls._log_token(token)}")
+
+        device = await cls.find_active_by_token(db_session, token)
+        if not device:
+            logger.warning("Устройство не найдено или уже деактивировано")
+            return None
+
         try:
-            stmt = select(cls).where(
+            device.is_active = False
+            await db_session.commit()
+            logger.info(f"Устройство {device.id} деактивировано")
+            return device
+        except Exception as e:
+            logger.error(f"Ошибка деактивации: {str(e)}")
+            await db_session.rollback()
+            raise
+
+    # Query methods
+    @classmethod
+    async def find_active_by_token(
+        cls,
+        db_session: AsyncSession,
+        token: str
+    ) -> Optional['UserDevice']:
+        """Находит активное устройство по токену."""
+        query = select(cls).where(
+            and_(
                 cls.token == token,
                 cls.is_active == True,
                 cls.expires_at > datetime.utcnow()
             )
-            result = await db_session.execute(stmt)
-            return result.scalar_one_or_none()
-        except Exception as e:
-            logger.error(f"Ошибка при поиске токена: {e}")
-            raise
+        )
+        return await cls._execute_scalar(db_session, query)
 
     @classmethod
-    async def get_user_devices(cls, db_session: AsyncSession, user_uid: UUID):
-        """
-        Асинхронно получает все активные устройства пользователя.
-        """
-        try:
-            stmt = select(cls).where(
+    async def get_user_devices(
+        cls,
+        db_session: AsyncSession,
+        user_uid: UUID
+    ) -> List['UserDevice']:
+        """Возвращает все активные устройства пользователя."""
+        query = select(cls).where(
+            and_(
                 cls.user_uid == user_uid,
                 cls.is_active == True,
                 cls.expires_at > datetime.utcnow()
-            ).order_by(cls.created_at.desc())
-            
-            result = await db_session.execute(stmt)
-            return result.scalars().all()
-        except Exception as e:
-            logger.error(f"Ошибка при получении устройств пользователя: {e}")
-            raise
+            )
+        ).order_by(cls.created_at.desc())
+
+        result = await db_session.execute(query)
+        return result.scalars().all()
+
+    # Private helpers
+    @classmethod
+    async def _get_and_lock_device(
+        cls,
+        db_session: AsyncSession,
+        token: str
+    ) -> Optional['UserDevice']:
+        """Находит и блокирует устройство для обновления."""
+        query = select(cls).where(
+            and_(
+                cls.token == token,
+                cls.is_active == True
+            )
+        ).with_for_update().limit(1)
+
+        device = await cls._execute_scalar(db_session, query)
+        if not device:
+            logger.warning(f"Устройство не найдено: {cls._log_token(token)}")
+        return device
+
+    @classmethod
+    async def _is_token_used(
+        cls,
+        db_session: AsyncSession,
+        token: str
+    ) -> bool:
+        """Проверяет, используется ли токен другим устройством."""
+        query = select(cls.id).where(
+            and_(
+                cls.token == token,
+                cls.is_active == True
+            )
+        ).limit(1)
+
+        result = await cls._execute_scalar(db_session, query)
+        if result:
+            logger.warning(f"Токен уже используется: {cls._log_token(token)}")
+        return bool(result)
+
+    @classmethod
+    def _update_device(
+        cls,
+        device: 'UserDevice',
+        new_token: str,
+        ip_address: str,
+        user_agent: str,
+        expires_in_days: int
+    ) -> 'UserDevice':
+        """Обновляет данные устройства."""
+        device.token = new_token
+        device.ip_address = ip_address
+        device.user_agent = user_agent
+        device.expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+        logger.info(f"Устройство обновлено: {device.id}")
+        return device
