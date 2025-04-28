@@ -37,7 +37,7 @@ class UserDevice(Database.Base):
     @staticmethod
     def _log_token(token: str) -> str:
         """Логирование части токена для безопасности."""
-        return f"{token[:10]}..." if token else "empty_token"
+        return f"{token}..." if token else "empty_token"
 
     @classmethod
     async def _execute_scalar(cls, db_session: AsyncSession, query) -> Optional['UserDevice']:
@@ -99,24 +99,24 @@ class UserDevice(Database.Base):
         logger.info(f"Обновление токена {cls._log_token(old_token)} -> {cls._log_token(new_token)}")
 
         try:
-            async with db_session.begin():
-                # Получаем и блокируем устройство
-                device = await cls._get_and_lock_device(db_session, old_token)
-                if not device:
-                    return None
+            # async with db_session.begin():
+            # Получаем и блокируем устройство
+            device = await cls._get_and_lock_device(db_session, old_token)
+            if not device:
+                return None
 
-                # Проверяем новый токен
-                if await cls._is_token_used(db_session, new_token):
-                    return None
+            # Проверяем новый токен
+            if await cls._is_token_used(db_session, new_token):
+                return None
 
-                # Обновляем данные
-                return cls._update_device(
-                    device,
-                    new_token,
-                    ip_address,
-                    user_agent,
-                    expires_in_days
-                )
+            # Обновляем данные
+            return cls._update_device(
+                device,
+                new_token,
+                ip_address,
+                user_agent,
+                expires_in_days
+            )
 
         except InterfaceError as e:
             logger.error(f"Ошибка соединения: {str(e)}")
