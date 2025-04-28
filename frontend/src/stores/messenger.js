@@ -1,3 +1,4 @@
+import axios from "axios";
 export default {
 	namespaced: true,
 	state: {
@@ -88,7 +89,25 @@ export default {
 		}
 	},
 	actions: {
-		async connectMessenger({ commit, state, rootGetters }) {
+		async refreshToken({ commit, dispatch }) {
+			try {
+
+				const refreshResponse = await axios.get(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000' }/refresh`, {
+					withCredentials: true,
+				});
+				const { status, access_token } = refreshResponse.data;
+				
+				localStorage.setItem('access_token', access_token);
+
+				return true;
+			} catch (error) {
+				console.error('Ошибка обновления токена:', error);
+				// Если не удалось обновить токен, выполняем выход
+				dispatch('logout');
+				throw error;
+			}
+		},
+		async connectMessenger({ commit, state, rootGetters, dispatch }) {
 			try {
 				// Закрываем предыдущее соединение
 				if (state.socket) {
@@ -110,11 +129,28 @@ export default {
 				socket.onopen = () => {
 					console.log('Messenger WebSocket соединение установлено');
 					commit('SET_CONNECTION_STATUS', true);
+					// Восстанавливаем подписки после подключения
+					dispatch('restoreStatusSubscriptions');
 				};
 
-				socket.onclose = (event) => {
+				socket.onclose = async (event) => {
 					console.log('Messenger WebSocket соединение закрыто', event);
 					commit('SET_CONNECTION_STATUS', false);
+					
+					// Обработка случая, когда токен устарел (код 1008)
+					if (event.code === 1008 || event.code === 1006) {
+						console.log('Токен устарел, пытаемся обновить...');
+						try {
+							// Пытаемся обновить токен
+							await dispatch('messenger/refreshToken', null, { root: true });
+							// После успешного обновления переподключаемся
+							await dispatch('connectMessenger');
+						} catch (refreshError) {
+							console.error('Не удалось обновить токен:', refreshError);
+							// Если не удалось обновить токен, перенаправляем на страницу входа
+							// dispatch('auth/logout', null, { root: true });
+						}
+					}
 				};
 
 				socket.onerror = (error) => {

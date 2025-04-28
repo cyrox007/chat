@@ -14,11 +14,11 @@ const ensureValidTokenAndConnect = async () => {
 	if (!store.getters['isAuth']) return;
 	try {
 		// Проверяем и обновляем токен, если он устарел
-		const response = await AuthService.getValidAccessToken();
+		/* const response = await AuthService.getValidAccessToken();
 
 		if (response.status !== 200) {
 			throw new Error(`Ошибка при обновлении токена: ${response.statusText}`);
-		}
+		} */
 
 		// Подключаемся к чату, если есть активная комната
 		if (store.getters['chat/getCurrentRoom']) {

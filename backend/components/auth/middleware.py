@@ -40,6 +40,7 @@ async def auth_middle_ws(token: str):
     user_data = validate_access_token(token)
     if not user_data:
         logger.warning("Недопустимый токен в запросе WebSocket")
+        #await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
 
     logger.info(f"<WS>Аутентифицированный пользователь: {user_data}")
