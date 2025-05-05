@@ -79,7 +79,7 @@
 				<div v-for="user in users" :key="user.uid" class="user-item-wrapper">
 					<router-link :to="`/profile/${user.uid}`" class="username">
 						<div class="chat-sidebar-users-item" :data-user-id="user.uid">
-							<img :src="apiBaseUrl + user.avatar" alt="Avatar" class="user-avatar">
+							<img :src="apiBaseUrl + user.avatar" :alt="user.username" class="user-avatar">
 							<span>{{ user.username }}</span>
 							<span v-if="user.uid === roomInfo.owner_uid" class="user-badge owner">Владелец</span>
 							<span v-else-if="isModerator(user.uid)" class="user-badge moderator">Модератор</span>
