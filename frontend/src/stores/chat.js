@@ -166,6 +166,11 @@ export default {
 							// dispatch('auth/logout', null, { root: true });
 						}
 					}
+
+					if (event.code === 4001) {
+						alert(`Доступ к комнате запрещен по причине: ${event.reason}`);
+						commit("clearCurrentRoom");
+					}
 				};
 
 				socket.onerror = (error) => {
