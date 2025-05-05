@@ -37,16 +37,10 @@ async def initialize_websocket(websocket: WebSocket, db_session, room_uid: UUID,
     is_banned = await RoomBan.is_user_banned(db_session, room_uid, user_uid)
     if is_banned:
         ban_info = await RoomBan.get_active_ban_info(db_session, room_uid, user_uid)
-        await websocket.send_json({
-            "type": "ban_status",
-            "status": "banned",
-            "details": {
-                "reason": ban_info['reason'],
-                "expires_at": ban_info['expires_at'],
-                "banned_by": ban_info['banned_by_uid']
-            }
-        })
-        await websocket.close(code=4001, reason="User is banned from this room")
+        reason = "User is banned" + (f": {ban_info['reason']}" if ban_info and ban_info.get('reason') else "")
+        # Ограничиваем длину reason для WebSocket
+        reason = reason[:120]  # Максимальная длина для WebSocket close reason
+        await websocket.close(code=4001, reason=reason)
         return
 
     # Остальная логика инициализации...
@@ -104,7 +98,7 @@ async def process_incoming_messages(websocket: WebSocket, room_uid: UUID, user_u
                 response = await handle_moderator_action(data, db_session, user_uid)
                 await manager.broadcast_to_room(room_uid, response)
             elif data.get("type") == "ban_user":
-                response = await handle_ban_user(websocket, db_session, room_uid, user_uid)
+                response = await handle_ban_user(data, db_session, room_uid, user_uid)
             else:
                 content_type = data.get("content_type", "text")
                 
@@ -359,10 +353,15 @@ async def handle_ban_user(data: dict, db_session: AsyncSession, room_uid: UUID, 
     Обработчик бана пользователя в комнате
     """
     try:
-        target_user_uid = data.get('target_user_uid')
+        target_user_uid = data.get('target_user_uid', None)
         reason = data.get('reason', 'Нарушение правил чата')
         ban_duration = timedelta(days=7) if not data.get('permanent', False) else None
         
+        if target_user_uid is None:
+            return {
+                "type": 'error',
+                'message': 'targer uid not found'
+            }
         # Проверяем права (владелец или модератор)
         room = await Room.get_room_by_uid(db_session, room_uid)
         if not room:
@@ -376,7 +375,7 @@ async def handle_ban_user(data: dict, db_session: AsyncSession, room_uid: UUID, 
                 "type": "error",
                 "message": "Недостаточно прав для блокировки пользователя"
             }
-        
+        print(target_user_uid)
         # Создаем запись о бане
         ban = await RoomBan.ban_user(
             db_session,
@@ -403,7 +402,7 @@ async def handle_ban_user(data: dict, db_session: AsyncSession, room_uid: UUID, 
             
             try:
                 await target_connection.send_json(ban_notification)
-                await asyncio.sleep(0.1)  # Даем время на обработку сообщения
+                await asyncio.sleep(0.1)
             except Exception as e:
                 logger.error(f"Ошибка отправки уведомления о бане: {e}")
         

@@ -201,8 +201,10 @@ class ConnectionManager:
         """Получить соединение пользователя в конкретной комнате"""
         if room_uid not in self.room_connections:
             return None
-            
+        
         for connection, uid in self.room_connections[room_uid]:
+            print(f"conn: {connection} - user: {type(uid)}")
+            print(f"user targ: {user_uid} - type: {type(user_uid)}")
             if uid == user_uid:
                 return connection
         return None

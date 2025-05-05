@@ -3,7 +3,7 @@ from uuid import uuid4, UUID
 from datetime import datetime, timedelta
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, exists, or_, select, update
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import Database
@@ -342,3 +342,40 @@ class RoomBan(Database.Base):
             ))
         )
         return result.scalar()
+    
+    @staticmethod
+    async def get_active_ban_info(db: AsyncSession, room_uid: UUID, user_uid: UUID):
+        """Получить информацию о бане с явной загрузкой связей"""
+        result = await db.execute(
+            select(RoomBan)
+            .options(
+                joinedload(RoomBan.banned_by),
+                joinedload(RoomBan.user),
+                joinedload(RoomBan.room)
+            )
+            .where(
+                RoomBan.room_uid == room_uid,
+                RoomBan.user_uid == user_uid,
+                RoomBan.is_active == True,
+                or_(
+                    RoomBan.expires_at == None,
+                    RoomBan.expires_at > datetime.utcnow()
+                )
+            )
+            .limit(1)
+        )
+        
+        ban = result.scalar_one_or_none()
+        
+        if not ban:
+            return None
+            
+        return {
+            "id": ban.id,
+            "reason": ban.reason,
+            "expires_at": ban.expires_at,
+            "banned_by_uid": ban.banned_by_uid,
+            "banned_by_username": ban.banned_by.username if ban.banned_by else None,
+            "created_at": ban.created_at
+        }
+        

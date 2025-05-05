@@ -21,6 +21,6 @@ def install(app: FastAPI):
             await handle_websocket_connection(websocket, room_uid, user)
         except Exception as e:
             logger.error(f"WebSocket error: {e}")
-            await websocket.close(code=1008, reason="Connection error")
+            #await websocket.close(code=1008, reason="Connection error")
 
     app.include_router(router)
