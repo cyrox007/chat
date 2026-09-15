@@ -1,128 +1,172 @@
-# System
-import asyncio
 import base64
 import os
+import uuid
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import UUID
-from datetime import datetime, timedelta
-import uuid
 
-# Other
 from fastapi import WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Custom
-from components.user.model import Penalty
-from components.room.model import Room, RoomBan, RoomMember
-from components.message.model import Message
 from components.decorators.db import get_session
-from utils.logger import setup_logger
-from utils.file_handler import save_file
+from components.message.model import Message
+from components.realtime import realtime_service
+from components.room.model import Room, RoomBan, RoomMember
+from components.user.model import Penalty
 from settings import config
 from socket_manager import room_manager as manager
+from utils.file_handler import save_file
+from utils.logger import setup_logger
 
-# Создаем логгер для этого модуля
 logger = setup_logger(__name__)
 
-# Init ws manager
-# manager = ConnectionManager()
-
-# Ограничение длянниы имени файла
 MAX_FILENAME_LENGTH = 255
 
-# Инициализация подключения к комнате
-async def initialize_websocket(websocket: WebSocket, db_session, room_uid: UUID, user_uid: UUID):
-    """Обновленная инициализация с проверкой бана"""
-    # Проверяем бан перед подключением
-    is_banned = await RoomBan.is_user_banned(db_session, room_uid, user_uid)
-    if is_banned:
+
+async def initialize_websocket(
+    websocket: WebSocket,
+    db_session: AsyncSession,
+    room_uid: UUID,
+    user_uid: UUID,
+) -> bool:
+    if await RoomBan.is_user_banned(db_session, room_uid, user_uid):
         ban_info = await RoomBan.get_active_ban_info(db_session, room_uid, user_uid)
-        reason = "User is banned" + (f": {ban_info['reason']}" if ban_info and ban_info.get('reason') else "")
-        # Ограничиваем длину reason для WebSocket
-        reason = reason[:120]  # Максимальная длина для WebSocket close reason
-        await websocket.close(code=4001, reason=reason)
-        return
+        reason = "Доступ к пространству ограничен"
+        if ban_info and ban_info.get("reason"):
+            reason = f"{reason}: {ban_info['reason']}"
+        await websocket.close(code=4001, reason=reason[:120])
+        return False
 
-    # Остальная логика инициализации...
     room = await Room.get_room_by_uid(db_session, room_uid)
-    if not room:
-        logger.warning(f"Комната не найдена: {room_uid}")
-        await websocket.close(code=1008, reason="Room not found")
-        return
+    if not room or not room.is_active:
+        logger.warning("Пространство не найдено: %s", room_uid)
+        await websocket.close(code=1008, reason="Space not found")
+        return False
 
-    # Подключение пользователя к комнате
     await manager.connect_to_room(websocket, room_uid, user_uid)
     await manager.update_user_activity(db_session, user_uid)
 
-    # Проверка наличия активного mute
     active_mute = await Penalty.get_active_mute(db_session, user_uid)
     if active_mute:
-        await websocket.send_json({
-            "type": "mute_status",
-            "status": "muted",
-            "details": {
-                "expires_at": active_mute["expires_at"],
-                "reason": active_mute["reason"],
-            },
-        })
+        await websocket.send_json(
+            {
+                "type": "mute_status",
+                "status": "muted",
+                "details": {
+                    "expires_at": active_mute["expires_at"],
+                    "reason": active_mute["reason"],
+                },
+            }
+        )
 
-    # Отправка начальных данных
-    await send_initial_data(websocket, db_session, room_uid, user_uid)
+    await send_initial_data(websocket, db_session, room_uid)
+    return True
 
-async def send_initial_data(websocket: WebSocket, db_session, room_uid: UUID, user_uid: UUID):
-    # Получаем информацию о комнате с модераторами
+
+async def send_initial_data(
+    websocket: WebSocket,
+    db_session: AsyncSession,
+    room_uid: UUID,
+) -> None:
     room_info = await Room.get_room_with_details(db_session, room_uid)
     if not room_info:
         return
-        
-    # Отправляем информацию о комнате
-    await websocket.send_json({
-        "type": "room_info",
-        "room": room_info
-    })
-    
-    # Отправляем последние сообщения
-    last_messages = await Message.get_last_messages(db_session, room_uid, limit=5)
-    await websocket.send_json({
-        "type": "initial_data",
-        "messages": last_messages
-    })
 
-async def process_incoming_messages(websocket: WebSocket, room_uid: UUID, user_uid: UUID, db_session):
-    try:
-        while True:
-            data = await websocket.receive_json()
-            
-            # Добавляем обработку moderator_action
-            if data.get("type") == "moderator_action":
-                response = await handle_moderator_action(data, db_session, user_uid)
-                await manager.broadcast_to_room(room_uid, response)
-            elif data.get("type") == "ban_user":
-                response = await handle_ban_user(data, db_session, room_uid, user_uid)
-            else:
-                content_type = data.get("content_type", "text")
-                
-                # Остальная обработка сообщений
-                if content_type == "text":
-                    await handle_text_message(data, room_uid, user_uid, db_session)
-                elif content_type in ["file", "image", "video"]:
-                    await handle_file_message(data, room_uid, user_uid, db_session)
-                elif content_type == "voice":
-                    await handle_audio_message(data, room_uid, user_uid, db_session)
-                else:
-                    logger.warning(f"Неизвестный тип контента: {content_type}")
+    await websocket.send_json({"type": "room_info", "room": room_info})
 
+    # Re-send a small recent window after reconnect. The SPA de-duplicates by
+    # server uid/frontId, which gives us a simple reconnect/resume baseline.
+    last_messages = await Message.get_last_messages(db_session, room_uid, limit=20)
+    await websocket.send_json(
+        {
+            "type": "initial_data",
+            "messages": last_messages,
+            "resume": True,
+        }
+    )
+
+
+async def _rate_limit_message(websocket: WebSocket, user_uid: UUID) -> bool:
+    allowed = await realtime_service.allow_action(
+        user_uid=user_uid,
+        bucket="space-message",
+        limit=config.REALTIME_MESSAGE_RATE_LIMIT,
+        window_seconds=config.REALTIME_MESSAGE_RATE_WINDOW_SECONDS,
+    )
+    if allowed:
+        return True
+
+    await websocket.send_json(
+        {
+            "type": "rate_limited",
+            "scope": "message",
+            "retry_after": config.REALTIME_MESSAGE_RATE_WINDOW_SECONDS,
+        }
+    )
+    return False
+
+
+async def process_incoming_messages(
+    websocket: WebSocket,
+    room_uid: UUID,
+    user_uid: UUID,
+    db_session: AsyncSession,
+) -> None:
+    while True:
+        data = await websocket.receive_json()
+        frame_type = data.get("type")
+
+        if frame_type in {"heartbeat", "pong"}:
+            await manager.touch_connection(websocket)
+            continue
+
+        await manager.touch_connection(websocket)
+
+        if frame_type == "moderator_action":
+            response = await handle_moderator_action(data, db_session, user_uid)
+            await manager.broadcast_to_room(room_uid, response)
             await manager.update_user_activity(db_session, user_uid)
-    except WebSocketDisconnect:
-        logger.info("WebSocket отключен")
-        manager.disconnect(websocket, room_uid)
+            continue
 
-async def handle_text_message(data: dict, room_uid: UUID, user_uid: UUID, db_session: AsyncSession):  
+        if frame_type == "ban_user":
+            response = await handle_ban_user(data, db_session, room_uid, user_uid)
+            if response:
+                await manager.broadcast_to_room(room_uid, response)
+            await manager.update_user_activity(db_session, user_uid)
+            continue
+
+        if not await _rate_limit_message(websocket, user_uid):
+            continue
+
+        content_type = data.get("content_type", "text")
+        if content_type == "text":
+            await handle_text_message(data, room_uid, user_uid, db_session)
+        elif content_type in {"file", "image", "video"}:
+            await handle_file_message(data, room_uid, user_uid, db_session, websocket)
+        elif content_type in {"voice", "audio"}:
+            await handle_audio_message(data, room_uid, user_uid, db_session, websocket)
+        else:
+            await websocket.send_json(
+                {
+                    "type": "error",
+                    "error_type": "unsupported_content_type",
+                    "frontId": data.get("frontId"),
+                }
+            )
+
+        await manager.update_user_activity(db_session, user_uid)
+
+
+async def handle_text_message(
+    data: dict,
+    room_uid: UUID,
+    user_uid: UUID,
+    db_session: AsyncSession,
+) -> None:
     content = data.get("content")
-    if not content:
-        logger.warning("Получено пустое текстовое сообщение")
+    if not isinstance(content, str) or not content.strip():
         return
-    
+
     message_data = {
         "content": content,
         "content_type": "text",
@@ -131,311 +175,273 @@ async def handle_text_message(data: dict, room_uid: UUID, user_uid: UUID, db_ses
         "reply_to_uid": data.get("reply_to_uid"),
         "timestamp": datetime.utcnow().isoformat(),
     }
+    formatted_message = await Message.create_message(db_session, message_data)
+    formatted_message["frontId"] = data.get("frontId")
+    await manager.broadcast_to_room(room_uid, formatted_message)
 
-    try:
-        # Создаем сообщение в БД
-        formatted_message = await Message.create_message(db_session, message_data)
-        formatted_message['frontId'] = data.get('frontId')  # Сохраняем frontId
-        
-        await manager.broadcast_to_room(room_uid, formatted_message)
-        logger.info(f"Сообщение отправлено в комнату {room_uid}: {formatted_message}")
 
-    except Exception as e:
-        logger.error(f"Ошибка обработки текстового сообщения: {e}")
-        raise
-
-async def handle_file_message(data: dict, room_uid: UUID, user_uid: UUID, db_session):
+async def handle_file_message(
+    data: dict,
+    room_uid: UUID,
+    user_uid: UUID,
+    db_session: AsyncSession,
+    websocket: WebSocket,
+) -> None:
     files = data.get("media_metadata", {}).get("files", [])
     if not files:
-        logger.warning("Получено пустое файловое сообщение")
         return
 
-    # Проверка количества файлов
     if len(files) > config.MAX_FILES_LIMIT:
-        error_message = {
-            "type": "error",
-            "message": f"Too many files. Maximum allowed is {config.MAX_FILES_LIMIT}.",
-            "details": {
-                "received_files_count": len(files),
-                "max_allowed_files": config.MAX_FILES_LIMIT,
-            },
-        }
-        await manager.broadcast_to_room(room_uid, error_message)
+        await websocket.send_json(
+            {
+                "type": "error",
+                "error_type": "too_many_files",
+                "frontId": data.get("frontId"),
+                "details": {"max_allowed_files": config.MAX_FILES_LIMIT},
+            }
+        )
         return
 
     saved_files = []
     errors = []
-
     for file_data in files:
         try:
-            # Извлекаем данные о файле
             file_url = file_data.get("url")
             file_type = file_data.get("type")
-            file_name = file_data.get("name")
+            file_name = str(file_data.get("name") or "")[:MAX_FILENAME_LENGTH]
             file_size = file_data.get("size")
-
             if not all([file_url, file_type, file_name, file_size]):
                 raise ValueError("Missing required file data")
 
-            file_metadata = {
-                "url": file_url,
-                "type": file_type,
-                "name": file_name,
-                "size": file_size,
-            }
-            
-            saved_file_url = save_file(file_metadata)
-            saved_files.append({
-                "url": saved_file_url,
-                "type": file_type,
-                "name": file_name,
-                "size": file_size,
-            })
-
-        except Exception as e:
-            logger.error(f"Ошибка при обработке файла '{file_data.get('name')}': {str(e)}")
-            errors.append({
-                "file_name": file_data.get("name"),
-                "error": str(e),
-            })
+            saved_file_url = save_file(
+                {
+                    "url": file_url,
+                    "type": file_type,
+                    "name": file_name,
+                    "size": file_size,
+                }
+            )
+            saved_files.append(
+                {
+                    "url": saved_file_url,
+                    "type": file_type,
+                    "name": file_name,
+                    "size": file_size,
+                }
+            )
+        except Exception as exc:
+            logger.warning("Не удалось сохранить realtime attachment: %s", exc)
+            errors.append({"file_name": file_data.get("name"), "error": "upload_failed"})
 
     if not saved_files:
-        error_message = {
-            "type": "error",
-            "message": "All files failed to process.",
-            "details": errors,
-        }
-        await manager.broadcast_to_room(room_uid, error_message)
+        await websocket.send_json(
+            {
+                "type": "error",
+                "error_type": "attachments_failed",
+                "frontId": data.get("frontId"),
+                "details": errors,
+            }
+        )
         return
 
-    # Создаём данные для сообщения
     message_data = {
         "content": data.get("content", ""),
-        "content_type": data.get('content_type', 'other'),
+        "content_type": data.get("content_type", "file"),
         "sender_uid": str(user_uid),
         "room_uid": str(room_uid),
-        "media_metadata": {
-            "files": saved_files,
-        },
+        "media_metadata": {"files": saved_files},
         "reply_to_uid": data.get("reply_to_uid"),
     }
+    formatted_message = await Message.create_message(db_session, message_data)
+    formatted_message["frontId"] = data.get("frontId")
+    await manager.broadcast_to_room(room_uid, formatted_message)
 
-    try:
-        formatted_message = await Message.create_message(db_session, message_data)
-        formatted_message['frontId'] = data.get('frontId')
-        await manager.broadcast_to_room(room_uid, formatted_message)
-        logger.info(f"Файловое сообщение отправлено в комнату {room_uid}: {formatted_message}")
-
-        if errors:
-            partial_error_message = {
+    if errors:
+        await websocket.send_json(
+            {
                 "type": "partial_error",
-                "message": "Some files failed to process.",
-                "details": {
-                    "success": saved_files,
-                    "errors": errors,
-                },
+                "error_type": "some_attachments_failed",
+                "frontId": data.get("frontId"),
+                "details": errors,
             }
-            await manager.broadcast_to_room(room_uid, partial_error_message)
-    except Exception as e:
-        logger.error(f"Ошибка при создании файлового сообщения: {e}")
-        raise
+        )
 
-async def handle_audio_message(data: dict, room_uid: UUID, user_uid: UUID, db_session):
-    audio_url: str = data.get("media_metadata", {}).get("voice")
+
+async def handle_audio_message(
+    data: dict,
+    room_uid: UUID,
+    user_uid: UUID,
+    db_session: AsyncSession,
+    websocket: WebSocket,
+) -> None:
+    audio_url = data.get("media_metadata", {}).get("voice")
     if not audio_url:
-        logger.warning("Получено пустое аудио сообщение")
         return
 
     try:
-        mime_type, encoded_data = audio_url.split(',', 1)
+        mime_type, encoded_data = audio_url.split(",", 1)
         file_content = base64.b64decode(encoded_data)
-
         if len(file_content) > config.MAX_FILE_SIZE:
-            logger.warning(f"Аудиофайл слишком большой: {len(file_content)} байт")
-            return
+            raise ValueError("audio_too_large")
 
-        extension = mime_type.split(';')[0].split('/')[1]
+        extension = mime_type.split(";")[0].split("/")[1]
+        if extension not in {"webm", "ogg", "mp3", "mpeg", "wav", "m4a", "mp4"}:
+            raise ValueError("unsupported_audio_type")
+
         upload_dir = Path("uploads/audio")
         os.makedirs(upload_dir, exist_ok=True)
-
         file_name = f"{uuid.uuid4()}.{extension}"
         file_path = upload_dir / file_name
-
-        with open(file_path, "wb") as f:
-            f.write(file_content)
+        with open(file_path, "wb") as file_handle:
+            file_handle.write(file_content)
 
         saved_audio_url = f"{config.BASE_URL}/uploads/audio/{file_name}"
-
-        message_data = {
-            "content": saved_audio_url,
-            "content_type": "audio",
-            "sender_uid": str(user_uid),
-            "room_uid": str(room_uid),
-            "reply_to_uid": data.get("reply_to_uid"),
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-
-        formatted_message = await Message.create_message(db_session, message_data)
-        formatted_message['frontId'] = data.get('frontId')
+        formatted_message = await Message.create_message(
+            db_session,
+            {
+                "content": saved_audio_url,
+                "content_type": "audio",
+                "sender_uid": str(user_uid),
+                "room_uid": str(room_uid),
+                "reply_to_uid": data.get("reply_to_uid"),
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        )
+        formatted_message["frontId"] = data.get("frontId")
         await manager.broadcast_to_room(room_uid, formatted_message)
-        logger.info(f"Аудио сообщение отправлено в комнату {room_uid}: {formatted_message}")
+    except Exception as exc:
+        logger.warning("Не удалось обработать audio frame: %s", exc)
+        await websocket.send_json(
+            {
+                "type": "error",
+                "error_type": "audio_failed",
+                "frontId": data.get("frontId"),
+            }
+        )
 
-    except Exception as e:
-        logger.error(f"Ошибка при обработке аудио: {e}")
 
-async def handle_moderator_action(data: dict, db_session: AsyncSession, user_uid: UUID):
-    """
-    Обработчик действий с модераторами.
-    """
+async def handle_moderator_action(
+    data: dict,
+    db_session: AsyncSession,
+    user_uid: UUID,
+) -> dict:
     try:
-        room_uid = UUID(data['room_uid'])
-        target_user_uid = UUID(data['target_user_uid'])
-        action = data['action']
+        room_uid = UUID(str(data["room_uid"]))
+        target_user_uid = UUID(str(data["target_user_uid"]))
+        action = data["action"]
 
-        # Проверяем, что инициатор - владелец комнаты
         room = await Room.get_room_by_uid(db_session, room_uid)
         if not room or str(room.owner_uid) != str(user_uid):
             return {
                 "type": "error",
-                "message": "Только владелец комнаты может управлять модераторами"
+                "error_type": "space_owner_required",
+                "message": "Только владелец пространства может управлять ролями",
             }
 
-        # Обрабатываем действие
         if action == "add_moderator":
-            try:
-                await Room.add_moderator(db_session, room_uid, target_user_uid)
-                # Получаем обновленный список модераторов
-                moderators = await RoomMember.get_moderators(db_session, room_uid)
-
-                return {
-                    "type": "moderator_added",
-                    "room_uid": str(room_uid),
-                    "target_user_uid": str(target_user_uid),
-                    "moderators": [str(m) for m in moderators],
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            except Exception as e:
-                return {
-                    "type": "error",
-                    "message": "Пользователь уже является модератором"
-                }
-                       
-
+            await Room.add_moderator(db_session, room_uid, target_user_uid)
+            event_type = "moderator_added"
         elif action == "remove_moderator":
             await Room.remove_moderator(db_session, room_uid, target_user_uid)
-
-            # Получаем обновленный список модераторов
-            moderators = await RoomMember.get_moderators(db_session, room_uid)
-
-            return {
-                "type": "moderator_removed",
-                "room_uid": str(room_uid),
-                "target_user_uid": str(target_user_uid),
-                "moderators": [str(m) for m in moderators],
-                "timestamp": datetime.utcnow().isoformat()
-            }
-
+            event_type = "moderator_removed"
         else:
-            return {
-                "type": "error",
-                "message": "Неизвестное действие"
-            }
+            return {"type": "error", "error_type": "unknown_moderator_action"}
 
-    except Exception as e:
-        logger.error(f"Ошибка обработки moderator_action: {e}")
+        moderators = await RoomMember.get_moderators(db_session, room_uid)
         return {
-            "type": "error",
-            "message": "Внутренняя ошибка сервера"
+            "type": event_type,
+            "room_uid": str(room_uid),
+            "target_user_uid": str(target_user_uid),
+            "moderators": [str(item) for item in moderators],
+            "timestamp": datetime.utcnow().isoformat(),
         }
-    
-async def handle_ban_user(data: dict, db_session: AsyncSession, room_uid: UUID, user_uid: UUID):
-    """
-    Обработчик бана пользователя в комнате
-    """
+    except Exception:
+        logger.exception("Ошибка изменения scoped роли пространства")
+        return {"type": "error", "error_type": "moderator_action_failed"}
+
+
+async def handle_ban_user(
+    data: dict,
+    db_session: AsyncSession,
+    room_uid: UUID,
+    user_uid: UUID,
+) -> dict:
     try:
-        target_user_uid = data.get('target_user_uid', None)
-        reason = data.get('reason', 'Нарушение правил чата')
-        ban_duration = timedelta(days=7) if not data.get('permanent', False) else None
-        
-        if target_user_uid is None:
-            return {
-                "type": 'error',
-                'message': 'targer uid not found'
-            }
-        # Проверяем права (владелец или модератор)
+        target_user_uid = UUID(str(data["target_user_uid"]))
+        reason = str(data.get("reason") or "Нарушение правил пространства")[:500]
+        ban_duration = None if data.get("permanent", False) else timedelta(days=7)
+
         room = await Room.get_room_by_uid(db_session, room_uid)
         if not room:
-            return {"type": "error", "message": "Комната не найдена"}
-        
+            return {"type": "error", "error_type": "space_not_found"}
+
         is_owner = str(room.owner_uid) == str(user_uid)
         is_moderator = await RoomMember.is_moderator(db_session, room_uid, user_uid)
-        
         if not (is_owner or is_moderator):
-            return {
-                "type": "error",
-                "message": "Недостаточно прав для блокировки пользователя"
-            }
-        print(target_user_uid)
-        # Создаем запись о бане
+            return {"type": "error", "error_type": "space_moderator_required"}
+
         ban = await RoomBan.ban_user(
             db_session,
             room_uid=room_uid,
             user_uid=target_user_uid,
             banned_by_uid=user_uid,
             reason=reason,
-            ban_duration=ban_duration
+            ban_duration=ban_duration,
         )
-        
-        # Получаем соединение пользователя
-        target_connection = manager.get_user_connection(room_uid, target_user_uid)
-        
-        # Если пользователь онлайн - отправляем уведомление перед отключением
-        if target_connection:
-            ban_notification = {
-                "type": "user_banned",
-                "room_uid": str(room_uid),
-                "reason": reason,
-                "expires_at": ban.expires_at.isoformat() if ban.expires_at else None,
-                "permanent": ban.expires_at is None,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-            
-            try:
-                await target_connection.send_json(ban_notification)
-                await asyncio.sleep(0.1)
-            except Exception as e:
-                logger.error(f"Ошибка отправки уведомления о бане: {e}")
-        
-        # Отключаем пользователя от комнаты
-        if target_connection:
-            await manager.disconnect_user_from_room(room_uid, target_user_uid)
-        
-        # Уведомляем остальных участников
-        return {
-            "type": "user_banned_notification",
+
+        notification = {
+            "type": "user_banned",
             "room_uid": str(room_uid),
             "target_user_uid": str(target_user_uid),
-            "banned_by": str(user_uid),
+            "restricted_by": str(user_uid),
             "reason": reason,
             "expires_at": ban.expires_at.isoformat() if ban.expires_at else None,
-            "timestamp": datetime.utcnow().isoformat()
+            "permanent": ban.expires_at is None,
+            "timestamp": datetime.utcnow().isoformat(),
         }
-        
-    except Exception as e:
-        logger.error(f"Ошибка обработки бана пользователя: {e}")
-        return {
-            "type": "error",
-            "message": "Внутренняя ошибка сервера"
-        }
+        await manager.disconnect_user_from_room(room_uid, target_user_uid, reason=reason)
+        return notification
+    except (KeyError, ValueError):
+        return {"type": "error", "error_type": "invalid_restriction_target"}
+    except Exception:
+        logger.exception("Ошибка ограничения доступа к пространству")
+        return {"type": "error", "error_type": "space_restriction_failed"}
+
 
 @get_session
-async def handle_websocket_connection(websocket: WebSocket, room_uid: str, user, db_session: AsyncSession = None):
-    try:
-        room_uid = UUID(room_uid)
-        user_uid = UUID(user["user_uid"])
+async def handle_websocket_connection(
+    websocket: WebSocket,
+    room_uid: UUID | str,
+    user: dict,
+    db_session: AsyncSession = None,
+):
+    normalized_room_uid = UUID(str(room_uid))
+    user_uid = UUID(user["user_uid"])
+    connected = False
 
-        await initialize_websocket(websocket, db_session, room_uid, user_uid)
-        await process_incoming_messages(websocket, room_uid, user_uid, db_session)
-    except Exception as e:
-        logger.error(f"Ошибка WebSocket: {e}")
-        await websocket.close(code=1011, reason="Internal server error")
+    try:
+        connected = await initialize_websocket(
+            websocket,
+            db_session,
+            normalized_room_uid,
+            user_uid,
+        )
+        if not connected:
+            return
+        await process_incoming_messages(
+            websocket,
+            normalized_room_uid,
+            user_uid,
+            db_session,
+        )
+    except WebSocketDisconnect:
+        logger.info("Room realtime disconnected: user=%s room=%s", user_uid, normalized_room_uid)
+    except Exception:
+        logger.exception("Room realtime handler failed")
+        try:
+            await websocket.close(code=1011, reason="Realtime room error")
+        except Exception:
+            pass
+    finally:
+        if connected:
+            await manager.disconnect(websocket, normalized_room_uid)
