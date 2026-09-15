@@ -13,6 +13,7 @@ const store = useStore();
 const router = useRouter();
 const networkOnline = ref(navigator.onLine);
 const bootstrapError = ref(false);
+let authenticatedBootstrap = null;
 
 const connectionNotice = computed(() => {
 	if (!store.getters.isAuth) return null;
@@ -50,21 +51,31 @@ const stopAuthenticatedServices = async () => {
 	await store.dispatch('chat/disconnectSocket');
 };
 
+const bootstrapAuthenticatedServices = async () => {
+	await store.dispatch('syncIdentity');
+	await Promise.all([
+		store.dispatch('messenger/connectMessenger'),
+		store.dispatch('notifications/sync').catch(() => null),
+	]);
+	store.dispatch('notifications/startPolling');
+	const room = store.getters['chat/getCurrentRoom'];
+	if (room?.uid) await store.dispatch('chat/connectSocket', room.uid);
+	bootstrapError.value = false;
+};
+
 const ensureSessionAndConnect = async () => {
 	if (!store.getters.isAuth) return;
-	try {
-		await store.dispatch('syncIdentity');
-		await Promise.all([
-			store.dispatch('messenger/connectMessenger'),
-			store.dispatch('notifications/sync').catch(() => null),
-		]);
-		store.dispatch('notifications/startPolling');
-		const room = store.getters['chat/getCurrentRoom'];
-		if (room?.uid) await store.dispatch('chat/connectSocket', room.uid);
-		bootstrapError.value = false;
-	} catch (error) {
-		if (error.response?.status !== 401) bootstrapError.value = true;
-	}
+	if (authenticatedBootstrap) return authenticatedBootstrap;
+
+	authenticatedBootstrap = bootstrapAuthenticatedServices()
+		.catch((error) => {
+			if (error.response?.status !== 401) bootstrapError.value = true;
+		})
+		.finally(() => {
+			authenticatedBootstrap = null;
+		});
+
+	return authenticatedBootstrap;
 };
 
 const handleSessionExpired = async () => {
