@@ -1,46 +1,125 @@
 <template>
-	<CreateRoomModal :isShow="isCreateRoomeModalShow" @close="handleOpenCreateChatModal"
-		@create-room-complete="loadRooms" />
-	<main class="chat-window">
-		<LeftSidebar :class="{ active: isLeftSidebarActive }" @close="closeLeftSidebar" :rooms="rooms"
-			@switch-room="switchRoom" :userRole="currentUser.global_role" :userRating="currentUser.rating"
-			@open-create-chat-modal="handleOpenCreateChatModal" />
+	<CreateRoomModal
+		:isShow="isCreateRoomModalOpen"
+		@close="toggleCreateSpaceModal"
+		@create-room-complete="loadRooms"
+	/>
 
-		<div class="chat-content">
-			<header class="chat-window-header">
-				<button class="toggle-left-sidebar" aria-label="Открыть/закрыть левый сайдбар"
-					@click="toggleLeftSidebar">
-					<i class="fas fa-comments"></i>
+	<main class="space-shell">
+		<LeftSidebar
+			:class="{ active: isLeftSidebarActive }"
+			:rooms="rooms"
+			:userRole="currentUser.global_role"
+			:userRating="currentUser.rating"
+			@close="closeLeftSidebar"
+			@switch-room="switchRoom"
+			@open-create-chat-modal="toggleCreateSpaceModal"
+		/>
+
+		<section class="space-main">
+			<header class="space-header">
+				<button
+					class="space-header__icon"
+					type="button"
+					aria-label="Открыть список пространств"
+					@click="toggleLeftSidebar"
+				>
+					<i class="fas fa-layer-group" aria-hidden="true"></i>
 				</button>
-				<h2>{{ currentRoom?.name || 'Нет выбранной комнаты' }}</h2>
-				<button class="toggle-right-sidebar" aria-label="Открыть/закрыть правый сайдбар"
-					@click="toggleRightSidebar" :disabled="!currentRoom?.id">
-					<i class="fas fa-info-circle"></i>
+
+				<div class="space-header__title">
+					<span class="space-header__eyebrow">Пространство</span>
+					<div class="space-header__title-row">
+						<h1>{{ currentRoom?.name || 'Выберите пространство' }}</h1>
+						<span
+							v-if="currentRoom?.uid"
+							class="connection-chip"
+							:class="`connection-chip--${connectionState}`"
+							role="status"
+						>
+							<span class="connection-chip__dot" aria-hidden="true"></span>
+							{{ connectionLabel }}
+						</span>
+					</div>
+				</div>
+
+				<button
+					class="space-header__icon"
+					type="button"
+					aria-label="Открыть информацию о пространстве"
+					:disabled="!currentRoom?.uid"
+					@click="toggleRightSidebar"
+				>
+					<i class="fas fa-circle-info" aria-hidden="true"></i>
 				</button>
 			</header>
-			<div v-if="currentRoom?.uid && !isLoading" class="chat-container">
-				<section id="chat-messages" ref="chatMessages" class="chat-window-body">
-					<Message v-for="(msg, index) in messages" :key="msg.uid || msg.tempId" :message="msg"
-						:ref="index === messages.length - 1 ? 'lastMessage' : null" @reply="handleMessageReply" />
-				</section>
-				<MessageComposer ref="messageComposer" @send-message="handleSendMessage" :isDisabled="isUserMuted" />
+
+			<div
+				v-if="realtimeNotice && currentRoom?.uid"
+				class="space-notice"
+				:class="`space-notice--${realtimeNotice.type}`"
+				role="status"
+			>
+				<i class="fas fa-circle-info" aria-hidden="true"></i>
+				<span>{{ realtimeNotice.message }}</span>
 			</div>
-			<section v-else-if="!isLoading" class="placeholder">
-				<i class="fas fa-comments"></i>
-				<p>Выберите комнату, чтобы начать общение.</p>
+
+			<div v-if="currentRoom?.uid && !isLoading" class="conversation-area">
+				<section id="chat-messages" ref="chatMessages" class="message-stream" aria-label="Сообщения пространства">
+					<div v-if="messages.length === 0" class="stream-empty">
+						<div class="stream-empty__icon" aria-hidden="true"><i class="fas fa-mug-hot"></i></div>
+						<strong>Здесь пока тихо</strong>
+						<span>Можно начать разговор без формальностей.</span>
+					</div>
+
+					<Message
+						v-for="(msg, index) in messages"
+						:key="msg.uid || msg.frontId || msg.tempId"
+						:message="msg"
+						:ref="index === messages.length - 1 ? 'lastMessage' : null"
+						@reply="handleMessageReply"
+					/>
+				</section>
+
+				<div v-if="!isRealtimeReady" class="composer-state" role="status">
+					<span v-if="connectionState === 'restricted'">Отправка сообщений недоступна в этом пространстве.</span>
+					<span v-else-if="connectionState === 'offline'">Нет сети. Разговор восстановится автоматически.</span>
+					<span v-else>Восстанавливаем связь с пространством…</span>
+				</div>
+
+				<MessageComposer
+					ref="messageComposer"
+					@send-message="handleSendMessage"
+					:isDisabled="isComposerDisabled"
+				/>
+			</div>
+
+			<section v-else-if="!isLoading" class="space-placeholder">
+				<div class="space-placeholder__art" aria-hidden="true">
+					<i class="fas fa-comments"></i>
+				</div>
+				<h2>Выберите место для разговора</h2>
+				<p>Пространства — это небольшие сообщества со своей темой, людьми и атмосферой.</p>
+				<button class="ui-button" type="button" @click="toggleLeftSidebar">Посмотреть пространства</button>
 			</section>
-		</div>
+		</section>
 
 		<Loader :isLoading="isLoading" />
-		<RightSidebar v-if="currentRoom?.uid && !isLoading" :class="{ active: isRightSidebarActive }"
-			@close="closeRightSidebar" :roomInfo="currentRoom" :users="connectedUsers"
-			@moderator-changed="handleModeratorChange" @user-banned="handleBanUser" />
-	</main>
 
+		<RightSidebar
+			v-if="currentRoom?.uid && !isLoading"
+			:class="{ active: isRightSidebarActive }"
+			:roomInfo="currentRoom"
+			:users="connectedUsers"
+			@close="closeRightSidebar"
+			@moderator-changed="handleModeratorChange"
+			@user-banned="handleRestrictUser"
+		/>
+	</main>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, onUnmounted, watch, nextTick } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useStore } from 'vuex';
 import { v4 as uuidv4 } from 'uuid';
 import DOMPurify from 'dompurify';
@@ -50,337 +129,254 @@ import LeftSidebar from '@/components/LeftSidebar/index.vue';
 import RightSidebar from '@/components/RightSidebar/index.vue';
 import Message from '@/components/Message/ChatMessage.vue';
 import MessageComposer from '@/components/MessageComposer/index.vue';
-import CreateRoomModal from '@/components/MainPageModals/CreateRoomModal.vue'
-
+import CreateRoomModal from '@/components/MainPageModals/CreateRoomModal.vue';
 import RoomsService from '@/API/RoomsService';
 
-// Инициализация хранилища
 const store = useStore();
 
-const isCreateRoomeModalShow = ref(false);
-
-// Получаем данные из хранилища
-const currentRoom = computed(() => store.getters['chat/getCurrentRoom']);
-const messages = computed(() => store.getters['chat/getMessages']);
-
-const connectedUsers = computed(() => store.getters['chat/getConnectedUsers']);
-
-// Получаем данные текущего пользователя из хранилища
-const currentUser = computed(() => {
-	const user = store.getters.getUser || {
-		uid: null,
-		username: 'Неизвестный пользователь',
-		avatar: '/images/default-avatar.png',
-	};
-	return user;
-});
-
-// Состояния
+const isCreateRoomModalOpen = ref(false);
 const isLoading = ref(false);
 const isLeftSidebarActive = ref(false);
 const isRightSidebarActive = ref(false);
 const rooms = ref([]);
 const messageComposer = ref(null);
-const isUserMuted = computed(() => store.getters['chat/isUserMuted']);
 
-// Загрузка списка комнат
+const currentRoom = computed(() => store.getters['chat/getCurrentRoom']);
+const messages = computed(() => store.getters['chat/getMessages']);
+const connectedUsers = computed(() => store.getters['chat/getConnectedUsers']);
+const connectionState = computed(() => store.getters['chat/getConnectionState']);
+const realtimeNotice = computed(() => store.getters['chat/getRealtimeNotice']);
+const isUserMuted = computed(() => store.getters['chat/isUserMuted']);
+const isRealtimeReady = computed(() => connectionState.value === 'connected');
+const isComposerDisabled = computed(() => isUserMuted.value || !isRealtimeReady.value);
+
+const currentUser = computed(() => store.getters.getUser || {
+	uid: null,
+	username: 'Неизвестный пользователь',
+	avatar: '/images/default-avatar.png',
+});
+
+const connectionLabel = computed(() => ({
+	idle: 'Не подключено',
+	connecting: 'Подключаемся',
+	authenticating: 'Проверяем сессию',
+	connected: 'В эфире',
+	reconnecting: 'Восстанавливаем',
+	offline: 'Офлайн',
+	restricted: 'Доступ ограничен',
+}[connectionState.value] || 'Подключение'));
+
 const loadRooms = async () => {
 	try {
 		const response = await RoomsService.get_rooms();
-		if (response.data.status === 'ok' && response.data.rooms) {
-			rooms.value = response.data.rooms;
-		}
+		if (response.data.status === 'ok' && response.data.rooms) rooms.value = response.data.rooms;
 	} catch (error) {
-		console.error('Ошибка загрузки комнат:', error);
+		console.error('Ошибка загрузки пространств:', error);
 	}
 };
 
-// Обработчик ответа на сообщение
 const handleMessageReply = (message) => {
 	messageComposer.value?.setReply(message);
 	scrollToBottom();
 };
 
-// Модифицированная функция отправки сообщения
 const handleSendMessage = async (messageData) => {
-	const sanitizedContent = DOMPurify.sanitize(messageData.content);
-
-	const messagePayload = {
+	if (isComposerDisabled.value) return;
+	const sanitizedContent = DOMPurify.sanitize(messageData.content || '');
+	store.dispatch('chat/sendMessage', {
 		frontId: uuidv4(),
-		content: sanitizedContent || '',
+		content: sanitizedContent,
 		content_type: messageData.content_type,
 		media_metadata: messageData.media_metadata,
 		sender: {
 			uid: currentUser.value.uid,
-			name: currentUser.value.username,
+			name: currentUser.value.display_name || currentUser.value.username,
 			avatar: currentUser.value.avatar,
 		},
 		reply_to_uid: messageData.reply_to_uid,
 		status: 'sending',
-	};
-
-	store.dispatch('chat/sendMessage', messagePayload);
+	});
 };
 
 const handleModeratorChange = async ({ userId, isModerator }) => {
 	try {
 		await store.dispatch('chat/sendModeratorAction', {
 			target_user_uid: userId,
-			action: isModerator ? 'add_moderator' : 'remove_moderator'
+			action: isModerator ? 'add_moderator' : 'remove_moderator',
 		});
 	} catch (error) {
-		console.error('Ошибка при изменении статуса модератора:', error);
-		// Можно показать уведомление об ошибке
+		console.error('Не удалось изменить роль в пространстве:', error);
 	}
 };
 
-// Обработчик блокировки пользователя
-const handleBanUser = async (userId) => {
+const handleRestrictUser = async (userId) => {
 	try {
 		await store.dispatch('chat/sendBanAction', {
 			target_user_uid: userId,
-			reason: 'Нарушение правил чата'
+			reason: 'Нарушение правил пространства',
 		});
 	} catch (error) {
-		console.error('Ошибка при блокировке пользователя:', error);
-		// Можно показать уведомление об ошибке
+		console.error('Не удалось ограничить доступ к пространству:', error);
 	}
 };
 
-// Функция для переключения комнаты
 const switchRoom = async (room) => {
 	isLoading.value = true;
 	try {
 		const roomData = await RoomsService.get_room(room.uid);
 		await store.dispatch('chat/switchRoom', {
 			room: roomData.data.room,
-			roomId: room.uid
+			roomId: room.uid,
 		});
-		isRightSidebarActive.value = true;
+		isLeftSidebarActive.value = false;
+		isRightSidebarActive.value = window.innerWidth >= 1100;
 	} catch (error) {
-		console.error('Ошибка загрузки данных комнаты:', error);
+		console.error('Ошибка открытия пространства:', error);
 	} finally {
 		isLoading.value = false;
 	}
 };
 
-// Функция для переключения левого сайдбара
 const toggleLeftSidebar = () => {
 	isLeftSidebarActive.value = !isLeftSidebarActive.value;
-	if (isRightSidebarActive.value) {
-		isRightSidebarActive.value = false; // Закрываем правый сайдбар, если он открыт
-	}
+	if (isLeftSidebarActive.value) isRightSidebarActive.value = false;
 };
-
-// Функция для закрытия левого сайдбара
-const closeLeftSidebar = () => {
-	isLeftSidebarActive.value = false;
-};
-
-// Функция для переключения правого сайдбара
+const closeLeftSidebar = () => { isLeftSidebarActive.value = false; };
 const toggleRightSidebar = () => {
-	if (currentRoom.value.id) {
-		isRightSidebarActive.value = !isRightSidebarActive.value;
-	}
+	if (!currentRoom.value?.uid) return;
+	isRightSidebarActive.value = !isRightSidebarActive.value;
+	if (isRightSidebarActive.value && window.innerWidth < 1100) isLeftSidebarActive.value = false;
 };
-
-// Функция для закрытия правого сайдбара
-const closeRightSidebar = () => {
-	isRightSidebarActive.value = false;
-};
-
-const handleOpenCreateChatModal = () => {
-	isCreateRoomeModalShow.value = !isCreateRoomeModalShow.value;
-}
+const closeRightSidebar = () => { isRightSidebarActive.value = false; };
+const toggleCreateSpaceModal = () => { isCreateRoomModalOpen.value = !isCreateRoomModalOpen.value; };
 
 const scrollToBottom = async () => {
-	await nextTick(); // Ждём обновления DOM
-	const chatMessages = document.getElementById('chat-messages');
-	if (chatMessages) {
-		//console.log('Scrolling to bottom...');
-		chatMessages.scrollTop = chatMessages.scrollHeight;
-		console.log('New scrollTop:', chatMessages.scrollTop);
-	}
+	await nextTick();
+	const container = document.getElementById('chat-messages');
+	if (container) container.scrollTop = container.scrollHeight;
 };
 
-// Загрузка данных при монтировании
 onMounted(async () => {
-	loadRooms();
-	if (currentRoom) {
-		const savedRoom = rooms.value.find((room) => room.uid === currentRoom.uid);
-		if (savedRoom) {
-			await switchRoom(savedRoom);
-		}
+	await loadRooms();
+	if (currentRoom.value?.uid && connectionState.value === 'idle') {
+		const savedRoom = rooms.value.find((room) => room.uid === currentRoom.value.uid);
+		if (savedRoom) await switchRoom(savedRoom);
 	}
-});
-
-// Очистка при размонтировании
-onUnmounted(() => {
-	//store.dispatch('chat/disconnectSocket');
 });
 
 watch(
-	() => [...messages.value], // Создаем новый массив для триггера
-	async () => {
-		await nextTick();
-		scrollToBottom();
-	},
-	{ deep: true }
+	() => messages.value.length,
+	async () => scrollToBottom(),
 );
 </script>
 
 <style scoped>
-.chat-window {
-	height: calc(100vh - (54px + 5px));
-
-	width: 100%;
-	flex: 0 0 100%;
+.space-shell {
+	height: calc(100dvh - 4.35rem);
+	min-height: 32rem;
 	display: flex;
-	flex-direction: row;
-	flex-wrap: nowrap;
-	overflow-x: hidden;
-	background-color: var(--bg-light);
-	/* Используем переменную для фона */
-	color: var(--text-light);
-}
-
-.chat-content {
-	display: flex;
-	flex-direction: column;
-	width: 100%;
-	background-color: var(--bg-light);
-}
-
-.chat-window-header {
-	max-height: 40px;
-	height: 40px;
-	padding: 10px;
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	background-color: var(--primary-color);
-	/* Используем основной цвет */
-	border-bottom: 1px solid var(--primary-color);
-	/* Используем основной цвет */
-	color: white;
-	/* Белый текст */
-	box-shadow: var(--shadow-light);
-	/* Добавляем легкую тень */
-}
-
-@media screen and (max-width: 400px) {
-	.chat-window-header h2 {
-		font-size: 1.15rem;
-	}
-}
-
-
-.chat-window-header button {
-	background: none;
-	border: none;
-	cursor: pointer;
-	color: white;
-	/* Белый текст */
-	transition: color 0.2s ease;
-	/* Плавное изменение цвета */
-}
-
-.chat-window-header button:hover {
-	color: var(--primary-color-hover);
-	/* Цвет при наведении */
-}
-
-.chat-window-header button:disabled {
-	cursor: auto;
-	opacity: 0.8;
-}
-
-.chat-container {
-	flex: 1 1 100%;
-	display: flex;
-	flex-direction: column;
 	overflow: hidden;
-	background-color: var(--bg-light);
-	/* Используем переменную для фона */
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-xl);
+	background: var(--ui-surface);
+	box-shadow: var(--ui-shadow-sm);
 }
 
-.chat-window-body {
-	min-height: 100px;
+.space-main {
+	min-width: 0;
 	flex: 1;
-	overflow-y: auto;
-	padding: 10px;
-	background-color: var(--messenger-conversation-bg);
-	color: var(--messenger-text);
-	border: 1px solid var(--messenger-border);
-	box-shadow: var(--shadow-light);
-}
-
-/* Стили для компонента ввода данных */
-.message-composer {
-	flex-shrink: 0;
-	/* Предотвращает сжатие компонента */
-	padding: 10px;
-	background-color: var(--bg-light);
-	border-top: 1px solid var(--primary-color);
-}
-
-.placeholder {
-	flex: 1;
-	height: 100%;
-	width: 100%;
-	background: var(--bg-light);
 	display: flex;
 	flex-direction: column;
+	background: var(--ui-bg);
+}
+
+.space-header {
+	min-height: 4.25rem;
+	display: grid;
+	grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
 	align-items: center;
-	justify-content: center;
-	color: var(--text-light);
+	gap: var(--ui-space-3);
+	padding: var(--ui-space-2) var(--ui-space-4);
+	border-bottom: 1px solid var(--ui-border);
+	background: color-mix(in srgb, var(--ui-surface) 96%, transparent);
 }
 
-.placeholder i {
-	font-size: 3rem;
-	margin-bottom: 15px;
-	color: var(--primary-color);
+.space-header__icon {
+	width: 2.65rem;
+	height: 2.65rem;
+	display: grid;
+	place-items: center;
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-md);
+	background: var(--ui-surface);
+	color: var(--ui-text-muted);
+	cursor: pointer;
+}
+.space-header__icon:hover:not(:disabled) { background: var(--ui-surface-muted); color: var(--ui-text); }
+.space-header__icon:disabled { opacity: 0.4; cursor: default; }
+
+.space-header__title { min-width: 0; }
+.space-header__eyebrow { display: block; color: var(--ui-text-subtle); font-size: var(--ui-text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.space-header__title-row { min-width: 0; display: flex; align-items: center; gap: var(--ui-space-3); }
+.space-header h1 { min-width: 0; overflow: hidden; margin: 0.1rem 0 0; text-overflow: ellipsis; white-space: nowrap; font-size: var(--ui-text-lg); }
+
+.connection-chip {
+	min-height: 1.75rem;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--ui-space-1);
+	padding: 0 var(--ui-space-2);
+	border-radius: var(--ui-radius-pill);
+	background: var(--ui-surface-muted);
+	color: var(--ui-text-muted);
+	font-size: var(--ui-text-xs);
+	font-weight: 700;
+	white-space: nowrap;
+}
+.connection-chip__dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: currentColor; }
+.connection-chip--connected { background: var(--ui-success-soft); color: var(--ui-success); }
+.connection-chip--reconnecting, .connection-chip--connecting, .connection-chip--authenticating { background: var(--ui-info-soft); color: var(--ui-info); }
+.connection-chip--offline { background: var(--ui-warning-soft); color: var(--ui-warning); }
+.connection-chip--restricted { background: var(--ui-danger-soft); color: var(--ui-danger); }
+
+.space-notice {
+	display: flex;
+	align-items: center;
+	gap: var(--ui-space-2);
+	padding: var(--ui-space-2) var(--ui-space-4);
+	border-bottom: 1px solid var(--ui-border);
+	background: var(--ui-info-soft);
+	color: var(--ui-info);
+	font-size: var(--ui-text-sm);
+}
+.space-notice--warning { background: var(--ui-warning-soft); color: var(--ui-warning); }
+.space-notice--error, .space-notice--restricted { background: var(--ui-danger-soft); color: var(--ui-danger); }
+
+.conversation-area { min-height: 0; flex: 1; display: flex; flex-direction: column; }
+.message-stream { min-height: 0; flex: 1; overflow-y: auto; padding: var(--ui-space-4) clamp(var(--ui-space-3), 3vw, var(--ui-space-6)); scroll-behavior: smooth; }
+.stream-empty { min-height: 100%; display: grid; place-items: center; align-content: center; gap: var(--ui-space-2); text-align: center; color: var(--ui-text-muted); }
+.stream-empty__icon { width: 3.25rem; height: 3.25rem; display: grid; place-items: center; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: var(--ui-text-xl); }
+.stream-empty strong { color: var(--ui-text); font-size: var(--ui-text-lg); }
+
+.composer-state { padding: var(--ui-space-2) var(--ui-space-4); border-top: 1px solid var(--ui-border); background: var(--ui-surface-soft); color: var(--ui-text-muted); font-size: var(--ui-text-xs); text-align: center; }
+
+.space-placeholder { flex: 1; display: grid; place-items: center; align-content: center; gap: var(--ui-space-3); padding: var(--ui-space-8); text-align: center; }
+.space-placeholder__art { width: 5rem; height: 5rem; display: grid; place-items: center; border-radius: 1.75rem; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 2rem; transform: rotate(-4deg); }
+.space-placeholder h2 { margin: var(--ui-space-2) 0 0; font-size: var(--ui-text-xl); }
+.space-placeholder p { width: min(100%, 30rem); margin: 0; color: var(--ui-text-muted); }
+.space-placeholder .ui-button { margin-top: var(--ui-space-2); }
+
+@media (max-width: 991px) {
+	.space-shell { height: calc(100dvh - 8.4rem); border-radius: var(--ui-radius-lg); }
+	.space-header { padding-inline: var(--ui-space-3); }
 }
 
-@media screen and (max-width: 370px) {
-	.placeholder {
-		font-size: 15px;
-	}
-}
-
-/* Адаптивные стили для чата */
-@media (max-width: 768px) {
-	.message {
-		max-width: 90%;
-	}
-
-	.reply-button {
-		width: 30px;
-		height: 30px;
-		font-size: 1.1em;
-	}
-
-	.reply-preview .reply-content {
-		max-width: 80vw;
-	}
-}
-
-/* Анимация для кнопки ответа */
-@keyframes pulse {
-	0% {
-		transform: scale(1);
-	}
-
-	50% {
-		transform: scale(1.1);
-	}
-
-	100% {
-		transform: scale(1);
-	}
-}
-
-.message:active .reply-button {
-	animation: pulse 0.3s ease;
+@media (max-width: 560px) {
+	.space-shell { margin-inline: calc(var(--ui-space-3) * -1); border-right: 0; border-left: 0; border-radius: 0; }
+	.space-header__eyebrow { display: none; }
+	.space-header__title-row { gap: var(--ui-space-2); }
+	.space-header h1 { font-size: var(--ui-text-md); }
+	.connection-chip { max-width: 7.5rem; overflow: hidden; text-overflow: ellipsis; }
+	.message-stream { padding-inline: var(--ui-space-3); }
 }
 </style>
