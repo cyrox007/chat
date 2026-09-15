@@ -32,7 +32,9 @@ from components.identity.model import (
     PrivacySettings,
     RolePermission,
 )
+from components.achievement.model import AccountAchievement, AchievementDefinition
 from components.engagement.model import ActivityRSVP, PersonaAppearance, SpaceActivity, SpaceAppearance
+from components.engagement.round_model import ConversationRound, ConversationRoundResponse
 from components.moderation.model import ModerationAction, ModerationAppeal, ModerationReport
 from components.space.model import (
     SpaceEvent,
