@@ -61,9 +61,11 @@ class SupportLedgerEntry(Database.Base):
 
     __table_args__ = (
         CheckConstraint("target_kind IN ('persona', 'space')", name="ck_support_ledger_target_kind"),
+        # The relevant FK may become NULL after target deletion. Snapshot labels keep
+        # the historical record meaningful, while the opposite target must stay NULL.
         CheckConstraint(
-            "(target_kind = 'persona' AND target_persona_uid IS NOT NULL AND target_room_uid IS NULL) OR "
-            "(target_kind = 'space' AND target_persona_uid IS NULL AND target_room_uid IS NOT NULL)",
+            "(target_kind = 'persona' AND target_room_uid IS NULL) OR "
+            "(target_kind = 'space' AND target_persona_uid IS NULL)",
             name="ck_support_ledger_exact_target",
         ),
         Index("ix_support_ledger_sender_created", "sender_account_uid", "created_at"),
