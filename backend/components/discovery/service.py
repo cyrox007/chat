@@ -19,7 +19,7 @@ from components.space.service import list_spaces
 DISCOVERY_POOL_LIMIT = 200
 DISCOVERY_ALGORITHM = "organic-v1"
 UPCOMING_WINDOW_DAYS = 14
-RECENT_MESSAGE_HOURS = 24
+RECENT_ACTIVITY_HOURS = 24
 
 INTENT_PURPOSES = {
     "open": {"conversation", "community"},
@@ -114,19 +114,20 @@ async def _viewer_context(
     return purposes, tags, str(social_intent) if social_intent else None
 
 
-async def _recent_message_counts(
+async def _recent_contributor_counts(
     db: AsyncSession,
     room_uids: list[UUID],
     now: datetime,
 ) -> dict[UUID, int]:
     if not room_uids:
         return {}
-    since = now - timedelta(hours=RECENT_MESSAGE_HOURS)
+    since = now - timedelta(hours=RECENT_ACTIVITY_HOURS)
     result = await db.execute(
-        select(Message.room_uid, func.count(Message.uid))
+        select(Message.room_uid, func.count(func.distinct(Message.author_uid)))
         .where(
             Message.room_uid.in_(room_uids),
             Message.created_at >= since,
+            Message.author_uid.is_not(None),
         )
         .group_by(Message.room_uid)
     )
@@ -189,7 +190,7 @@ async def _upcoming_by_room(
 def _score_space(
     space: dict,
     *,
-    recent_messages: int,
+    recent_contributors: int,
     upcoming: dict | None,
     viewer_purposes: set[str],
     viewer_tags: set[str],
@@ -202,14 +203,16 @@ def _score_space(
     membership = space.get("viewer_membership") or {}
     membership_status = membership.get("status")
     if membership_status == "active":
-        score += 12
+        score += 2
         reasons.append(_reason("already_member"))
     elif membership_status == "pending":
-        score += 4
+        score += 1
         reasons.append(_reason("request_pending"))
 
-    if recent_messages > 0:
-        score += 7 + min(11, math.log2(recent_messages + 1) * 2.5)
+    if recent_contributors > 0:
+        # Distinct recent authors are intentionally used instead of raw message
+        # volume so one noisy Account cannot cheaply manufacture activity rank.
+        score += 6 + min(8, recent_contributors * 2)
         reasons.append(_reason("active_conversation"))
 
     if upcoming:
@@ -241,8 +244,10 @@ def _score_space(
         score += 3
         reasons.append(_reason("new_space"))
 
+    # Member count is a deliberately weak/capped organic context signal, never a
+    # social authority score and never sourced from legacy Room.rating.
     member_count = max(0, int(space.get("member_count") or 0))
-    score += min(6.0, math.log2(member_count + 1))
+    score += min(4.0, math.log2(member_count + 1) * 0.75)
 
     # Score stays server-only. Client receives a compact explanation instead.
     return score, reasons[:3]
@@ -315,17 +320,26 @@ async def discover_spaces(
 
     room_uids = [UUID(str(space["uid"])) for space in eligible]
     now = datetime.utcnow()
-    recent_by_room = await _recent_message_counts(db, room_uids, now)
+    recent_by_room = await _recent_contributor_counts(db, room_uids, now)
     upcoming_by_room = await _upcoming_by_room(db, room_uids, now)
     viewer_purposes, viewer_tags, social_intent = await _viewer_context(db, viewer)
 
     ranked: list[dict] = []
     for space in eligible:
         room_uid = UUID(str(space["uid"]))
-        upcoming = upcoming_by_room.get(room_uid)
+        membership = space.get("viewer_membership") or {}
+        is_owner = str(space.get("owner_uid") or "") == str(viewer)
+        can_see_live_context = (
+            space.get("visibility") == "public"
+            or membership.get("status") == "active"
+            or is_owner
+        )
+        recent_contributors = recent_by_room.get(room_uid, 0) if can_see_live_context else 0
+        upcoming = upcoming_by_room.get(room_uid) if can_see_live_context else None
+
         score, reasons = _score_space(
             space,
-            recent_messages=recent_by_room.get(room_uid, 0),
+            recent_contributors=recent_contributors,
             upcoming=upcoming,
             viewer_purposes=viewer_purposes,
             viewer_tags=viewer_tags,
