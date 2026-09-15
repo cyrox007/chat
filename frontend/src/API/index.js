@@ -22,6 +22,10 @@ const expireSession = () => {
     window.dispatchEvent(new CustomEvent('pubchat:session-expired'));
 };
 
+const ensureCsrfCookie = async () => {
+    await axios.get(`${$api.defaults.baseURL}/csrf/get`, { withCredentials: true });
+};
+
 const processQueue = (error = null, accessToken = null) => {
     failedQueue.forEach(({ resolve, reject, request }) => {
         if (error) {
@@ -47,7 +51,19 @@ $api.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
         const status = error.response?.status;
+        const detail = error.response?.data?.detail;
         const isIdentityRefresh = originalRequest?.url?.includes('/identity/v2/refresh');
+        const isCsrfFailure = status === 403 && typeof detail === 'string' && detail.includes('CSRF');
+
+        if (isCsrfFailure && !originalRequest?._csrfRetry) {
+            originalRequest._csrfRetry = true;
+            try {
+                await ensureCsrfCookie();
+                return $api(originalRequest);
+            } catch (csrfError) {
+                return Promise.reject(csrfError);
+            }
+        }
 
         if (status === 401 && !originalRequest?._isRetry && !isIdentityRefresh) {
             if (isRefreshing) {
@@ -60,6 +76,7 @@ $api.interceptors.response.use(
             originalRequest._isRetry = true;
 
             try {
+                await ensureCsrfCookie();
                 const refreshResponse = await axios.post(
                     `${$api.defaults.baseURL}/identity/v2/refresh`,
                     {},
