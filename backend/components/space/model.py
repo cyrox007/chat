@@ -81,3 +81,37 @@ class SpaceTag(Database.Base):
     __table_args__ = (
         Index("ix_space_tags_slug", "slug"),
     )
+
+
+class SpaceInvitation(Database.Base):
+    __tablename__ = "space_invitations"
+
+    uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    room_uid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("rooms.uid", ondelete="CASCADE"),
+        nullable=False,
+    )
+    inviter_account_uid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.uid", ondelete="CASCADE"),
+        nullable=False,
+    )
+    invitee_account_uid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.uid", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status = Column(String(24), nullable=False, default="pending")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    responded_at = Column(DateTime, nullable=True)
+
+    room = relationship("Room")
+
+    __table_args__ = (
+        UniqueConstraint("room_uid", "invitee_account_uid", name="uq_space_invitation_invitee"),
+        Index("ix_space_invitations_invitee_status", "invitee_account_uid", "status"),
+        Index("ix_space_invitations_room_status", "room_uid", "status"),
+    )
