@@ -1,6 +1,6 @@
 <template>
 	<main class="life-shell" v-if="space">
-		<header class="life-hero" :class="`theme--${appearance.theme_preset}`">
+		<header class="life-hero" :class="[`theme--${appearance.theme_preset}`, `cover--${appearance.cover_preset}`]">
 			<div class="ambient">{{ appearance.ambient_icon || '☕' }}</div>
 			<div>
 				<span class="eyebrow">Жизнь пространства</span>
@@ -22,6 +22,8 @@
 					<button class="ui-button" type="button" @click="showActivityForm = !showActivityForm"><i class="fas fa-plus"></i>Создать</button>
 				</header>
 
+				<div v-if="activityNotice" :class="['notice', `notice--${activityNotice.type}`]" role="status">{{ activityNotice.message }}</div>
+
 				<form v-if="showActivityForm" class="activity-form" @submit.prevent="createActivity">
 					<label>Название<input v-model.trim="activityDraft.title" maxlength="120" required placeholder="Например: Пятничная викторина" /></label>
 					<label>Формат
@@ -40,14 +42,15 @@
 					<article v-for="activity in activities" :key="activity.uid" class="activity-card" :class="{ cancelled: activity.status === 'cancelled' }">
 						<div class="activity-icon"><i :class="activityIcon(activity.activity_type)"></i></div>
 						<div class="activity-copy">
-							<div class="activity-title"><strong>{{ activity.title }}</strong><span v-if="activity.recurrence !== 'none'">{{ recurrenceLabel(activity.recurrence) }}</span></div>
+							<div class="activity-title"><strong>{{ activity.title }}</strong><span v-if="activity.recurrence !== 'none'">{{ recurrenceLabel(activity.recurrence) }}</span><span v-if="activity.status === 'cancelled'" class="cancelled-label">отменено</span></div>
 							<p v-if="activity.description">{{ activity.description }}</p>
-							<small>{{ formatDate(activity.starts_at) }} · {{ activity.rsvp.going }} идут · {{ activity.rsvp.interested }} интересуются</small>
+							<small>{{ activityTimeLabel(activity) }} · {{ activity.rsvp.going }} идут · {{ activity.rsvp.interested }} интересуются</small>
 						</div>
 						<div class="rsvp-actions" v-if="activity.status !== 'cancelled'">
 							<button type="button" :class="{ active: activity.rsvp.viewer === 'interested' }" @click="setRsvp(activity, 'interested')">Интересно</button>
 							<button type="button" :class="{ active: activity.rsvp.viewer === 'going' }" @click="setRsvp(activity, 'going')">Иду</button>
 							<button v-if="activity.rsvp.viewer" type="button" class="clear" @click="clearRsvp(activity)">Снять</button>
+							<button v-if="canManageActivity(activity)" type="button" class="danger-link" @click="cancelActivity(activity)">Отменить</button>
 						</div>
 					</article>
 				</div>
@@ -77,13 +80,15 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
+import { useStore } from 'vuex';
 
 import EngagementService from '@/API/EngagementService';
 import SpacesService from '@/API/SpacesService';
 
 const route = useRoute();
+const store = useStore();
 const loading = ref(true);
 const space = ref(null);
 const appearance = ref({ theme_preset: 'lounge', cover_preset: 'soft-gradient', ambient_icon: null, welcome_line: null });
@@ -95,7 +100,9 @@ const showActivityForm = ref(false);
 const creatingActivity = ref(false);
 const savingAppearance = ref(false);
 const appearanceNotice = ref('');
+const activityNotice = ref(null);
 const activityDraft = reactive({ title: '', description: '', activity_type: 'hangout', starts_at: '', recurrence: 'none' });
+const currentUserUid = computed(() => store.getters.getUser?.uid);
 
 const applyAppearance = (value = {}) => {
 	appearance.value = { theme_preset: value.theme_preset || 'lounge', cover_preset: value.cover_preset || 'soft-gradient', ambient_icon: value.ambient_icon || null, welcome_line: value.welcome_line || null };
@@ -119,11 +126,12 @@ const loadActivities = async () => {
 };
 
 const createActivity = async () => {
-	creatingActivity.value = true;
+	creatingActivity.value = true; activityNotice.value = null;
 	try {
 		await EngagementService.createActivity(route.params.uid, { ...activityDraft, starts_at: new Date(activityDraft.starts_at).toISOString(), description: activityDraft.description || null });
 		Object.assign(activityDraft, { title: '', description: '', activity_type: 'hangout', starts_at: '', recurrence: 'none' }); showActivityForm.value = false; await loadActivities();
-	} catch (error) { console.error(error); }
+		activityNotice.value = { type: 'success', message: 'Активность создана.' };
+	} catch (error) { console.error(error); activityNotice.value = { type: 'error', message: 'Не удалось создать активность.' }; }
 	finally { creatingActivity.value = false; }
 };
 
@@ -134,17 +142,33 @@ const saveAppearance = async () => {
 	finally { savingAppearance.value = false; }
 };
 
-const setRsvp = async (activity, status) => { const response = await EngagementService.rsvp(activity.uid, status); replaceActivity(response.data.activity); };
-const clearRsvp = async (activity) => { const response = await EngagementService.clearRsvp(activity.uid); replaceActivity(response.data.activity); };
+const setRsvp = async (activity, status) => {
+	try { const response = await EngagementService.rsvp(activity.uid, status); replaceActivity(response.data.activity); }
+	catch (error) { activityNotice.value = { type: 'error', message: 'Не удалось обновить участие.' }; }
+};
+const clearRsvp = async (activity) => {
+	try { const response = await EngagementService.clearRsvp(activity.uid); replaceActivity(response.data.activity); }
+	catch (error) { activityNotice.value = { type: 'error', message: 'Не удалось снять участие.' }; }
+};
+const canManageActivity = (activity) => Boolean(space.value?.can_manage || activity.created_by_account_uid === currentUserUid.value);
+const cancelActivity = async (activity) => {
+	activityNotice.value = null;
+	try {
+		const response = await EngagementService.updateActivity(route.params.uid, activity.uid, { status: 'cancelled' });
+		replaceActivity(response.data.activity);
+		activityNotice.value = { type: 'success', message: 'Активность отменена.' };
+	} catch (error) { activityNotice.value = { type: 'error', message: 'Не удалось отменить активность.' }; }
+};
 const replaceActivity = (next) => { const index = activities.value.findIndex((item) => item.uid === next.uid); if (index >= 0) activities.value[index] = next; };
 const activityIcon = (value) => ({ quiz: 'fas fa-circle-question', game: 'fas fa-gamepad', watch: 'fas fa-film', creative: 'fas fa-palette', local: 'fas fa-location-dot', hangout: 'fas fa-comments' }[value] || 'fas fa-comments');
 const recurrenceLabel = (value) => ({ daily: 'каждый день', weekly: 'каждую неделю', monthly: 'каждый месяц' }[value] || '');
 const formatDate = (value) => new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+const activityTimeLabel = (activity) => `${activity.recurrence === 'none' ? '' : 'Следующая: '}${formatDate(activity.next_starts_at || activity.starts_at)}`;
 
 onMounted(load);
 </script>
 
 <style scoped>
-.life-shell { display: grid; gap: var(--ui-space-5); padding-bottom: var(--ui-space-8); }.life-hero { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: var(--ui-space-5); padding: clamp(1.4rem,4vw,2.4rem); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-xl); background: linear-gradient(135deg,var(--ui-surface),var(--ui-primary-soft)); }.theme--garden { background: linear-gradient(135deg,var(--ui-surface),color-mix(in srgb,var(--ui-success-soft) 70%,var(--ui-surface))); }.theme--warm { background: linear-gradient(135deg,var(--ui-surface),color-mix(in srgb,var(--ui-warning-soft) 65%,var(--ui-surface))); }.theme--night { background: linear-gradient(135deg,var(--ui-surface),color-mix(in srgb,var(--ui-text) 18%,var(--ui-surface))); }.ambient { width: 4rem; height: 4rem; display: grid; place-items: center; border-radius: 1.25rem; background: var(--ui-surface); font-size: 1.8rem; box-shadow: var(--ui-shadow-sm); }.eyebrow { color: var(--ui-primary); font-size: var(--ui-text-xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }.life-hero h1 { margin: .25rem 0; font-size: clamp(1.7rem,4vw,2.6rem); }.life-hero p { margin: 0; color: var(--ui-text-muted); }.life-tabs { display: flex; gap: var(--ui-space-2); border-bottom: 1px solid var(--ui-border); }.life-tabs button { padding: .8rem 1rem; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--ui-text-muted); font: inherit; font-weight: 700; cursor: pointer; }.life-tabs button.active { border-bottom-color: var(--ui-primary); color: var(--ui-text); }.content-card { display: grid; gap: var(--ui-space-4); padding: var(--ui-space-5); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-xl); background: var(--ui-surface); }.section-head { display: flex; justify-content: space-between; gap: var(--ui-space-4); align-items: center; }.section-head div { display: grid; gap: .2rem; }.section-head span { color: var(--ui-text-subtle); font-size: var(--ui-text-xs); text-transform: uppercase; letter-spacing: .06em; }.section-head strong { font-size: var(--ui-text-xl); }.activity-form,.appearance-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--ui-space-3); padding: var(--ui-space-4); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-muted); }.activity-form label,.appearance-form label { display: grid; gap: .35rem; color: var(--ui-text-muted); font-size: var(--ui-text-sm); font-weight: 700; }.activity-form input,.activity-form select,.activity-form textarea,.appearance-form input,.appearance-form select { width: 100%; padding: .75rem; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text); font: inherit; }.wide { grid-column: 1 / -1; }.form-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--ui-space-3); }.form-actions span { margin-right: auto; color: var(--ui-text-muted); }.form-actions > button:not(.ui-button) { border: 0; background: transparent; color: var(--ui-text-muted); cursor: pointer; }.activity-list { display: grid; gap: var(--ui-space-3); }.activity-card { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: var(--ui-space-3); align-items: center; padding: var(--ui-space-4); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); }.activity-card.cancelled { opacity: .55; }.activity-icon { width: 2.8rem; height: 2.8rem; display: grid; place-items: center; border-radius: .9rem; background: var(--ui-primary-soft); color: var(--ui-primary); }.activity-copy { min-width: 0; }.activity-copy p { margin: .35rem 0; color: var(--ui-text-muted); }.activity-copy small { color: var(--ui-text-subtle); }.activity-title { display: flex; gap: var(--ui-space-2); align-items: center; flex-wrap: wrap; }.activity-title span { padding: .2rem .45rem; border-radius: var(--ui-radius-pill); background: var(--ui-surface-muted); color: var(--ui-text-subtle); font-size: .7rem; }.rsvp-actions { display: flex; gap: .35rem; flex-wrap: wrap; justify-content: flex-end; }.rsvp-actions button { min-height: 2.25rem; padding: 0 .7rem; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-pill); background: var(--ui-surface); color: var(--ui-text-muted); cursor: pointer; }.rsvp-actions button.active { background: var(--ui-primary-soft); border-color: var(--ui-primary); color: var(--ui-primary); }.rsvp-actions .clear { border: 0; background: transparent; }.state-card { display: grid; gap: .25rem; padding: var(--ui-space-5); border: 1px dashed var(--ui-border); border-radius: var(--ui-radius-lg); color: var(--ui-text-muted); }.state-card strong { color: var(--ui-text); }
+.life-shell { display: grid; gap: var(--ui-space-5); padding-bottom: var(--ui-space-8); }.life-hero { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: var(--ui-space-5); padding: clamp(1.4rem,4vw,2.4rem); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-xl); background: linear-gradient(135deg,var(--ui-surface),var(--ui-primary-soft)); }.theme--garden { border-color: color-mix(in srgb,var(--ui-success) 28%,var(--ui-border)); }.theme--warm { border-color: color-mix(in srgb,var(--ui-warning) 28%,var(--ui-border)); }.theme--studio { border-color: color-mix(in srgb,var(--ui-info) 28%,var(--ui-border)); }.theme--night { border-color: color-mix(in srgb,var(--ui-text-muted) 32%,var(--ui-border)); }.cover--paper { background: color-mix(in srgb,var(--ui-surface) 91%,var(--ui-warning-soft)); }.cover--mist { background: color-mix(in srgb,var(--ui-surface) 90%,var(--ui-info-soft)); }.cover--linen { background: color-mix(in srgb,var(--ui-surface) 90%,var(--ui-surface-muted)); }.cover--night { background: color-mix(in srgb,var(--ui-surface) 80%,var(--ui-text) 20%); }.ambient { width: 4rem; height: 4rem; display: grid; place-items: center; border-radius: 1.25rem; background: var(--ui-surface); font-size: 1.8rem; box-shadow: var(--ui-shadow-sm); }.eyebrow { color: var(--ui-primary); font-size: var(--ui-text-xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }.life-hero h1 { margin: .25rem 0; font-size: clamp(1.7rem,4vw,2.6rem); }.life-hero p { margin: 0; color: var(--ui-text-muted); }.life-tabs { display: flex; gap: var(--ui-space-2); border-bottom: 1px solid var(--ui-border); }.life-tabs button { padding: .8rem 1rem; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--ui-text-muted); font: inherit; font-weight: 700; cursor: pointer; }.life-tabs button.active { border-bottom-color: var(--ui-primary); color: var(--ui-text); }.content-card { display: grid; gap: var(--ui-space-4); padding: var(--ui-space-5); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-xl); background: var(--ui-surface); }.section-head { display: flex; justify-content: space-between; gap: var(--ui-space-4); align-items: center; }.section-head div { display: grid; gap: .2rem; }.section-head span { color: var(--ui-text-subtle); font-size: var(--ui-text-xs); text-transform: uppercase; letter-spacing: .06em; }.section-head strong { font-size: var(--ui-text-xl); }.notice { padding: var(--ui-space-3); border-radius: var(--ui-radius-md); background: var(--ui-success-soft); color: var(--ui-success); }.notice--error { background: var(--ui-danger-soft); color: var(--ui-danger); }.activity-form,.appearance-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--ui-space-3); padding: var(--ui-space-4); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-muted); }.activity-form label,.appearance-form label { display: grid; gap: .35rem; color: var(--ui-text-muted); font-size: var(--ui-text-sm); font-weight: 700; }.activity-form input,.activity-form select,.activity-form textarea,.appearance-form input,.appearance-form select { width: 100%; padding: .75rem; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text); font: inherit; }.wide { grid-column: 1 / -1; }.form-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--ui-space-3); }.form-actions span { margin-right: auto; color: var(--ui-text-muted); }.form-actions > button:not(.ui-button) { border: 0; background: transparent; color: var(--ui-text-muted); cursor: pointer; }.activity-list { display: grid; gap: var(--ui-space-3); }.activity-card { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: var(--ui-space-3); align-items: center; padding: var(--ui-space-4); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); }.activity-card.cancelled { opacity: .62; }.activity-icon { width: 2.8rem; height: 2.8rem; display: grid; place-items: center; border-radius: .9rem; background: var(--ui-primary-soft); color: var(--ui-primary); }.activity-copy { min-width: 0; }.activity-copy p { margin: .35rem 0; color: var(--ui-text-muted); }.activity-copy small { color: var(--ui-text-subtle); }.activity-title { display: flex; gap: var(--ui-space-2); align-items: center; flex-wrap: wrap; }.activity-title span { padding: .2rem .45rem; border-radius: var(--ui-radius-pill); background: var(--ui-surface-muted); color: var(--ui-text-subtle); font-size: .7rem; }.activity-title .cancelled-label { background: var(--ui-danger-soft); color: var(--ui-danger); }.rsvp-actions { display: flex; gap: .35rem; flex-wrap: wrap; justify-content: flex-end; }.rsvp-actions button { min-height: 2.25rem; padding: 0 .7rem; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-pill); background: var(--ui-surface); color: var(--ui-text-muted); cursor: pointer; }.rsvp-actions button.active { background: var(--ui-primary-soft); border-color: var(--ui-primary); color: var(--ui-primary); }.rsvp-actions .clear { border: 0; background: transparent; }.rsvp-actions .danger-link { border: 0; background: transparent; color: var(--ui-danger); }.state-card { display: grid; gap: .25rem; padding: var(--ui-space-5); border: 1px dashed var(--ui-border); border-radius: var(--ui-radius-lg); color: var(--ui-text-muted); }.state-card strong { color: var(--ui-text); }
 @media (max-width: 760px) { .life-hero { grid-template-columns: auto 1fr; }.life-hero .ui-button { grid-column: 1 / -1; width: 100%; }.activity-form,.appearance-form { grid-template-columns: 1fr; }.wide { grid-column: auto; }.activity-card { grid-template-columns: auto 1fr; align-items: start; }.rsvp-actions { grid-column: 1 / -1; justify-content: flex-start; }.section-head { align-items: stretch; flex-direction: column; }.section-head .ui-button { width: 100%; }.form-actions { flex-direction: column; align-items: stretch; }.form-actions span { margin-right: 0; } }
 </style>
