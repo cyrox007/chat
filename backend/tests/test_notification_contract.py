@@ -9,6 +9,10 @@ from components.engagement.occurrence_service import OCCURRENCE_HORIZON_DAYS
 from components.engagement.recurrence import occurrences_between
 from components.notification.model import ActivityReminderPreference, UserNotification
 from components.notification.schemas import ActivityReminderUpdateRequest
+from components.notification.service import (
+    MAX_REMINDER_PREFERENCES_PER_SYNC,
+    MAX_REMINDERS_PER_ACCOUNT,
+)
 
 
 class NotificationContractTests(unittest.TestCase):
@@ -40,6 +44,11 @@ class NotificationContractTests(unittest.TestCase):
             self.assertEqual(ActivityReminderUpdateRequest(lead_minutes=value).lead_minutes, value)
         with self.assertRaises(ValidationError):
             ActivityReminderUpdateRequest(lead_minutes=30)
+
+    def test_reminder_account_limit_covers_every_syncable_preference(self):
+        self.assertEqual(MAX_REMINDERS_PER_ACCOUNT, MAX_REMINDER_PREFERENCES_PER_SYNC)
+        self.assertGreater(MAX_REMINDERS_PER_ACCOUNT, 0)
+        self.assertLessEqual(MAX_REMINDERS_PER_ACCOUNT, 200)
 
     def test_occurrence_rows_are_unique_per_activity_start(self):
         constraints = {constraint.name for constraint in ActivityOccurrence.__table__.constraints if constraint.name}
