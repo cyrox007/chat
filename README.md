@@ -6,9 +6,9 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Текущий выпущенный checkpoint: `0.5.3-alpha.1`.
+Текущий выпущенный checkpoint: `0.5.4-alpha.1`.
 
-Следующая development-линия: `0.5.4-alpha.0` — Discovery quality.
+Следующая development-линия: `0.5.5-alpha.0` — Web application maturity.
 
 Канонический номер версии находится в `VERSION`, история выпусков — в `CHANGELOG.md`.
 
@@ -45,8 +45,10 @@ SPA является первым клиентом; backend API и realtime cont
 - Space moderator не является platform moderator.
 - Деньги не покупают trust и moderation power.
 - Gifts/support не являются рейтингом и не влияют на discovery/authority.
+- Organic discovery сначала применяет privacy/eligibility, а затем ranking.
+- Числовой discovery score не является публичным API и не показывается пользователю.
 - PostgreSQL — источник истины; Redis — ephemeral realtime слой.
 - Access JWT браузера хранится только в памяти; долговременная сессия — HttpOnly refresh-cookie.
 - Credentials не передаются в WebSocket URL.
 - Activity reminders в `0.5.2+` — opt-in in-app notifications; browser/native push появится отдельным delivery adapter позже.
-- Creator support в `0.5.3` — бесплатные internal cosmetic gestures; реальные payments требуют отдельного financial/security review.
+- Creator support в `0.5.3+` — бесплатные internal cosmetic gestures; реальные payments требуют отдельного financial/security review.
