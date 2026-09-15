@@ -6,9 +6,9 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Текущий выпущенный checkpoint: `0.5.1-alpha.1`.
+Текущий выпущенный checkpoint: `0.5.2-alpha.1`.
 
-Активная development-линия: `0.5.2-alpha.0` — Activity Occurrences & in-app Notifications.
+Следующая development-линия: `0.5.3-alpha.0` — Creator support & cosmetic economy foundation.
 
 Канонический номер версии находится в `VERSION`, история выпусков — в `CHANGELOG.md`.
 
@@ -23,10 +23,11 @@ PubChat — SPA-приложение для свободного общения 
 - [`docs/user-guide.md`](docs/user-guide.md) — функции и пользовательские сценарии;
 - [`docs/architecture.md`](docs/architecture.md) — архитектура;
 - [`docs/api-and-realtime.md`](docs/api-and-realtime.md) — HTTP API и WebSocket;
+- [`docs/security-and-privacy.md`](docs/security-and-privacy.md) — security/privacy model;
 - [`docs/development.md`](docs/development.md) — разработка, миграции, тесты и CI;
 - [`docs/operations.md`](docs/operations.md) — эксплуатация;
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — типовые проблемы;
-- [`docs/revival-roadmap.md`](docs/revival-roadmap.md) — дорожная карта;
+- [`docs/roadmap.md`](docs/roadmap.md) — актуальная дорожная карта;
 - [`CHANGELOG.md`](CHANGELOG.md) — история версий.
 
 ## Технологии
@@ -46,3 +47,4 @@ SPA является первым клиентом; backend API и realtime cont
 - PostgreSQL — источник истины; Redis — ephemeral realtime слой.
 - Access JWT браузера хранится только в памяти; долговременная сессия — HttpOnly refresh-cookie.
 - Credentials не передаются в WebSocket URL.
+- Activity reminders в `0.5.2` — opt-in in-app notifications; browser/native push появится отдельным delivery adapter позже.
