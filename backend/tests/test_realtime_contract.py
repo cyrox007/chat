@@ -1,3 +1,4 @@
+import json
 import unittest
 from uuid import uuid4
 
@@ -28,6 +29,37 @@ class RealtimeContractTests(unittest.TestCase):
     def test_auth_frame_rejects_short_ticket(self):
         with self.assertRaises(ValidationError):
             RealtimeAuthFrame(type='auth', ticket='short')
+
+
+class FakePipeline:
+    def __init__(self):
+        self.expire_calls = []
+
+    def set(self, *args, **kwargs):
+        return self
+
+    def zadd(self, *args, **kwargs):
+        return self
+
+    def expire(self, key, ttl):
+        self.expire_calls.append((key, ttl))
+        return self
+
+    async def execute(self):
+        return []
+
+
+class FakeRedis:
+    def __init__(self, record):
+        self.record = record
+        self.last_pipeline = None
+
+    async def get(self, key):
+        return json.dumps(self.record)
+
+    def pipeline(self, transaction=False):
+        self.last_pipeline = FakePipeline()
+        return self.last_pipeline
 
 
 class RealtimeLifecycleTests(unittest.IsolatedAsyncioTestCase):
@@ -71,6 +103,33 @@ class RealtimeLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await self.service.claim_event(account_uid, scope, event_id))
         await self.service.release_event(account_uid, scope, event_id)
         self.assertTrue(await self.service.claim_event(account_uid, scope, event_id))
+
+    async def test_heartbeat_refreshes_user_and_room_presence_index_ttls(self):
+        account_uid = uuid4()
+        room_uid = uuid4()
+        connection_id = 'connection-1'
+        fake_redis = FakeRedis(
+            {
+                'connection_id': connection_id,
+                'user_uid': str(account_uid),
+                'target': 'room',
+                'room_uid': str(room_uid),
+                'expires_at': 0,
+            }
+        )
+        self.service._redis = fake_redis
+
+        await self.service.touch_connection(connection_id)
+
+        ttl = config.REALTIME_PRESENCE_TTL_SECONDS * 2
+        self.assertIn(
+            (self.service._presence_user_key(account_uid), ttl),
+            fake_redis.last_pipeline.expire_calls,
+        )
+        self.assertIn(
+            (self.service._presence_room_key(room_uid), ttl),
+            fake_redis.last_pipeline.expire_calls,
+        )
 
 
 if __name__ == '__main__':
