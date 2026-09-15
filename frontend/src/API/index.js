@@ -2,111 +2,86 @@ import axios from "axios";
 import store from "@/stores";
 
 const $api = axios.create({
-    withCredentials: true, // Включаем отправку кук
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000', // Базовый URL вашего API
+    withCredentials: true,
+    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000',
 });
 
-let isRefreshing = false; // Флаг для предотвращения множественных запросов на обновление токена
-let failedQueue = []; // Очередь для хранения запросов, ожидающих обновления токена
+let isRefreshing = false;
+let failedQueue = [];
 
-// Функция для обработки очереди запросов
-const processQueue = (error = null) => {
-    failedQueue.forEach((callback) => callback(error));
+const clearSessionStorage = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('auth');
+    localStorage.removeItem('user');
+    localStorage.removeItem('identity');
+};
+
+const expireSession = () => {
+    clearSessionStorage();
+    store.dispatch('clearUser');
+    window.dispatchEvent(new CustomEvent('pubchat:session-expired'));
+};
+
+const processQueue = (error = null, accessToken = null) => {
+    failedQueue.forEach(({ resolve, reject, request }) => {
+        if (error) {
+            reject(error);
+            return;
+        }
+        request.headers.Authorization = `Bearer ${accessToken}`;
+        resolve($api(request));
+    });
     failedQueue = [];
 };
 
-// Перехватчик запросов: добавляем токен в заголовки
 $api.interceptors.request.use((config) => {
     const accessToken = localStorage.getItem('access_token');
     if (accessToken) {
         config.headers.Authorization = `Bearer ${accessToken}`;
     }
     return config;
-}, (error) => {
-    return Promise.reject(error);
 });
 
-// Перехватчик ответов: обработка ошибок
 $api.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
+        const status = error.response?.status;
+        const isIdentityRefresh = originalRequest?.url?.includes('/identity/v2/refresh');
 
-        // Обработка ошибки 401 Unauthorized
-        if (error.response?.status === 401 && !originalRequest._isRetry) {
-            if (!isRefreshing) {
-                isRefreshing = true;
-                originalRequest._isRetry = true;
-
-                try {
-                    // Обновляем токен
-                    const refreshResponse = await axios.get(`${$api.defaults.baseURL}/refresh`, {
-                        withCredentials: true,
-                    });
-                    const { status, access_token } = refreshResponse.data;
-                    console.log(access_token);
-                    
-                    // Сохраняем новый access_token
-                    localStorage.setItem('access_token', access_token);
-
-                    // Устанавливаем новый токен в заголовки
-                    originalRequest.headers.Authorization = `Bearer ${access_token}`;
-
-                    // Повторяем все запросы из очереди
-                    processQueue();
-
-                    // Повторяем исходный запрос и возвращаем его результат
-                    return $api(originalRequest);
-                } catch (refreshError) {
-                    // Если обновление токена не удалось, очищаем данные и перенаправляем на страницу входа
-                    processQueue(refreshError);
-                    localStorage.clear();
-                    store.dispatch('clearUser');
-                    window.location.href = '/login';
-                    return Promise.reject(refreshError);
-                } finally {
-                    isRefreshing = false;
-                }
-            } else {
-                // Добавляем запрос в очередь на повторение
+        if (status === 401 && !originalRequest?._isRetry && !isIdentityRefresh) {
+            if (isRefreshing) {
                 return new Promise((resolve, reject) => {
-                    failedQueue.push((err) => {
-                        if (err) {
-                            reject(err);
-                        } else {
-                            resolve($api(originalRequest));
-                        }
-                    });
+                    failedQueue.push({ resolve, reject, request: originalRequest });
                 });
             }
-        }
 
-        // Обработка ошибки 403 Forbidden
-        if (error.response?.status === 403) {
-            console.error('Доступ запрещен: токен недействителен или удален.');
+            isRefreshing = true;
+            originalRequest._isRetry = true;
 
-            // Очищаем данные аутентификации
-            localStorage.clear();
-            store.dispatch('clearUser');
-            
-            // Перенаправляем пользователя на страницу входа
-            const allowedPaths = ['/login', '/registration'];
-
-            if (!allowedPaths.some(path => window.location.pathname.includes(path))) {
-                window.location.href = '/login';
+            try {
+                const refreshResponse = await axios.post(
+                    `${$api.defaults.baseURL}/identity/v2/refresh`,
+                    {},
+                    { withCredentials: true }
+                );
+                const accessToken = refreshResponse.data.access_token;
+                localStorage.setItem('access_token', accessToken);
+                originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+                processQueue(null, accessToken);
+                return $api(originalRequest);
+            } catch (refreshError) {
+                processQueue(refreshError);
+                expireSession();
+                return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
             }
-
-            // Прерываем выполнение
-            throw error;
         }
 
-        // Обработка других ошибок
-        if (error.response?.status === 400) {
-            console.error('Ошибка валидации:', error);
-        }
-
-        // Пробрасываем ошибку дальше
-        throw error;
+        // 403 means "authenticated but not allowed". It must never silently log
+        // a user out (e.g. opening an admin-only screen as a normal member).
+        return Promise.reject(error);
     }
 );
 
