@@ -71,3 +71,18 @@ class UserNotification(Database.Base):
         Index("ix_user_notifications_account_created", "account_uid", "created_at"),
         Index("ix_user_notifications_account_unread", "account_uid", "read_at"),
     )
+
+
+class NotificationWorkerState(Database.Base):
+    """Durable cursor for bounded externally-scheduled notification workers.
+
+    The row is locked with SELECT ... FOR UPDATE SKIP LOCKED for the duration of
+    one worker run. This prevents overlapping schedulers from processing the same
+    bounded cursor window while preserving progress across separate invocations.
+    """
+
+    __tablename__ = "notification_worker_state"
+
+    worker_name = Column(String(64), primary_key=True)
+    cursor_account_uid = Column(UUID(as_uuid=True), nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
