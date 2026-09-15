@@ -83,5 +83,7 @@ jobs:
           fi
       - name: PWA cache safety guard
         run: npm run check:pwa
+      - name: App lifecycle regression guard
+        run: npm run check:lifecycle
       - name: Build frontend
         run: npm run build
