@@ -4,7 +4,10 @@ from fastapi import APIRouter, Depends, FastAPI, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
-from components.engagement.occurrence_service import list_activity_occurrences
+from components.engagement.occurrence_service import (
+    list_activity_occurrences,
+    sync_activity_occurrences,
+)
 from components.notification.schemas import ActivityReminderUpdateRequest
 from components.notification.service import (
     delete_activity_reminder,
@@ -31,6 +34,21 @@ def install(app: FastAPI) -> None:
         db: AsyncSession = Depends(Database.session_generator),
     ):
         items = await list_activity_occurrences(
+            db,
+            activity_uid,
+            current_user["user_uid"],
+            limit=limit,
+        )
+        return {"status": "ok", "occurrences": items}
+
+    @occurrences.post("/activities/{activity_uid}/sync")
+    async def activity_occurrence_sync(
+        activity_uid: UUID,
+        limit: int = Query(default=20, ge=1, le=100),
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        items = await sync_activity_occurrences(
             db,
             activity_uid,
             current_user["user_uid"],
