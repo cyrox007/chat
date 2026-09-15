@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import HTTPException, Request
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import case, desc, func, or_, select
 from sqlalchemy.orm import joinedload
 
 from components.decorators.db import get_session
@@ -13,20 +13,24 @@ logger = setup_logger(__name__)
 
 @get_session
 async def get_dialogs(request: Request, db_session=None):
-    """Return one latest message per real conversation partner.
-
-    The legacy implementation grouped by greatest(sender_uid, receiver_uid), which
-    can collapse unrelated dialogs when the current UUID sorts above both partners.
-    Partner identity is contextual, so derive it relative to the authenticated user.
-    """
+    """Return exactly one latest message per real conversation partner."""
     try:
         current_uid = UUID(request.state.user["user_uid"])
 
-        result = await db_session.execute(
-            select(PrivateMessage)
-            .options(
-                joinedload(PrivateMessage.sender),
-                joinedload(PrivateMessage.receiver),
+        partner_uid = case(
+            (PrivateMessage.sender_uid == current_uid, PrivateMessage.receiver_uid),
+            else_=PrivateMessage.sender_uid,
+        )
+        ranked = (
+            select(
+                PrivateMessage.id.label("message_id"),
+                partner_uid.label("partner_uid"),
+                func.row_number()
+                .over(
+                    partition_by=partner_uid,
+                    order_by=(desc(PrivateMessage.created_at), desc(PrivateMessage.id)),
+                )
+                .label("row_number"),
             )
             .where(
                 or_(
@@ -34,10 +38,20 @@ async def get_dialogs(request: Request, db_session=None):
                     PrivateMessage.receiver_uid == current_uid,
                 )
             )
-            .order_by(desc(PrivateMessage.created_at))
-            .limit(500)
+            .subquery()
         )
-        recent_messages = result.scalars().all()
+
+        result = await db_session.execute(
+            select(PrivateMessage)
+            .join(ranked, ranked.c.message_id == PrivateMessage.id)
+            .options(
+                joinedload(PrivateMessage.sender),
+                joinedload(PrivateMessage.receiver),
+            )
+            .where(ranked.c.row_number == 1)
+            .order_by(desc(PrivateMessage.created_at), desc(PrivateMessage.id))
+        )
+        latest_messages = result.scalars().all()
 
         unread_result = await db_session.execute(
             select(PrivateMessage.sender_uid, func.count(PrivateMessage.uid))
@@ -50,23 +64,18 @@ async def get_dialogs(request: Request, db_session=None):
         unread_by_sender = {str(sender_uid): count for sender_uid, count in unread_result.all()}
 
         dialogs = []
-        seen_partners = set()
-        for message in recent_messages:
-            partner_uid = (
+        for message in latest_messages:
+            partner_id = (
                 message.receiver_uid
                 if str(message.sender_uid) == str(current_uid)
                 else message.sender_uid
             )
-            partner_key = str(partner_uid)
-            if partner_key in seen_partners:
-                continue
-            seen_partners.add(partner_key)
-
             partner = (
                 message.receiver
                 if str(message.sender_uid) == str(current_uid)
                 else message.sender
             )
+            partner_key = str(partner_id)
             dialogs.append(
                 {
                     "partner_id": partner_key,
