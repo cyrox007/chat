@@ -124,6 +124,10 @@ async def _rate_limit_message(websocket: WebSocket, user_uid: UUID) -> bool:
     return False
 
 
+def _dm_event_scope(receiver_uid: UUID) -> str:
+    return f"direct-message:{receiver_uid}"
+
+
 async def handle_private_messages(
     websocket: WebSocket,
     user_uid: UUID,
@@ -187,6 +191,23 @@ async def handle_send_private_message(
         )
         return
 
+    front_id = data.get("frontId")
+    scope = _dm_event_scope(receiver_uid)
+    claimed = await realtime_service.claim_event(
+        user_uid=sender_uid,
+        scope=scope,
+        event_id=front_id,
+    )
+    if not claimed:
+        await websocket.send_json(
+            {
+                "type": "duplicate_ignored",
+                "scope": "direct_message",
+                "frontId": front_id,
+            }
+        )
+        return
+
     try:
         formatted_message = await PrivateMessage.create_private_message(
             db_session,
@@ -198,18 +219,19 @@ async def handle_send_private_message(
                 "media_metadata": data.get("media_metadata"),
             },
         )
-        formatted_message["frontId"] = data.get("frontId")
+        formatted_message["frontId"] = front_id
 
         await private_manager.send_to_user(sender_uid, formatted_message)
         if receiver_uid != sender_uid:
             await private_manager.send_to_user(receiver_uid, formatted_message)
     except Exception:
+        await realtime_service.release_event(sender_uid, scope, front_id)
         logger.exception("Ошибка отправки private message")
         await websocket.send_json(
             {
                 "type": "error",
                 "error_type": "message_send_failed",
-                "frontId": data.get("frontId"),
+                "frontId": front_id,
             }
         )
 
