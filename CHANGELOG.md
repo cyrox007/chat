@@ -2,9 +2,9 @@
 
 Формат версий: `MAJOR.MINOR.PATCH-channel.N` до стабильного `1.0.0`.
 
-## [Unreleased] — 0.5.1-alpha.0
+## [0.5.1-alpha.1] — 2026-09-15
 
-Stage 5.2: Earned Achievements & Conversation Rounds. Второй engagement-slice развивается поверх выпущенного `0.5.0-alpha.1` и пока не является релизом.
+Stage 5.2: Earned Achievements & Conversation Rounds. Второй engagement-checkpoint поверх `0.5.0-alpha.1`.
 
 ### Earned achievements
 - system-only каталог и выдача достижений;
@@ -44,15 +44,16 @@ Stage 5.2: Earned Achievements & Conversation Rounds. Второй engagement-sl
 - rounds используют существующие membership/moderation границы, а не параллельную trust-систему;
 - достижения выдаются только backend system hooks и идемпотентны.
 
-### Release gate
-Перед фиксацией `0.5.1-alpha.1` обязательны:
+### Quality gate
+До version bump успешно прошли:
 - additive migration graph с одной Alembic head;
 - backend compile/import/security/contracts;
 - SPA security guard + production build;
 - final abuse/privacy/permissions self-review;
-- roadmap/versioning sync;
-- canonical `VERSION` bump только после зелёного functional exact-head CI;
-- повторный exact-head CI на `0.5.1-alpha.1` перед merge.
+- roadmap/versioning/UI Kit sync;
+- functional exact-head CI на frozen feature head.
+
+После version bump выполняется повторный exact-head CI уже на `0.5.1-alpha.1`; merge разрешён только после его успешного завершения.
 
 ## [0.5.0-alpha.1] — 2026-09-15
 
@@ -157,7 +158,7 @@ Stage 4: Living Spaces & Social Core. Первый alpha-checkpoint продук
 - one moderation action per report на уровне БД;
 - original decision maker не может рассматривать собственную апелляцию;
 - overturn отзывает именно связанное ограничение;
-- повторный restrict отзывает предыдущее активное ограничение и закрывает его незавершённую апелляцию;
+- повторный restrict отзывает предыдущее активное решение и закрывает его pending appeal;
 - закрытые/уже обработанные жалобы нельзя повторно использовать для нового action;
 - private report metadata проверяется только после scoped manager authorization.
 
