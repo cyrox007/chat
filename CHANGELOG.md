@@ -2,9 +2,9 @@
 
 Формат версий: `MAJOR.MINOR.PATCH-channel.N` до стабильного `1.0.0`.
 
-## [Unreleased] — 0.4.0-alpha.0
+## [0.4.0-alpha.1] — 2026-09-15
 
-Stage 4: Living Spaces & Social Core. Функциональный scope реализован, но версия ещё не назначена релизным checkpoint: требуется exact-head quality gate и отдельный version bump.
+Stage 4: Living Spaces & Social Core. Первый alpha-checkpoint продуктового социального ядра PubChat.
 
 ### Living Spaces
 - канонический `/spaces/v1` domain поверх legacy `rooms/messages` без destructive rewrite;
@@ -57,16 +57,26 @@ Stage 4: Living Spaces & Social Core. Функциональный scope реа�
 - mobile-first навигация;
 - rules/events/history surfaces;
 - Safety Center и manager moderation UI;
-- terminology приведена к концепции PubChat: Space, участие, ограничение доступа, апелляция.
+- terminology приведена к концепции PubChat: Space, участие, ограничение доступа, апелляция;
+- legacy UTC timestamps нормализуются на SPA Space boundary.
 
-### Release gate
-Перед фиксацией `0.4.0-alpha.1` обязательны:
-- backend compile/import/contracts;
-- ровно одна Alembic head;
-- frontend production build;
-- final privacy/permission self-review;
-- canonical `VERSION` bump;
-- повторный exact-head CI уже на финальном номере версии.
+### Quality gate
+Перед version bump успешно прошли:
+- backend dependency install, compile и FastAPI import;
+- realtime security regression guard;
+- ровно одна Alembic migration head;
+- все backend contract tests;
+- SPA security regression guard;
+- production Vite build;
+- final privacy/permission/migration self-review.
+
+После version bump выполняется повторный exact-head CI; merge разрешён только после его успешного завершения.
+
+### Известный технический долг
+- race вокруг member capacity при конкурентных join/approve будет отдельно harden перед beta;
+- нужен platform-level fallback для апелляций, если в Space нет второго независимого manager;
+- legacy `users/rooms/room_members/room_bans` остаются compatibility backbone для части домена;
+- до beta нужны реальные PostgreSQL + Redis integration tests, migration rehearsal, observability и load testing.
 
 ## [0.3.0-alpha.1] — 2026-09-15
 
