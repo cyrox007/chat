@@ -2,11 +2,11 @@
 
 ## Current release
 
-`0.5.1-alpha.1`
+`0.5.2-alpha.1`
 
-Active development line: `0.5.2-alpha.0` — Activity Occurrences & Notifications.
+Next development line: `0.5.3-alpha.0` — Creator support & cosmetic economy foundation.
 
-The canonical released value lives in the repository root `VERSION` file. `CHANGELOG.md` records released checkpoints; active work is additionally tracked in `docs/roadmap.md` and its domain document.
+The canonical released value lives in the repository root `VERSION` file. `CHANGELOG.md` records released checkpoints; active work is additionally tracked in `docs/roadmap.md` and domain documents.
 
 ## Format
 
@@ -17,8 +17,8 @@ Before `1.0.0`, PubChat uses Semantic Versioning with an explicit readiness chan
 `MAJOR.MINOR.PATCH` for stable releases.
 
 Examples:
-- `0.5.2-alpha.0` — active compatible development inside Stage 5;
-- `0.5.2-alpha.1` — first validated checkpoint of that patch line;
+- `0.5.3-alpha.0` — active compatible development inside Stage 5;
+- `0.5.3-alpha.1` — first validated checkpoint of that patch line;
 - `0.9.0-beta.1` — core product flows complete and entering stabilization;
 - `1.0.0` — first stable public release.
 
@@ -50,7 +50,7 @@ Stable begins at `1.0.0` only after beta launch gate and absence of known P0/P1 
 1. Review actual feature scope and blockers.
 2. Freeze candidate head.
 3. Run functional CI on that exact head.
-4. Update `VERSION` and release entry only after success.
+4. Update `VERSION` and release documentation only after success.
 5. Run CI again on the exact versioned head.
 6. Merge only after the second gate succeeds.
 7. Start the next compatible slice as next patch `alpha.0`, or next milestone as next minor `alpha.0`.
@@ -66,4 +66,5 @@ Version number is a readiness statement, not commit count.
 - `0.4.0-alpha.1` — Living Spaces/social/moderation;
 - `0.5.0-alpha.1` — Persona/Space appearance + recurring Activities;
 - `0.5.1-alpha.1` — earned achievements + Conversation Rounds;
-- `0.5.2-alpha.0` — active occurrences/reminders/inbox development line.
+- `0.5.2-alpha.1` — Activity Occurrences + private in-app reminders/inbox;
+- `0.5.3-alpha.0` — next creator-support/cosmetic-economy development line.
