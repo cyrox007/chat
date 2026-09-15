@@ -143,9 +143,6 @@ class RealtimeService:
         except asyncio.CancelledError:
             raise
         except Exception:
-            # redis-py reconnects commands automatically, but a PubSub iterator can
-            # terminate after a transport failure. Make the failure visible so a
-            # process supervisor/health check can detect the degraded worker.
             logger.exception("Redis realtime listener остановлен из-за ошибки")
 
     async def _dispatch(self, event: dict) -> None:
@@ -313,16 +310,25 @@ class RealtimeService:
                 return
             record = json.loads(raw_record)
             record["expires_at"] = expires_at
+            presence_index_ttl = config.REALTIME_PRESENCE_TTL_SECONDS * 2
+            user_presence_key = self._presence_user_key(record["user_uid"])
+
             pipe = self._redis.pipeline(transaction=False)
             pipe.set(
                 self._presence_connection_key(connection_id),
                 json.dumps(record),
                 ex=config.REALTIME_PRESENCE_TTL_SECONDS,
             )
-            pipe.zadd(self._presence_user_key(record["user_uid"]), {connection_id: expires_at})
+            pipe.zadd(user_presence_key, {connection_id: expires_at})
+            # Heartbeats must refresh the index key itself as well as the member
+            # score; otherwise Redis expires the whole sorted-set while a socket
+            # is still active and presence silently drops after ~2 TTLs.
+            pipe.expire(user_presence_key, presence_index_ttl)
             if record.get("room_uid"):
                 member = f"{connection_id}|{record['user_uid']}"
-                pipe.zadd(self._presence_room_key(record["room_uid"]), {member: expires_at})
+                room_presence_key = self._presence_room_key(record["room_uid"])
+                pipe.zadd(room_presence_key, {member: expires_at})
+                pipe.expire(room_presence_key, presence_index_ttl)
             await pipe.execute()
             return
 
