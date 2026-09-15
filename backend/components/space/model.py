@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import uuid4
 
 from sqlalchemy import (
     Column,
@@ -37,7 +38,7 @@ class SpaceSettings(Database.Base):
 class SpaceMembership(Database.Base):
     __tablename__ = "space_memberships"
 
-    id = Column(Integer, primary_key=True)
+    uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     room_uid = Column(
         UUID(as_uuid=True),
         ForeignKey("rooms.uid", ondelete="CASCADE"),
