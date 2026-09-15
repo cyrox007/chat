@@ -13,7 +13,7 @@
 
 - [`product-concept.md`](product-concept.md) — позиционирование и продуктовые инварианты.
 - [`roadmap.md`](roadmap.md) — актуальная дорожная карта.
-- [`revival-roadmap.md`](revival-roadmap.md) — совместимая историческая ссылка на новый roadmap.
+- [`revival-roadmap.md`](revival-roadmap.md) — исторический revival-plan.
 - [`../CHANGELOG.md`](../CHANGELOG.md) — история выпущенных версий.
 - [`versioning.md`](versioning.md) — политика alpha/beta/stable.
 - [`versioning-quick-reference.md`](versioning-quick-reference.md) — краткий статус версии.
@@ -36,12 +36,12 @@
 - [`realtime-v2.md`](realtime-v2.md) — tickets, Redis pub/sub, presence, reconnect.
 - [`product-identity-v1.md`](product-identity-v1.md) — Persona/Space appearance и recurring Activities.
 - [`social-engagement-v2.md`](social-engagement-v2.md) — earned achievements и Conversation Rounds.
-- [`activity-occurrences-v1.md`](activity-occurrences-v1.md) — development-дизайн occurrences/reminders/inbox для `0.5.2-alpha.x`.
+- [`activity-occurrences-v1.md`](activity-occurrences-v1.md) — Activity Occurrences, reminders и notification inbox, выпущенные в `0.5.2-alpha.1`.
 
 ## Статус документов
 
-`VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md` и domain-документе ветки.
+`VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md` и domain-документе следующего slice.
 
-Текущий release: `0.5.1-alpha.1`.
+Текущий release: `0.5.2-alpha.1`.
 
-Активная development-линия: `0.5.2-alpha.0`.
+Следующая development-линия: `0.5.3-alpha.0`.
