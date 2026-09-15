@@ -1,327 +1,158 @@
 <template>
-	<header class="app-header">
-		<!-- Логотип сайта -->
-		<div class="site-logo">
-			<router-link :to="{ path: '/' }">
-				<!-- <img src="@/assets/logo.png" alt="Логотип сайта" /> -->
-				<span>PubChat</span>
-			</router-link>
-		</div>
+	<header class="app-topbar">
+		<div class="topbar-inner container">
+			<RouterLink class="brand" :to="{ name: 'chats' }" aria-label="PubChat — на главную">
+				<span class="brand-mark" aria-hidden="true">P</span>
+				<span class="brand-name">PubChat</span>
+			</RouterLink>
 
-		<!-- Пользовательское меню (правая часть) -->
-		<nav style="display: flex;">
-			<!-- Навигационное меню -->
-			<div class="app-menu" v-if="!isAuthenticated">
-				<ul>
-					<!-- <li>
-						<router-link to="/login">Авторизация</router-link>
-					</li>
-					<li>
-						<router-link to="/registration">Регистрация</router-link>
-					</li> -->
-				</ul>
-			</div>
+			<nav v-if="isAuthenticated" class="desktop-nav" aria-label="Основная навигация">
+				<RouterLink :to="{ name: 'chats' }">Пространства</RouterLink>
+				<RouterLink :to="{ name: 'messenger' }">Сообщения</RouterLink>
+			</nav>
 
-			<div class="user-profile user-menu" v-if="currentUser.uid">
-				<div class="user-avatar" @click="toggleDropdown">
-					<img :src="apiBaseUrl + currentUser.avatar" alt="Аватар пользователя" />
+			<div class="topbar-actions">
+				<template v-if="!isAuthenticated">
+					<RouterLink class="guest-link" :to="{ name: 'login' }">Войти</RouterLink>
+					<RouterLink class="ui-button signup-button" :to="{ name: 'registration' }">Создать образ</RouterLink>
+				</template>
+
+				<button class="icon-button" type="button" :aria-label="currentTheme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'" @click="toggleTheme">
+					<i :class="currentTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon'" aria-hidden="true"></i>
+				</button>
+
+				<div v-if="isAuthenticated" class="persona-menu">
+					<button class="persona-trigger" type="button" :aria-expanded="isDropdownOpen" aria-haspopup="menu" @click="toggleDropdown">
+						<span class="persona-avatar">
+							<img v-if="currentUser.avatar" :src="avatarUrl" alt="" />
+							<span v-else>{{ avatarFallback }}</span>
+						</span>
+						<span class="persona-trigger__text">
+							<strong>{{ currentUser.display_name || currentUser.username }}</strong>
+							<small>{{ intentLabel }}</small>
+						</span>
+						<i class="fas fa-chevron-down persona-chevron" aria-hidden="true"></i>
+					</button>
+
+					<div v-if="isDropdownOpen" class="persona-dropdown" role="menu">
+						<RouterLink role="menuitem" :to="profileRoute" @click="closeDropdown">
+							<i class="fas fa-user-circle" aria-hidden="true"></i><span>Мой образ</span>
+						</RouterLink>
+						<RouterLink v-if="isAdmin" role="menuitem" :to="{ name: 'AdminDashboard' }" @click="closeDropdown">
+							<i class="fas fa-user-shield" aria-hidden="true"></i><span>Управление</span>
+						</RouterLink>
+						<button role="menuitem" type="button" @click="handleLogout">
+							<i class="fas fa-sign-out-alt" aria-hidden="true"></i><span>Выйти</span>
+						</button>
+					</div>
 				</div>
-				<ul v-show="isDropdownOpen">
-					<li v-for="(item, index) in navigation" :key="index">
-						<router-link v-if="item.path !== '/users/logout'"
-							:to="item.params ? { path: item.path, params: item.params } : { path: item.path }"
-							@click.native="handleMenuClick(item)">
-							<i :class="`fas ${item.icon}`"></i>
-							<span class="menu-text">{{ item.label }}</span>
-						</router-link>
-						<a v-else href="#" @click.prevent="handleLogout">
-							<i :class="`fas ${item.icon}`"></i>
-							<span class="menu-text">{{ item.label }}</span>
-						</a>
-					</li>
-				</ul>
 			</div>
-			<!-- Темная тема -->
-			<button class="theme-toggle-btn" @click="toggleTheme">
-				<i :class="currentTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon'"></i>
-			</button>
-		</nav>
-
+		</div>
 	</header>
+
+	<nav v-if="isAuthenticated" class="mobile-nav" aria-label="Мобильная навигация">
+		<RouterLink :to="{ name: 'chats' }">
+			<i class="fas fa-comments" aria-hidden="true"></i><span>Пространства</span>
+		</RouterLink>
+		<RouterLink :to="{ name: 'messenger' }">
+			<i class="fas fa-envelope" aria-hidden="true"></i><span>Сообщения</span>
+		</RouterLink>
+		<RouterLink :to="profileRoute">
+			<i class="fas fa-user-circle" aria-hidden="true"></i><span>Профиль</span>
+		</RouterLink>
+	</nav>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
-import { RouterLink, useRoute, useRouter } from 'vue-router';
-/* import AuthService from '@/API/AuthService'; */
+import { computed, onMounted, ref } from 'vue';
+import { RouterLink, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 
-/* const route = useRoute(); */
 const router = useRouter();
 const store = useStore();
-
-// Состояние текущей темы
 const currentTheme = ref('light');
-
-// Флаг для выпадающего меню
 const isDropdownOpen = ref(false);
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-
-// Переключение выпадающего меню
-const toggleDropdown = () => {
-	isDropdownOpen.value = !isDropdownOpen.value;
-};
-
-// Проверка на неавторизованный режим
-const isAuthenticated = computed(() => { return store.getters.isAuth });
-
-// Получение текущего пользователя
-const currentUser = computed(() => {
-	return store.getters.getUser || { uid: null };
+const isAuthenticated = computed(() => store.getters.isAuth);
+const currentUser = computed(() => store.getters.getUser || {});
+const isAdmin = computed(() => ['admin', 'superadmin'].includes(currentUser.value.global_role));
+const profileRoute = computed(() => ({ name: 'UserProfile', params: { uid: currentUser.value.uid } }));
+const avatarFallback = computed(() => (currentUser.value.display_name || currentUser.value.username || '?').slice(0, 1).toUpperCase());
+const avatarUrl = computed(() => {
+	const avatar = currentUser.value.avatar;
+	if (!avatar) return '';
+	if (/^https?:\/\//.test(avatar)) return avatar;
+	return `${apiBaseUrl}${avatar}`;
 });
+const intentLabel = computed(() => ({
+	open: 'Хочу пообщаться',
+	meet: 'Открыт знакомствам',
+	games: 'Ищу компанию для игры',
+	friends: 'Только знакомые',
+	quiet: 'Спокойный режим',
+}[currentUser.value.social_intent] || 'В PubChat'));
 
-// Проверка роли администратора
-const isAdmin = computed(() => {
-	const user = store.getters.getUser;
-	return user?.global_role === 'admin' || user?.global_role === 'superadmin';
-});
+const toggleDropdown = () => { isDropdownOpen.value = !isDropdownOpen.value; };
+const closeDropdown = () => { isDropdownOpen.value = false; };
 
-// Генерация навигации
-const navigation = computed(() => {
-	const baseNavigation = [
-		{
-			path: `/profile/${currentUser.value.uid}`,
-			name: 'profile',
-			label: currentUser.value.first_name && currentUser.value.last_name ? `${currentUser.value.first_name} ${currentUser.value.last_name}` : `${currentUser.value.username}`,
-			icon: 'fa-user-circle',
-		},
-		{
-			path: '/',
-			name: 'chats',
-			label: 'Чаты',
-			icon: 'fa-comments',
-		},
-		{
-			path: '/messenger',
-			label: 'Сообщения',
-			icon: 'fa-envelope',
-		},
-		/* {
-			path: '/settings',
-			label: 'Настройки',
-			icon: 'fa-cog',
-		}, */
-		{
-			path: '/users/logout',
-			label: 'Выход',
-			icon: 'fa-sign-out-alt',
-		},
-	];
-
-	if (isAdmin.value) {
-		baseNavigation.splice(3, 0, {
-			path: '/admin',
-			label: 'Админка',
-			icon: 'fa-user-shield',
-		});
-	}
-
-	return baseNavigation;
-});
-
-// Обработка клика по меню
-const handleMenuClick = (item) => {
-	if (item.path === '/profile') {
-		console.log('Перезагрузка данных профиля...');
-	}
-};
-
-// Обработка выхода
 const handleLogout = async () => {
+	closeDropdown();
 	try {
 		await store.dispatch('logout');
+		await router.replace({ name: 'login' });
 	} catch (error) {
 		console.error('Ошибка при выходе:', error);
 	}
 };
 
-// Загрузка сохраненной темы из localStorage
-onMounted(() => {
-	const savedTheme = localStorage.getItem('theme') || 'light';
-	document.documentElement.classList.add(`${savedTheme}-theme`);
-	currentTheme.value = savedTheme;
-});
-
-// Переключение темы
-const toggleTheme = () => {
+const applyTheme = (theme) => {
 	const root = document.documentElement;
-	const savedTheme = localStorage.getItem('theme') || 'light';
-	const newTheme = savedTheme === 'light' ? 'dark' : 'light';
-
-	// Удаляем старый класс и добавляем новый
-	root.classList.remove(`${savedTheme}-theme`);
-	root.classList.add(`${newTheme}-theme`);
-
-	// Сохраняем новую тему в localStorage
-	localStorage.setItem('theme', newTheme);
-
-	// Обновляем значение переменной
-	currentTheme.value = newTheme;
+	root.classList.remove('light-theme', 'dark-theme');
+	root.classList.add(`${theme}-theme`);
+	localStorage.setItem('theme', theme);
+	currentTheme.value = theme;
 };
+const toggleTheme = () => applyTheme(currentTheme.value === 'dark' ? 'light' : 'dark');
 
-// Применение темы
-/* const applyTheme = (theme) => {
-	const root = document.documentElement;
-	if (theme === 'dark') {
-		root.style.setProperty('--bg-light', '#212529');
-		root.style.setProperty('--text-light', '#ffffff');
-		root.style.setProperty('--profile-bg-light', '#343a40');
-		root.style.setProperty('--profile-details-color', '#adb5bd');
-	} else {
-		root.style.setProperty('--bg-light', '#f8f9fa');
-		root.style.setProperty('--text-light', '#212529');
-		root.style.setProperty('--profile-bg-light', '#f0f4fc');
-		root.style.setProperty('--profile-details-color', '#6c757d');
-	}
-}; */
+onMounted(() => applyTheme(localStorage.getItem('theme') || 'light'));
 </script>
 
 <style scoped>
-/* Общие стили */
-.app-header {
-	position: relative;
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 10px 20px;
-	background-color: var(--bg-light);
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-	max-height: 50px;
-}
-
-.site-logo {
-	margin-right: auto;
-	font-size: 1.5rem;
-	font-weight: bold;
-	color: var(--text-light);
-	cursor: pointer;
-}
-
-.site-logo a {
-	text-decoration: none;
-	color: inherit;
-}
-
-/* Навигационное меню */
-.app-menu ul {
-	list-style: none;
-	display: flex;
-	gap: 20px;
-}
-
-.app-menu li {
-	display: flex;
-	align-items: center;
-	cursor: pointer;
-	transition: color 0.3s ease;
-}
-
-.app-menu li:hover {
-	color: var(--primary-color);
-}
-
-.app-menu a {
-	text-decoration: none;
-	color: inherit;
-}
-
-/* Пользовательское меню */
-.user-profile {
-	position: relative;
-	display: flex;
-	align-items: center;
-}
-.user-avatar {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-}
-.user-avatar img {
-	width: 30px;
-	height: 30px;
-	border-radius: 50%;
-	object-fit: cover;
-	cursor: pointer;
-}
-
-.user-menu ul {
-	position: absolute;
-	top: calc(100% + 10px);
-	right: 0;
-	background: var(--bg-light);
-	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-	border-radius: 4px;
-	padding: 10px;
-	z-index: 1000;
-	flex-direction: column;
-	min-width: 150px;
-}
-
-.user-menu ul li {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	padding: 8px 12px;
-	border-radius: 4px;
-	transition: background 0.3s ease;
-
-}
-
-.user-menu ul li:hover {
-	background: #f1f1f1;
-}
-
-.user-menu ul li a {
-	text-decoration: none;
-	color: inherit;
-	width: 100%;
-	display: flex;
-	align-items: center;
-	gap: 5px;
-}
-
-/* Темная тема кнопка */
-.theme-toggle-btn {
-	background: none;
-	border: none;
-	font-size: 20px;
-	cursor: pointer;
-	color: var(--text-light);
-	margin-left: 10px;
-}
-
-/* Адаптация для мобильных устройств */
-@media (max-width: 768px) {
-	.app-header {
-		/* flex-direction: column; */
-		/* align-items: flex-start; */
-		gap: 10px;
-	}
-
-	.site-logo {
-		margin-right: 0;
-	}
-
-	.app-menu ul {
-		/* flex-direction: column; */
-		gap: 10px;
-	}
-
-	.user-menu ul {
-		right: unset;
-		right: 0;
-		width: 100%;
-	}
+.app-topbar { position: sticky; top: 0; z-index: 120; border-bottom: 1px solid var(--ui-border); background: color-mix(in srgb, var(--ui-surface) 92%, transparent); backdrop-filter: blur(16px); }
+.topbar-inner { min-height: 3.75rem; display: flex; align-items: center; gap: var(--ui-space-5); }
+.brand { display: inline-flex; align-items: center; gap: var(--ui-space-2); color: var(--ui-text); text-decoration: none; font-weight: 800; letter-spacing: -0.02em; }
+.brand-mark { width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: 0.65rem; background: var(--ui-primary); color: var(--ui-primary-contrast); font-size: var(--ui-text-sm); }
+.brand-name { font-size: var(--ui-text-lg); }
+.desktop-nav { display: flex; align-items: center; gap: var(--ui-space-1); }
+.desktop-nav a, .guest-link { min-height: 2.5rem; display: inline-flex; align-items: center; padding: 0 var(--ui-space-3); border-radius: var(--ui-radius-md); color: var(--ui-text-muted); text-decoration: none; font-size: var(--ui-text-sm); font-weight: 650; }
+.desktop-nav a:hover, .desktop-nav a.router-link-active, .guest-link:hover { background: var(--ui-surface-muted); color: var(--ui-text); }
+.topbar-actions { margin-left: auto; display: flex; align-items: center; gap: var(--ui-space-2); }
+.signup-button { min-height: 2.5rem; }
+.icon-button { width: 2.5rem; height: 2.5rem; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text-muted); cursor: pointer; }
+.icon-button:hover { color: var(--ui-text); background: var(--ui-surface-muted); }
+.persona-menu { position: relative; }
+.persona-trigger { min-height: 2.75rem; display: flex; align-items: center; gap: var(--ui-space-2); padding: 0.2rem 0.45rem; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-pill); background: var(--ui-surface); color: var(--ui-text); cursor: pointer; }
+.persona-avatar { width: 2.15rem; height: 2.15rem; display: grid; place-items: center; overflow: hidden; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-primary); font-weight: 800; }
+.persona-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.persona-trigger__text { display: grid; max-width: 10rem; text-align: left; line-height: 1.1; }
+.persona-trigger__text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--ui-text-sm); }
+.persona-trigger__text small { margin-top: 0.2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ui-text-subtle); font-size: 0.68rem; }
+.persona-chevron { margin-right: var(--ui-space-1); color: var(--ui-text-subtle); font-size: 0.65rem; }
+.persona-dropdown { position: absolute; top: calc(100% + var(--ui-space-2)); right: 0; width: 13rem; display: grid; padding: var(--ui-space-2); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-raised); box-shadow: var(--ui-shadow-lg); }
+.persona-dropdown a, .persona-dropdown button { min-height: 2.65rem; display: flex; align-items: center; gap: var(--ui-space-3); width: 100%; padding: 0 var(--ui-space-3); border: 0; border-radius: var(--ui-radius-md); background: transparent; color: var(--ui-text); text-decoration: none; text-align: left; cursor: pointer; }
+.persona-dropdown a:hover, .persona-dropdown button:hover { background: var(--ui-surface-muted); }
+.persona-dropdown i { width: 1rem; color: var(--ui-text-muted); }
+.mobile-nav { display: none; }
+@media (max-width: 720px) {
+	.app-topbar { position: sticky; }
+	.topbar-inner { min-height: 3.35rem; padding-inline: var(--ui-space-3); }
+	.brand-name, .desktop-nav, .persona-trigger__text, .persona-chevron, .signup-button { display: none; }
+	.persona-trigger { border: 0; padding: 0; }
+	.mobile-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 130; min-height: 4.15rem; display: grid; grid-template-columns: repeat(3, 1fr); padding: 0.35rem max(0.35rem, env(safe-area-inset-right)) calc(0.35rem + env(safe-area-inset-bottom)) max(0.35rem, env(safe-area-inset-left)); border-top: 1px solid var(--ui-border); background: color-mix(in srgb, var(--ui-surface) 95%, transparent); backdrop-filter: blur(18px); }
+	.mobile-nav a { display: grid; place-items: center; align-content: center; gap: 0.2rem; border-radius: var(--ui-radius-md); color: var(--ui-text-subtle); text-decoration: none; font-size: 0.68rem; font-weight: 650; }
+	.mobile-nav a i { font-size: 1.05rem; }
+	.mobile-nav a.router-link-active { background: var(--ui-primary-soft); color: var(--ui-primary); }
+	.persona-dropdown { position: fixed; top: auto; right: var(--ui-space-3); bottom: calc(4.7rem + env(safe-area-inset-bottom)); left: var(--ui-space-3); width: auto; }
 }
 </style>

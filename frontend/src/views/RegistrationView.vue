@@ -1,393 +1,308 @@
 <template>
-	<div class="registration-container">
-		<div class="registration-form">
-			<h1>Регистрация</h1>
-			<span v-show="errorMessage" style="font-size: 13px; color: red; text-align: center;">{{ errorMessage }}</span>
-			<!-- Шаг 1: Основные данные -->
-			<form v-if="step === 1" @submit.prevent="validateStep1">
-				<BaseInput id="username" label="Имя пользователя" placeholder="Введите имя пользователя"
-					v-model="formData.username" :error="usernameError"
-					:validationRules="(value) => !value ? 'Поле обязательно' : ''"
-					:asyncValidation="checkUsernameUniqueness" />
+	<main class="auth-screen" aria-labelledby="registration-title">
+		<section class="auth-card auth-card--wide">
+			<div class="auth-brand">
+				<span class="auth-brand__mark" aria-hidden="true">P</span>
+				<div>
+					<p class="auth-eyebrow">Добро пожаловать в PubChat</p>
+					<h1 id="registration-title">Создайте свой образ</h1>
+				</div>
+			</div>
 
-				<BaseInput id="email" label="Email" type="email" placeholder="Введите email" v-model="formData.email"
-					:error="emailError" :validationRules="(value) => !value ? 'Поле обязательно' : ''"
-					:asyncValidation="checkEmailUniqueness" />
+			<p class="auth-lead">
+				Не анкета знакомств, а имя, под которым вас встретят в сообществах. Остальное можно настроить позже.
+			</p>
 
-				<BaseInput id="phone" label="Телефон" type="phone" placeholder="Введите номер телефона"
-					v-model="formData.phone" :error="phoneError"
-					:validationRules="(value) => !value ? 'Поле обязательно' : ''"
-					:asyncValidation="checkPhoneUniqueness" />
+			<div class="step-indicator" aria-label="Шаг регистрации">
+				<span :class="['step-dot', { 'step-dot--active': step >= 1 }]">1</span>
+				<span class="step-line"></span>
+				<span :class="['step-dot', { 'step-dot--active': step >= 2 }]">2</span>
+				<span class="step-label">{{ step === 1 ? 'Ваш образ' : 'Безопасность' }}</span>
+			</div>
 
-				<BaseInput id="password" label="Пароль" type="password" placeholder="Введите пароль"
-					v-model="formData.password" :error="passwordError" />
+			<div v-if="errorMessage" class="ui-notice ui-notice--danger" role="alert">
+				{{ errorMessage }}
+			</div>
 
-				<BaseInput id="confirmPassword" label="Подтвердите пароль" type="password"
-					placeholder="Подтвердите пароль" v-model="formData.confirmPassword" :error="confirmPasswordError" />
+			<form v-if="step === 1" class="auth-form" @submit.prevent="goToSecurity">
+				<label class="field">
+					<span class="field__label">Как вас называть?</span>
+					<input
+						v-model.trim="form.display_name"
+						class="ui-input"
+						type="text"
+						maxlength="80"
+						autocomplete="nickname"
+						placeholder="Например, Саша"
+						required
+					/>
+					<span class="field__hint">Это имя видно людям. Его можно менять.</span>
+				</label>
 
-				<button type="submit" class="btn-primary">Продолжить</button>
+				<label class="field">
+					<span class="field__label">Уникальный адрес</span>
+					<div class="handle-input">
+						<span aria-hidden="true">@</span>
+						<input
+							v-model.trim="form.handle"
+							class="ui-input ui-input--bare"
+							type="text"
+							minlength="3"
+							maxlength="32"
+							autocapitalize="none"
+							autocomplete="username"
+							placeholder="alex"
+							required
+						/>
+					</div>
+					<span v-if="handleError" class="field__error">{{ handleError }}</span>
+					<span v-else class="field__hint">Латинские буквы, цифры, точка и подчёркивание.</span>
+				</label>
+
+				<fieldset class="field intent-fieldset">
+					<legend class="field__label">Что вам сейчас ближе?</legend>
+					<div class="intent-grid">
+						<button
+							v-for="intent in intents"
+							:key="intent.value"
+							type="button"
+							:class="['intent-option', { 'intent-option--selected': form.social_intent === intent.value }]"
+							:aria-pressed="form.social_intent === intent.value"
+							@click="form.social_intent = intent.value"
+						>
+							<strong>{{ intent.label }}</strong>
+							<span>{{ intent.description }}</span>
+						</button>
+					</div>
+				</fieldset>
+
+				<button class="ui-button ui-button--primary ui-button--block" type="submit">Продолжить</button>
 			</form>
 
-			<!-- Шаг 2 -->
-			<form v-if="step === 2" @submit.prevent="handleRegistration">
-				<BaseInput id="first_name" label="Имя" placeholder="Введите имя" v-model="formData.first_name" />
+			<form v-else class="auth-form" @submit.prevent="register">
+				<label class="field">
+					<span class="field__label">Пароль</span>
+					<input
+						v-model="form.password"
+						class="ui-input"
+						type="password"
+						minlength="8"
+						maxlength="128"
+						autocomplete="new-password"
+						placeholder="Минимум 8 символов"
+						required
+					/>
+				</label>
 
-				<BaseInput id="last_name" label="Фамилия" placeholder="Введите фамилию" v-model="formData.last_name" />
+				<label class="field">
+					<span class="field__label">Повторите пароль</span>
+					<input
+						v-model="confirmPassword"
+						class="ui-input"
+						type="password"
+						autocomplete="new-password"
+						required
+					/>
+					<span v-if="passwordError" class="field__error">{{ passwordError }}</span>
+				</label>
 
-				<BaseSelect id="gender" label="Пол" placeholder="Выберите пол" v-model="formData.gender" :options="[
-					{ value: 'male', label: 'Мужской' },
-					{ value: 'female', label: 'Женский' }
-				]" />
+				<label class="field">
+					<span class="field__label">Email <span class="field__optional">необязательно</span></span>
+					<input
+						v-model.trim="form.email"
+						class="ui-input"
+						type="email"
+						autocomplete="email"
+						placeholder="Для восстановления доступа"
+					/>
+					<span class="field__hint">Можно добавить и подтвердить позже. Телефон для входа не требуется.</span>
+				</label>
 
-				<BaseInput id="date_of_birth" label="Дата рождения" type="date" v-model="formData.date_of_birth" />
+				<label class="field">
+					<span class="field__label">Пара слов о себе <span class="field__optional">необязательно</span></span>
+					<textarea
+						v-model.trim="form.bio"
+						class="ui-input ui-textarea"
+						maxlength="500"
+						rows="3"
+						placeholder="Например: люблю живую музыку и настолки"
+					></textarea>
+				</label>
 
-				<BaseTextarea id="bio" label="Биография" placeholder="Расскажите о себе" v-model="formData.bio" />
-
-				<BaseFileUpload id="avatar" label="Аватар" placeholder="Выбрать файл" v-model="formData.avatar"
-					:max-size="10 * 1024 * 1024" @validation-error="(message) => (avatarError = message)" />
-
-				<button type="submit" class="btn-primary">Завершить регистрацию</button>
-				<button type="button" class="btn-secondary" @click="goBackToStep1">Назад</button>
+				<div class="auth-actions">
+					<button class="ui-button ui-button--secondary" type="button" :disabled="isSubmitting" @click="step = 1">Назад</button>
+					<button class="ui-button ui-button--primary" type="submit" :disabled="isSubmitting">
+						{{ isSubmitting ? 'Создаём…' : 'Войти в PubChat' }}
+					</button>
+				</div>
 			</form>
 
-			<!-- Ссылка на страницу авторизации -->
-			<span class="link">
-				Уже зарегистрированы?
-				<router-link :to="{ name: 'login' }">Войти</router-link>
-			</span>
-		</div>
-	</div>
+			<p class="auth-footer">
+				Уже есть аккаунт?
+				<RouterLink :to="{ name: 'login' }">Войти</RouterLink>
+			</p>
+		</section>
+	</main>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
-
-import { processFile } from '@/utils/fileUtils';
+import { onMounted, reactive, ref } from 'vue';
+import { RouterLink, useRouter } from 'vue-router';
+import { useStore } from 'vuex';
 
 import AuthService from '@/API/AuthService';
 import CSRFService from '@/API/CSRFService';
 
-import BaseInput from "@/components/UI/BaseInput/index.vue";
-import BaseTextarea from "@/components/UI/BaseTextarea/index.vue";
-import BaseFileUpload from "@/components/UI/BaseFileUpload/index.vue";
-import BaseSelect from "@/components/UI/BaseSelect/index.vue"
-import { errorMessages } from 'vue/compiler-sfc';
-
-// Инициализация роутера
 const router = useRouter();
+const store = useStore();
 
-// Состояния формы
-const formData = ref({
-	username: '',
-	email: '',
-	phone: '',
-	password: '',
-	confirmPassword: '',
-	first_name: '',
-	last_name: '',
-	date_of_birth: '',
-	gender: '',
-	bio: '',
-	avatar: null,
-});
-const step = ref(1); // Текущий шаг
+const step = ref(1);
+const confirmPassword = ref('');
 const errorMessage = ref('');
-const usernameError = ref('');
-const emailError = ref('');
-const phoneError = ref('');
+const handleError = ref('');
 const passwordError = ref('');
-const confirmPasswordError = ref('');
-const avatarError = ref('');
+const isSubmitting = ref(false);
 
-// Валидация первого шага
-const validateStep1 = () => {
-	if (!formData.value.username) {
-		usernameError.value = 'Имя пользователя обязательно.';
+const form = reactive({
+	handle: '',
+	display_name: '',
+	password: '',
+	email: '',
+	bio: '',
+	social_intent: 'open',
+});
+
+const intents = [
+	{ value: 'open', label: 'Хочу пообщаться', description: 'Открыт разговорам без конкретной цели' },
+	{ value: 'meet', label: 'Новые знакомства', description: 'Не против познакомиться с новыми людьми' },
+	{ value: 'games', label: 'Компания для игры', description: 'Хочу совместные активности и игры' },
+	{ value: 'friends', label: 'Только знакомые', description: 'Предпочитаю общение в знакомом кругу' },
+	{ value: 'quiet', label: 'Спокойный режим', description: 'Сейчас не ищу новых контактов' },
+];
+
+const goToSecurity = () => {
+	errorMessage.value = '';
+	handleError.value = '';
+	const validHandle = /^[A-Za-z0-9_.]{3,32}$/.test(form.handle);
+	if (!validHandle) {
+		handleError.value = 'Используйте 3–32 латинских символа, цифры, точку или подчёркивание.';
 		return;
 	}
-	if (!formData.value.email) {
-		emailError.value = 'Email обязателен.';
-		return;
-	}
-	if (formData.value.password.length < 8) {
+	if (!form.display_name) return;
+	step.value = 2;
+};
+
+const register = async () => {
+	errorMessage.value = '';
+	passwordError.value = '';
+
+	if (form.password.length < 8) {
 		passwordError.value = 'Пароль должен содержать минимум 8 символов.';
 		return;
 	}
-	if (formData.value.password !== formData.value.confirmPassword) {
-		confirmPasswordError.value = 'Пароли не совпадают.';
+	if (form.password !== confirmPassword.value) {
+		passwordError.value = 'Пароли не совпадают.';
 		return;
 	}
-	step.value = 2; // Переход ко второму шагу
-};
 
-// Проверка уникальности имени пользователя
-const checkUsernameUniqueness = async () => {
-	if (!formData.value.username || formData.value.username === '') {
-		usernameError.value = "Поле имени пользователя не может быть пустым";
-	}
-
+	isSubmitting.value = true;
 	try {
-		const response = await AuthService.checkUsername(formData.value.username);
-		if (!response.data.isUnique) {
-			usernameError.value = 'Имя пользователя уже занято.';
-		} else {
-			usernameError.value = '';
-		}
-	} catch (error) {
-		console.error('Ошибка проверки имени пользователя:', error);
-	}
-};
-
-// Проверка уникальности email
-const checkEmailUniqueness = async () => {
-	// Проверяем, что поле email не пустое и содержит допустимое значение
-	if (!formData.value.email || formData.value.email.trim() === '') {
-		emailError.value = 'Поле email не может быть пустым.';
-		return;
-	}
-
-	// Регулярное выражение для проверки допустимых символов (только латинские буквы, цифры и подчеркивание)
-	const validUsernamePattern = /^[a-zA-Z0-9_]+$/;
-
-	// Проверяем, соответствует ли имя пользователя допустимому формату
-	if (!validUsernamePattern.test(formData.value.username)) {
-		usernameError.value = "Имя пользователя может содержать только латинские буквы, цифры и символ подчеркивания.";
-		return;
-	}
-
-	try {
-		// Отправляем запрос на сервер для проверки уникальности email
-		const response = await AuthService.checkEmail(formData.value.email);
-
-		// Если email уже используется, устанавливаем сообщение об ошибке
-		if (!response.data.isUnique) {
-			emailError.value = 'Email уже используется.';
-		} else {
-			emailError.value = ''; // Очищаем ошибку, если email уникален
-		}
-	} catch (error) {
-		// Логируем ошибку и устанавливаем сообщение для пользователя
-		console.error('Ошибка проверки email:', error);
-
-		// Если сервер вернул статус 400, выводим сообщение о некорректных данных
-		if (error.response && error.response.status === 400) {
-			emailError.value = 'Некорректный формат email.';
-		} else {
-			emailError.value = 'Произошла ошибка при проверке email. Попробуйте позже.';
-		}
-	}
-};
-
-const checkPhoneUniqueness = async () => {
-	if (!formData.value.phone || formData.value.phone.trim() === '') {
-		phoneError.value = 'Поле не может быть пустым.';
-		return;
-	}
-
-	const phoneRegex = /^(?:\+7|8|\+375)\d{9,10}$/;
-	if (!phoneRegex.test(formData.value.phone)) {
-		phoneError.value = 'Неверный формат номера телефона.';
-		return;
-	}
-
-	try {
-		// Отправляем запрос на сервер для проверки уникальности phone
-		const response = await AuthService.checkPhone(formData.value.phone);
-
-		// Если email уже используется, устанавливаем сообщение об ошибке
-		if (!response.data.isUnique) {
-			phoneError.value = 'Номер телефона уже используется.';
-		} else {
-			phoneError.value = ''; // Очищаем ошибку, если phone уникален
-		}
-	} catch (error) {
-		// Логируем ошибку и устанавливаем сообщение для пользователя
-		console.error('Ошибка проверки поля:', error);
-
-		// Если сервер вернул статус 400, выводим сообщение о некорректных данных
-		if (error.response && error.response.status === 400) {
-			phoneError.value = 'Некорректный формат номера.';
-		} else {
-			phoneError.value = 'Произошла ошибка при проверке номера телефона. Попробуйте позже.';
-		}
-	}
-}
-
-// Обработчик регистрации
-const handleRegistration = async () => {
-	try {
-		// Подготовка данных для отправки
-		const registrationData = {
-			username: formData.value.username,
-			email: formData.value.email,
-			phone: formData.value.phone,
-			password: formData.value.password,
-			first_name: formData.value.first_name,
-			last_name: formData.value.last_name,
-			gender: formData.value.gender,
-			date_of_birth: formData.value.date_of_birth,
-			bio: formData.value.bio,
+		const payload = {
+			handle: form.handle,
+			display_name: form.display_name,
+			password: form.password,
+			social_intent: form.social_intent,
 		};
+		if (form.email) payload.email = form.email;
+		if (form.bio) payload.bio = form.bio;
 
-		// Обработка аватара
-		if (formData.value.avatar) {
-			const processedFile = await processFile(formData.value.avatar, {
-				maxWidth: 800,
-				quality: 0.7
-			});
-			registrationData.avatar = {
-				url: processedFile.base64,
-				type: processedFile.meta.type,
-				name: processedFile.meta.name,
-				size: processedFile.meta.size
-			};
-		}
-
-		// Отправка данных
-		const response = await AuthService.registration(registrationData);
-
-		// Успешная регистрация
-		if (response.data.status === "ok") {
-			router.push({ name: 'login' });
-			return;
-		}
-
-		// Обработка неожиданного ответа
-		errorMessage.value = "Неизвестная ошибка сервера";
-
+		const response = await AuthService.registration(payload);
+		await store.dispatch('applyIdentitySession', response.data);
+		await router.replace({ name: 'chats' });
 	} catch (error) {
-		// Очистка предыдущих ошибок
-		errorMessage.value = "";
-		usernameError.value = "";
-		emailError.value = "";
-		phoneError.value = "";
-
-		if (error.response) {
-			// Обработка структурированных ошибок от бэкенда
-			const { status, data } = error.response;
-
-			if (status === 400) {
-				// Валидационные ошибки
-				if (data.details?.missing_fields) {
-					errorMessage.value = "Заполните все обязательные поля";
-				} else if (data.details?.field === "date_of_birth") {
-					errorMessage.value = "Неверный формат даты рождения";
-				} else if (data.details?.avatar_error) {
-					avatarError.value = data.message || "Ошибка загрузки аватара";
-				}
-			}
-			else if (status === 409) {
-				// Конфликты уникальности
-				if (data.details?.conflict_fields) {
-					const conflicts = data.details.conflict_fields;
-
-					if (conflicts.username) {
-						usernameError.value = conflicts.username;
-					}
-					if (conflicts.email) {
-						emailError.value = conflicts.email;
-					}
-					if (conflicts.phone) {
-						phoneError.value = conflicts.phone;
-					}
-				}
-			}
-			else if (status === 500) {
-				// Серверные ошибки
-				errorMessage.value = data.message || "Ошибка сервера. Попробуйте позже.";
-			}
-
-			// Общее сообщение, если не найдена конкретная ошибка
-			if (!errorMessage.value && !usernameError.value &&
-				!emailError.value && !phoneError.value) {
-				errorMessage.value = data.message || "Произошла ошибка";
-			}
+		const detail = error.response?.data?.detail;
+		const errorType = detail?.error_type || detail?.detail?.error_type;
+		if (errorType === 'handle_taken') {
+			step.value = 1;
+			handleError.value = 'Такой адрес уже занят. Попробуйте другой.';
+		} else if (errorType === 'email_taken') {
+			errorMessage.value = 'Этот email уже связан с другим аккаунтом.';
+		} else if (error.response?.status === 422) {
+			errorMessage.value = 'Проверьте введённые данные.';
 		} else {
-			// Сетевые ошибки или ошибки без ответа
-			errorMessage.value = "Ошибка соединения с сервером";
-			console.error('Network error:', error);
+			errorMessage.value = 'Не удалось создать аккаунт. Проверьте соединение и попробуйте снова.';
 		}
+	} finally {
+		isSubmitting.value = false;
 	}
 };
 
-// Вернуться к первому шагу
-const goBackToStep1 = () => {
-	step.value = 1;
-};
-
-// Запрос CSRF-токена при загрузке страницы
 onMounted(async () => {
 	try {
 		await CSRFService.getCSRF();
-	} catch (error) {
-		console.error('Failed to fetch CSRF token:', error);
+	} catch {
+		errorMessage.value = 'Не удалось подготовить безопасное соединение с сервером.';
 	}
 });
 </script>
 
 <style scoped>
-.registration-container {
-	height: calc(100vh - (54px + 5px));
-	width: 100%;
-	flex: 0 0 100%;
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	justify-content: center;
-	flex-wrap: nowrap;
-	overflow-x: hidden;
+.auth-screen {
+	min-height: calc(100dvh - 64px);
+	display: grid;
+	place-items: center;
+	padding: var(--ui-space-6) var(--ui-space-4);
 }
 
-.registration-form {
-	width: 400px;
-	padding: 20px;
-	background: var(--bg-light);
-	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-	border-radius: 8px;
+.auth-card {
+	width: min(100%, 34rem);
+	background: var(--ui-surface);
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-xl);
+	box-shadow: var(--ui-shadow-md);
+	padding: clamp(1.25rem, 4vw, 2rem);
 }
 
-h1 {
-	text-align: center;
-	margin-bottom: 20px;
-}
+.auth-card--wide { width: min(100%, 42rem); }
+.auth-brand { display: flex; gap: var(--ui-space-3); align-items: center; }
+.auth-brand__mark { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: var(--ui-radius-md); background: var(--ui-primary); color: var(--ui-primary-contrast); font-weight: 800; font-size: var(--ui-text-xl); }
+.auth-eyebrow { margin: 0 0 0.125rem; color: var(--ui-primary); font-size: var(--ui-text-sm); font-weight: 700; }
+h1 { margin: 0; font-size: clamp(1.5rem, 5vw, 2rem); line-height: var(--ui-leading-tight); }
+.auth-lead { color: var(--ui-text-muted); line-height: var(--ui-leading-normal); margin: var(--ui-space-4) 0 var(--ui-space-6); }
+.step-indicator { display: flex; align-items: center; gap: var(--ui-space-2); margin-bottom: var(--ui-space-6); color: var(--ui-text-muted); font-size: var(--ui-text-sm); }
+.step-dot { display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; border: 1px solid var(--ui-border-strong); background: var(--ui-surface-soft); }
+.step-dot--active { border-color: var(--ui-primary); background: var(--ui-primary); color: white; }
+.step-line { width: 2rem; height: 1px; background: var(--ui-border); }
+.step-label { margin-left: var(--ui-space-1); font-weight: 600; }
+.auth-form { display: grid; gap: var(--ui-space-5); }
+.field { display: grid; gap: var(--ui-space-2); margin: 0; border: 0; padding: 0; }
+.field__label { font-size: var(--ui-text-sm); font-weight: 700; }
+.field__optional { color: var(--ui-text-subtle); font-weight: 500; }
+.field__hint { color: var(--ui-text-muted); font-size: var(--ui-text-xs); }
+.field__error { color: var(--ui-danger); font-size: var(--ui-text-sm); }
+.ui-input { width: 100%; min-height: 2.875rem; border: 1px solid var(--ui-border-strong); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text); padding: 0.7rem 0.8rem; font: inherit; }
+.ui-input:focus-visible { outline: none; border-color: var(--ui-focus); box-shadow: var(--ui-focus-ring); }
+.ui-input--bare { border: 0; padding-left: 0.25rem; box-shadow: none !important; background: transparent; }
+.ui-textarea { resize: vertical; min-height: 5.5rem; }
+.handle-input { display: flex; align-items: center; min-height: 2.875rem; border: 1px solid var(--ui-border-strong); border-radius: var(--ui-radius-md); padding-left: 0.8rem; color: var(--ui-text-muted); }
+.handle-input:focus-within { border-color: var(--ui-focus); box-shadow: var(--ui-focus-ring); }
+.intent-fieldset legend { margin-bottom: var(--ui-space-2); }
+.intent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ui-space-2); }
+.intent-option { text-align: left; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface-soft); color: var(--ui-text); padding: var(--ui-space-3); cursor: pointer; transition: border-color var(--ui-motion-fast) var(--ui-ease), background var(--ui-motion-fast) var(--ui-ease); }
+.intent-option strong, .intent-option span { display: block; }
+.intent-option span { color: var(--ui-text-muted); font-size: var(--ui-text-xs); margin-top: var(--ui-space-1); }
+.intent-option--selected { border-color: var(--ui-primary); background: var(--ui-primary-soft); }
+.auth-actions { display: grid; grid-template-columns: auto 1fr; gap: var(--ui-space-2); }
+.auth-footer { text-align: center; color: var(--ui-text-muted); margin: var(--ui-space-6) 0 0; }
+.auth-footer a { color: var(--ui-primary); font-weight: 700; text-decoration: none; }
+.ui-notice { padding: var(--ui-space-3); border-radius: var(--ui-radius-md); margin-bottom: var(--ui-space-4); }
+.ui-notice--danger { color: var(--ui-danger); background: var(--ui-danger-soft); }
 
-button {
-	width: 100%;
-	padding: 10px;
-	margin-top: 10px;
-	border: none;
-	border-radius: 4px;
-	cursor: pointer;
-	transition: background 0.3s ease;
-}
-
-.btn-primary {
-	background: var(--primary-color);
-	color: white;
-}
-
-.btn-primary:hover {
-	background: var(--primary-color-hover);
-}
-
-.btn-secondary {
-	background: #ccc;
-	color: black;
-}
-
-.btn-secondary:hover {
-	background: #bbb;
-}
-
-span.link {
-	display: block;
-	text-align: center;
-	margin-top: 15px;
-}
-
-span.link a {
-	color: var(--primary-color);
-	text-decoration: none;
+@media (max-width: 560px) {
+	.auth-screen { place-items: start stretch; padding: var(--ui-space-3); }
+	.auth-card { border-radius: var(--ui-radius-lg); box-shadow: var(--ui-shadow-sm); }
+	.intent-grid { grid-template-columns: 1fr; }
+	.auth-actions { grid-template-columns: 1fr; }
+	.auth-actions .ui-button--secondary { order: 2; }
 }
 </style>

@@ -31,12 +31,14 @@ class Config:
     DB_USER = os.getenv("DB_USER", "postgres")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 
-    # JWT. There are intentionally no production-capable default secrets.
+    # Security. There are intentionally no production-capable default secrets.
     JWT_ACCESS_SECRET_KEY = os.getenv("JWT_ACCESS_SECRET_KEY", "")
     JWT_REFRESH_SECRET_KEY = os.getenv("JWT_REFRESH_SECRET_KEY", "")
+    CSRF_SECRET_KEY = os.getenv("CSRF_SECRET_KEY", "")
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
     REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
+    CSRF_TOKEN_EXPIRE_MINUTES = int(os.getenv("CSRF_TOKEN_EXPIRE_MINUTES", "30"))
 
     # Paths
     STATICS_DIRNAME = os.getenv("STATICS_DIRNAME", "static")
@@ -45,14 +47,15 @@ class Config:
         secrets = {
             "JWT_ACCESS_SECRET_KEY": self.JWT_ACCESS_SECRET_KEY,
             "JWT_REFRESH_SECRET_KEY": self.JWT_REFRESH_SECRET_KEY,
+            "CSRF_SECRET_KEY": self.CSRF_SECRET_KEY,
         }
         missing = [name for name, value in secrets.items() if len(value) < 32]
         if missing:
             raise RuntimeError(
                 f"{', '.join(missing)} must be configured with at least 32 characters"
             )
-        if self.JWT_ACCESS_SECRET_KEY == self.JWT_REFRESH_SECRET_KEY:
-            raise RuntimeError("JWT access and refresh secrets must be different")
+        if len(set(secrets.values())) != len(secrets):
+            raise RuntimeError("JWT access, refresh and CSRF secrets must be different")
 
     def database_url(self, async_mode=False):
         driver = "postgresql+asyncpg" if async_mode else "postgresql"

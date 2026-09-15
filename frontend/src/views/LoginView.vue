@@ -1,194 +1,144 @@
 <template>
-	<div class="login-container">
-		<div class="login-form">
-			<h1>Авторизация</h1>
-			<form @submit.prevent="handleLogin">
-				<div class="form-group">
-					<label for="identifier">Логин / Email / Телефон:</label>
-					<input type="text" id="identifier" v-model="identifier" required
-						placeholder="Введите логин, email или телефон" />
+	<main class="auth-screen" aria-labelledby="login-title">
+		<section class="auth-card">
+			<div class="auth-brand">
+				<span class="auth-brand__mark" aria-hidden="true">P</span>
+				<div>
+					<p class="auth-eyebrow">PubChat</p>
+					<h1 id="login-title">С возвращением</h1>
 				</div>
-				<div class="form-group">
-					<label for="password">Пароль:</label>
-					<input type="password" id="password" v-model="password" required placeholder="Введите пароль"
-						autocomplete="off" @copy.prevent @paste.prevent />
-				</div>
-				<button type="submit" class="btn-primary">Войти</button>
-				<p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+			</div>
+
+			<p class="auth-lead">Продолжите разговоры, вернитесь в свои пространства и к знакомым людям.</p>
+
+			<div v-if="errorMessage" class="ui-notice ui-notice--danger" role="alert">
+				{{ errorMessage }}
+			</div>
+
+			<form class="auth-form" @submit.prevent="handleLogin">
+				<label class="field">
+					<span class="field__label">Логин или email</span>
+					<input
+						v-model.trim="identifier"
+						class="ui-input"
+						type="text"
+						autocomplete="username"
+						autocapitalize="none"
+						placeholder="@handle или email"
+						required
+					/>
+				</label>
+
+				<label class="field">
+					<span class="field__label">Пароль</span>
+					<input
+						v-model="password"
+						class="ui-input"
+						type="password"
+						autocomplete="current-password"
+						placeholder="Ваш пароль"
+						required
+					/>
+				</label>
+
+				<button class="ui-button ui-button--primary ui-button--block" type="submit" :disabled="isSubmitting">
+					{{ isSubmitting ? 'Входим…' : 'Войти' }}
+				</button>
 			</form>
-			<span>
-				Еще не зарегистрированы?
-				<a href="#" @click.prevent="goToRegistration">Регистрация</a>
-			</span>
-		</div>
-	</div>
+
+			<div class="auth-divider"><span>или</span></div>
+
+			<RouterLink class="ui-button ui-button--secondary ui-button--block auth-link-button" :to="{ name: 'registration' }">
+				Создать образ
+			</RouterLink>
+
+			<p class="auth-footnote">Телефон не нужен. Если вы раньше входили по телефону, старый способ пока продолжает поддерживаться.</p>
+		</section>
+	</main>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
+import { RouterLink, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
-import CSRFService from '@/API/CSRFService';
-import AuthService from '@/API/AuthService';
-import DOMPurify from 'dompurify'; // Для защиты от XSS
-import router from '@/router';
 
-// Реактивные переменные
+import AuthService from '@/API/AuthService';
+import CSRFService from '@/API/CSRFService';
+
+const router = useRouter();
+const store = useStore();
+
 const identifier = ref('');
 const password = ref('');
 const errorMessage = ref('');
+const isSubmitting = ref(false);
 
-const store = useStore();
-
-// Запрос CSRF-токена при загрузке страницы
-onMounted(async () => {
-	try {
-		await fetchCSRFToken();
-	} catch (error) {
-		console.error('Failed to fetch CSRF token:', error);
-	}
-});
-
-// Функция для запроса CSRF-токена
-const fetchCSRFToken = async () => {
-	await CSRFService.getCSRF(); // Запрос на получение CSRF-токена
-};
-
-// Функция для валидации ввода
-const validateInput = (value) => {
-	const sanitizedValue = DOMPurify.sanitize(value); // Экранируем ввод для защиты от XSS
-
-	// Проверяем, что значение содержит только разрешенные символы
-	const allowedCharsRegex = /^[a-zA-Z0-9@.+_-]+$/; // Разрешаем буквы, цифры, @, ., +, -, _
-	if (!allowedCharsRegex.test(sanitizedValue)) {
-		throw new Error('Недопустимые символы в поле ввода');
-	}
-
-	return sanitizedValue;
-};
-
-// Обработчик входа
 const handleLogin = async () => {
+	errorMessage.value = '';
+	isSubmitting.value = true;
 	try {
-		const sanitizedIdentifier = validateInput(identifier.value);
-
 		const response = await AuthService.login({
-			identifier: sanitizedIdentifier,
+			identifier: identifier.value,
 			password: password.value,
 		});
-
-		if (response.data.status === 'ok') {
-			// Сохраняем токен в localStorage
-			localStorage.setItem('access_token', response.data.access_token);
-			localStorage.setItem('user', JSON.stringify(response.data.user));
-
-			// Сохраняем данные пользователя в хранилище
-			store.commit('setUser', response.data.user);
-			store.commit('setAuth', true);
-
-			// Очищаем форму
-			identifier.value = '';
-			password.value = '';
-
-			// Перенаправляем на главную страницу
-			window.location.href = '/';
-			return
-		} else {
-			errorMessage.value = response.data.message;
-			return;
-		}
+		await store.dispatch('applyIdentitySession', response.data);
+		await router.replace({ name: 'chats' });
 	} catch (error) {
-		errorMessage.value = error.response?.data?.message || 'Ошибка входа';
+		const errorType = error.response?.data?.detail?.error_type;
+		if (errorType === 'invalid_credentials' || error.response?.status === 401) {
+			errorMessage.value = 'Не удалось войти. Проверьте логин и пароль.';
+		} else if (errorType === 'account_unavailable' || error.response?.status === 403) {
+			errorMessage.value = 'Аккаунт сейчас недоступен. Подробности можно узнать в центре поддержки.';
+		} else {
+			errorMessage.value = 'Сервер недоступен. Попробуйте ещё раз.';
+		}
+	} finally {
+		isSubmitting.value = false;
 	}
 };
-const goToRegistration = () => {
-	router.push({ name: 'registration' }); // Убедитесь, что маршрут с именем 'registration' существует
-};
+
+onMounted(async () => {
+	try {
+		await CSRFService.getCSRF();
+	} catch {
+		errorMessage.value = 'Не удалось подготовить безопасное соединение с сервером.';
+	}
+});
 </script>
 
 <style scoped>
-/* Стили остаются прежними */
-.login-container {
-	height: calc(100vh - (54px + 5px));
-	
-	width: 100%;
-	flex: 0 0 100%;
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	justify-content: center;
-	flex-wrap: nowrap;
-	overflow-x: hidden;
+.auth-screen {
+	min-height: calc(100dvh - 64px);
+	display: grid;
+	place-items: center;
+	padding: var(--ui-space-6) var(--ui-space-4);
 }
-
-.login-form {
-	background: var(--sidebar-bg-light);
-	padding: 20px;
-	border-radius: 8px;
-	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-	width: 100%;
-	max-width: 400px;
+.auth-card {
+	width: min(100%, 30rem);
+	background: var(--ui-surface);
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-xl);
+	box-shadow: var(--ui-shadow-md);
+	padding: clamp(1.25rem, 4vw, 2rem);
 }
-
-.login-form h1 {
-	text-align: center;
-}
-
-form {
-	margin-top: 20px;
-	width: 100%;
-}
-
-.form-group {
-	margin-bottom: 15px;
-	width: 100%;
-	/* display: flex;
-    flex-direction: column; */
-}
-
-input[type="text"],
-input[type="password"] {
-	width: 100%;
-	padding: 10px;
-	border: 1px solid var(--primary-color);
-	border-radius: 4px;
-	background: #fff;
-	/* color: var(--text-dark); */
-}
-
-input[type="text"]:focus,
-input[type="password"]:focus {
-	outline: none;
-	border-color: var(--primary-color);
-}
-
-.btn-primary {
-	background: var(--primary-color);
-	color: #fff;
-	padding: 10px;
-	border: none;
-	border-radius: 4px;
-	cursor: pointer;
-	width: 100%;
-	transition: background 0.3s ease;
-}
-
-button:hover {
-	background: var(--primary-color-hover);
-}
-
-.error {
-	color: red;
-	margin-top: 10px;
-}
-
-span {
-	display: block;
-	text-align: center;
-	margin-top: 15px;
-}
-
-a {
-	color: var(--primary-color);
-	text-decoration: none;
+.auth-brand { display: flex; gap: var(--ui-space-3); align-items: center; }
+.auth-brand__mark { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: var(--ui-radius-md); background: var(--ui-primary); color: var(--ui-primary-contrast); font-weight: 800; font-size: var(--ui-text-xl); }
+.auth-eyebrow { margin: 0 0 0.125rem; color: var(--ui-primary); font-size: var(--ui-text-sm); font-weight: 700; }
+h1 { margin: 0; font-size: clamp(1.5rem, 5vw, 2rem); line-height: var(--ui-leading-tight); }
+.auth-lead { color: var(--ui-text-muted); line-height: var(--ui-leading-normal); margin: var(--ui-space-4) 0 var(--ui-space-6); }
+.auth-form { display: grid; gap: var(--ui-space-5); }
+.field { display: grid; gap: var(--ui-space-2); }
+.field__label { font-size: var(--ui-text-sm); font-weight: 700; }
+.ui-input { width: 100%; min-height: 2.875rem; border: 1px solid var(--ui-border-strong); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text); padding: 0.7rem 0.8rem; font: inherit; }
+.ui-input:focus-visible { outline: none; border-color: var(--ui-focus); box-shadow: var(--ui-focus-ring); }
+.ui-notice { padding: var(--ui-space-3); border-radius: var(--ui-radius-md); margin-bottom: var(--ui-space-4); }
+.ui-notice--danger { color: var(--ui-danger); background: var(--ui-danger-soft); }
+.auth-divider { display: flex; align-items: center; gap: var(--ui-space-3); color: var(--ui-text-subtle); margin: var(--ui-space-5) 0; font-size: var(--ui-text-xs); }
+.auth-divider::before, .auth-divider::after { content: ''; height: 1px; flex: 1; background: var(--ui-border); }
+.auth-link-button { text-decoration: none; }
+.auth-footnote { margin: var(--ui-space-5) 0 0; color: var(--ui-text-subtle); font-size: var(--ui-text-xs); line-height: var(--ui-leading-normal); text-align: center; }
+@media (max-width: 560px) {
+	.auth-screen { place-items: start stretch; padding: var(--ui-space-3); }
+	.auth-card { border-radius: var(--ui-radius-lg); box-shadow: var(--ui-shadow-sm); }
 }
 </style>

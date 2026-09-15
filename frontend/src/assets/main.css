@@ -1,125 +1,406 @@
-/* Глобальные переменные */
+/*
+ * PubChat UI foundation
+ *
+ * New components should use semantic --ui-* tokens. Legacy variables are kept as
+ * aliases so the existing interface can migrate screen by screen without a hard
+ * visual rewrite.
+ */
+
 :root {
-    --bg-light: #f8f9fa;
-    --text-light: #212529;
-    --sidebar-bg-light: rgba(255, 255, 255, 0.9);
-    --primary-color: #a4146c;
-	--primary-color-hover: #c25091;
-	--other-user-bg: #f1f1f1;
-    --messenger-bg: var(--bg-light);
+    color-scheme: light;
+
+    /* Typography */
+    --ui-font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --ui-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --ui-text-xs: 0.75rem;
+    --ui-text-sm: 0.875rem;
+    --ui-text-md: 1rem;
+    --ui-text-lg: 1.125rem;
+    --ui-text-xl: 1.375rem;
+    --ui-text-2xl: 1.75rem;
+    --ui-leading-tight: 1.25;
+    --ui-leading-normal: 1.5;
+
+    /* Spacing */
+    --ui-space-1: 0.25rem;
+    --ui-space-2: 0.5rem;
+    --ui-space-3: 0.75rem;
+    --ui-space-4: 1rem;
+    --ui-space-5: 1.25rem;
+    --ui-space-6: 1.5rem;
+    --ui-space-8: 2rem;
+    --ui-space-10: 2.5rem;
+
+    /* Shape */
+    --ui-radius-sm: 0.5rem;
+    --ui-radius-md: 0.75rem;
+    --ui-radius-lg: 1rem;
+    --ui-radius-xl: 1.375rem;
+    --ui-radius-pill: 999px;
+
+    /* Calm, social-first light palette */
+    --ui-bg: #f6f4f1;
+    --ui-surface: #ffffff;
+    --ui-surface-raised: #ffffff;
+    --ui-surface-muted: #efebe7;
+    --ui-surface-soft: #faf8f6;
+    --ui-text: #272321;
+    --ui-text-muted: #6f6863;
+    --ui-text-subtle: #8b837d;
+    --ui-border: #e2dcd6;
+    --ui-border-strong: #cfc6bf;
+
+    /* Brand: warm plum, intentionally not "space" themed */
+    --ui-primary: #8c2f67;
+    --ui-primary-hover: #742653;
+    --ui-primary-active: #5f1f45;
+    --ui-primary-soft: #f7e8f0;
+    --ui-primary-contrast: #ffffff;
+
+    /* Semantic feedback */
+    --ui-success: #267a53;
+    --ui-success-soft: #e6f5ed;
+    --ui-warning: #9a5f08;
+    --ui-warning-soft: #fff3d8;
+    --ui-danger: #b53a3a;
+    --ui-danger-soft: #fdeaea;
+    --ui-info: #276a91;
+    --ui-info-soft: #e7f3fa;
+
+    /* Focus and elevation */
+    --ui-focus: #b65b8c;
+    --ui-focus-ring: 0 0 0 3px rgba(182, 91, 140, 0.22);
+    --ui-shadow-sm: 0 1px 2px rgba(39, 35, 33, 0.05), 0 1px 4px rgba(39, 35, 33, 0.04);
+    --ui-shadow-md: 0 8px 24px rgba(39, 35, 33, 0.08);
+    --ui-shadow-lg: 0 18px 46px rgba(39, 35, 33, 0.12);
+
+    /* Motion */
+    --ui-motion-fast: 120ms;
+    --ui-motion-normal: 180ms;
+    --ui-ease: cubic-bezier(0.2, 0, 0, 1);
+
+    /* Layout */
+    --ui-content-max: 1680px;
+    --ui-reading-max: 760px;
+    --ui-control-height: 44px;
+    --ui-control-height-compact: 36px;
+
+    /* Legacy aliases */
+    --bg-light: var(--ui-bg);
+    --text-light: var(--ui-text);
+    --sidebar-bg-light: rgba(255, 255, 255, 0.94);
+    --primary-color: var(--ui-primary);
+    --primary-color-hover: var(--ui-primary-hover);
+    --other-user-bg: var(--ui-surface-muted);
+    --messenger-bg: var(--ui-bg);
     --messenger-sidebar-bg: var(--sidebar-bg-light);
-    --messenger-conversation-bg: var(--bg-light);
-    --messenger-input-bg: var(--sidebar-bg-light);
-    --messenger-border: #ddd;
-    --messenger-text: var(--text-light);
-
-	--sent-message-bg: #dcf8c6; /* Зелёный фон для своих сообщений */
-	--sent-message-text: #212529; /* Текст для своих сообщений */
-	--received-message-bg: #f1f1f1; /* Серый фон для чужих сообщений */
-	--received-message-text: #212529; /* Текст для чужих сообщений */
-
-	--profile-avatar-border: #ddd; /* Граница аватара */
-	--profile-details-color: #666; /* Цвет деталей профиля */
-	--profile-edit-btn: var(--primary-color); /* Кнопка редактирования */
-	--profile-edit-btn-hover: var(--primary-color-hover); /* Кнопка редактирования при наведении */
-
-    /* Тени */
-    --shadow-light: 0px 2px 4px rgba(0, 0, 0, 0.1);
-    --shadow-medium: 0px 4px 8px rgba(0, 0, 0, 0.15);
-    --shadow-dark: 0px 6px 12px rgba(0, 0, 0, 0.2);
+    --messenger-conversation-bg: var(--ui-bg);
+    --messenger-input-bg: var(--ui-surface);
+    --messenger-border: var(--ui-border);
+    --messenger-text: var(--ui-text);
+    --sent-message-bg: var(--ui-primary-soft);
+    --sent-message-text: var(--ui-text);
+    --received-message-bg: var(--ui-surface-muted);
+    --received-message-text: var(--ui-text);
+    --profile-avatar-border: var(--ui-border);
+    --profile-details-color: var(--ui-text-muted);
+    --profile-edit-btn: var(--ui-primary);
+    --profile-edit-btn-hover: var(--ui-primary-hover);
+    --shadow-light: var(--ui-shadow-sm);
+    --shadow-medium: var(--ui-shadow-md);
+    --shadow-dark: var(--ui-shadow-lg);
 }
 
-/* Светлая тема */
 .light-theme {
-    --bg-light: #f8f9fa;
-    --text-light: #212529;
-    --sidebar-bg-light: rgba(255, 255, 255, 0.9);
-    --primary-color: #a4146c;
-	--primary-color-hover: #c25091;
+    color-scheme: light;
     --background-image: url('./images/bg.webp');
-
-    /* Тени для светлой темы */
-    --shadow-light: 0px 2px 4px rgba(0, 0, 0, 0.1);
-    --shadow-medium: 0px 4px 8px rgba(0, 0, 0, 0.15);
-    --shadow-dark: 0px 6px 12px rgba(0, 0, 0, 0.2);
 }
 
-/* Темная тема */
 .dark-theme {
+    color-scheme: dark;
     --background-image: url('./images/bg-dark.webp');
-    --bg-light: #15252b;
-    --text-light: #ffffff;
-    --sidebar-bg-light: rgba(50, 50, 50, 0.9);
-    --primary-color: #4c747c;
-	--primary-color-hover: #6c8086;
-	--other-user-bg: #333333;
-    --messenger-bg: var(--bg-light);
+    --ui-bg: #161718;
+    --ui-surface: #202224;
+    --ui-surface-raised: #25282a;
+    --ui-surface-muted: #2b2e30;
+    --ui-surface-soft: #1b1d1f;
+    --ui-text: #f3efec;
+    --ui-text-muted: #b9b1ab;
+    --ui-text-subtle: #918983;
+    --ui-border: #363a3c;
+    --ui-border-strong: #4a4f52;
+    --ui-primary: #e07bad;
+    --ui-primary-hover: #ef93bf;
+    --ui-primary-active: #c96798;
+    --ui-primary-soft: #402536;
+    --ui-primary-contrast: #211019;
+    --ui-success: #78c9a3;
+    --ui-success-soft: #1e3a2e;
+    --ui-warning: #edbf68;
+    --ui-warning-soft: #41341d;
+    --ui-danger: #ef8585;
+    --ui-danger-soft: #442525;
+    --ui-info: #80badd;
+    --ui-info-soft: #203746;
+    --ui-focus: #ef93bf;
+    --ui-focus-ring: 0 0 0 3px rgba(239, 147, 191, 0.24);
+    --ui-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.22);
+    --ui-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.28);
+    --ui-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.34);
+
+    /* Legacy aliases */
+    --bg-light: var(--ui-bg);
+    --text-light: var(--ui-text);
+    --sidebar-bg-light: rgba(32, 34, 36, 0.94);
+    --primary-color: var(--ui-primary);
+    --primary-color-hover: var(--ui-primary-hover);
+    --other-user-bg: var(--ui-surface-muted);
+    --messenger-bg: var(--ui-bg);
     --messenger-sidebar-bg: var(--sidebar-bg-light);
-    --messenger-conversation-bg: var(--bg-light);
-    --messenger-input-bg: var(--sidebar-bg-light);
-    --messenger-border: #445c63;
-    --messenger-text: var(--text-light);
+    --messenger-conversation-bg: var(--ui-bg);
+    --messenger-input-bg: var(--ui-surface);
+    --messenger-border: var(--ui-border);
+    --messenger-text: var(--ui-text);
+    --sent-message-bg: var(--ui-primary-soft);
+    --sent-message-text: var(--ui-text);
+    --received-message-bg: var(--ui-surface-muted);
+    --received-message-text: var(--ui-text);
+    --profile-avatar-border: var(--ui-border);
+    --profile-details-color: var(--ui-text-muted);
+}
 
-	--sent-message-bg: #2c488c; /* Синий фон для своих сообщений */
-	--sent-message-text: #ffffff; /* Белый текст для своих сообщений */
-	--received-message-bg: #333333; /* Темно-серый фон для чужих сообщений */
-	--received-message-text: #ffffff; /* Белый текст для чужих сообщений */
-
-	--profile-avatar-border: #444; /* Граница аватара */
-	--profile-details-color: #aaa; /* Цвет деталей профиля */
-
-    /* Тени для темной темы */
-    --shadow-light: 0px 2px 4px rgba(255, 255, 255, 0.1);
-    --shadow-medium: 0px 4px 8px rgba(255, 255, 255, 0.15);
-    --shadow-dark: 0px 6px 12px rgba(255, 255, 255, 0.2);
+html {
+    background: var(--ui-bg);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
 }
 
 body {
-	font-family: Arial, sans-serif;
-	margin: 0;
-	padding: 0;
-	background: var(--bg-light);
-	background-image: var(--background-image);
-	color: var(--text-light);
-	transition: background 0.3s, color 0.3s;
-	background-position: auto;
+    min-width: 320px;
+    margin: 0;
+    padding: 0;
+    font-family: var(--ui-font-sans);
+    font-size: var(--ui-text-md);
+    line-height: var(--ui-leading-normal);
+    background-color: var(--ui-bg);
+    background-image: var(--background-image);
+    background-position: center top;
+    background-attachment: fixed;
+    color: var(--ui-text);
+    transition:
+        background-color var(--ui-motion-normal) var(--ui-ease),
+        color var(--ui-motion-normal) var(--ui-ease);
 }
 
-* {
-	box-sizing: border-box;
-	scrollbar-width: thin;
-	scrollbar-color: var(--primary-color) var(--bg-light);
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ui-border-strong) transparent;
 }
 
 *::-webkit-scrollbar {
-	width: 4px;
+    width: 8px;
+    height: 8px;
 }
 
 *::-webkit-scrollbar-track {
-	background: var(--bg-light);
+    background: transparent;
 }
 
 *::-webkit-scrollbar-thumb {
-	background-color: var(--primary-color);
-	border-radius: 5px;
+    background-color: var(--ui-border-strong);
+    border: 2px solid transparent;
+    border-radius: var(--ui-radius-pill);
+    background-clip: padding-box;
+}
+
+::selection {
+    background: var(--ui-primary-soft);
+    color: var(--ui-text);
+}
+
+button,
+input,
+textarea,
+select {
+    font: inherit;
+}
+
+button,
+a,
+input,
+textarea,
+select,
+[tabindex]:not([tabindex='-1']) {
+    outline: none;
+}
+
+:focus-visible {
+    outline: 2px solid var(--ui-focus);
+    outline-offset: 2px;
+    box-shadow: var(--ui-focus-ring);
+}
+
+button,
+a {
+    -webkit-tap-highlight-color: transparent;
+}
+
+img,
+svg {
+    max-width: 100%;
 }
 
 .container {
-	width: 100%;
-	max-width: 1680px;
-	padding-right: 15px;
-	padding-left: 15px;
-	margin-right: auto;
-	margin-left: auto;
+    width: 100%;
+    max-width: var(--ui-content-max);
+    padding-inline: clamp(var(--ui-space-3), 2vw, var(--ui-space-6));
+    margin-inline: auto;
 }
 
 .row {
-	display: flex;
-	flex-wrap: wrap;
-	margin-right: -15px;
-	margin-left: -15px;
+    display: flex;
+    flex-wrap: wrap;
+    margin-inline: calc(var(--ui-space-4) * -1);
 }
 
 .mt-1 {
-	margin-top: 5px;
+    margin-top: var(--ui-space-2);
+}
+
+/* Reusable primitives for gradual migration of legacy screens. */
+.ui-surface {
+    background: var(--ui-surface);
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-lg);
+    box-shadow: var(--ui-shadow-sm);
+}
+
+.ui-card {
+    padding: var(--ui-space-5);
+    background: var(--ui-surface);
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-lg);
+    box-shadow: var(--ui-shadow-sm);
+}
+
+.ui-button {
+    min-height: var(--ui-control-height);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--ui-space-2);
+    padding: 0 var(--ui-space-4);
+    border: 1px solid transparent;
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-primary);
+    color: var(--ui-primary-contrast);
+    font-weight: 650;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+        background-color var(--ui-motion-fast) var(--ui-ease),
+        border-color var(--ui-motion-fast) var(--ui-ease),
+        transform var(--ui-motion-fast) var(--ui-ease);
+}
+
+.ui-button:hover {
+    background: var(--ui-primary-hover);
+}
+
+.ui-button:active {
+    background: var(--ui-primary-active);
+    transform: translateY(1px);
+}
+
+.ui-button--secondary {
+    background: var(--ui-surface);
+    border-color: var(--ui-border);
+    color: var(--ui-text);
+}
+
+.ui-button--secondary:hover {
+    background: var(--ui-surface-muted);
+    border-color: var(--ui-border-strong);
+}
+
+.ui-input {
+    width: 100%;
+    min-height: var(--ui-control-height);
+    padding: 0 var(--ui-space-3);
+    border: 1px solid var(--ui-border-strong);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-surface);
+    color: var(--ui-text);
+    transition:
+        border-color var(--ui-motion-fast) var(--ui-ease),
+        box-shadow var(--ui-motion-fast) var(--ui-ease);
+}
+
+textarea.ui-input {
+    min-height: 96px;
+    padding-block: var(--ui-space-3);
+    resize: vertical;
+}
+
+.ui-input::placeholder {
+    color: var(--ui-text-subtle);
+}
+
+.ui-input:hover {
+    border-color: var(--ui-border-strong);
+}
+
+.ui-chip {
+    min-height: 30px;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-1);
+    padding: var(--ui-space-1) var(--ui-space-3);
+    border-radius: var(--ui-radius-pill);
+    background: var(--ui-surface-muted);
+    color: var(--ui-text-muted);
+    font-size: var(--ui-text-sm);
+    font-weight: 600;
+}
+
+.ui-chip--accent {
+    background: var(--ui-primary-soft);
+    color: var(--ui-primary);
+}
+
+.ui-muted {
+    color: var(--ui-text-muted);
+}
+
+.ui-reading-width {
+    width: min(100%, var(--ui-reading-max));
+}
+
+@media (max-width: 720px) {
+    :root {
+        --ui-control-height: 46px;
+    }
+
+    .container {
+        padding-inline: var(--ui-space-3);
+    }
+
+    .ui-card {
+        padding: var(--ui-space-4);
+        border-radius: var(--ui-radius-md);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
 }
