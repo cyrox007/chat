@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from components.realtime import realtime_service
 from middlewares import csrf_middleware, error_handling_middleware
 from settings import config
+from utils.version import PROJECT_VERSION
 
 
 @asynccontextmanager
@@ -31,7 +32,7 @@ def create_app() -> FastAPI:
     from views.service import routers as service_routes
     from views.users import routers as user_routes
 
-    app = FastAPI(title="PubChat API", lifespan=lifespan)
+    app = FastAPI(title="PubChat API", version=PROJECT_VERSION, lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
