@@ -126,6 +126,7 @@ def install(app: FastAPI) -> None:
         await ensure_report_actionable(
             db,
             space_uid=space_uid,
+            viewer_uid=current_user["user_uid"],
             report_uid=payload.report_uid,
             target_account_uid=payload.target_account_uid,
         )
