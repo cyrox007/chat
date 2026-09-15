@@ -31,6 +31,16 @@ class Config:
     DB_USER = os.getenv("DB_USER", "postgres")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 
+    # Redis / realtime
+    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0" if DEBUG else "")
+    REDIS_MAX_CONNECTIONS = int(os.getenv("REDIS_MAX_CONNECTIONS", "100"))
+    REALTIME_TICKET_TTL_SECONDS = int(os.getenv("REALTIME_TICKET_TTL_SECONDS", "30"))
+    REALTIME_AUTH_TIMEOUT_SECONDS = int(os.getenv("REALTIME_AUTH_TIMEOUT_SECONDS", "8"))
+    REALTIME_PRESENCE_TTL_SECONDS = int(os.getenv("REALTIME_PRESENCE_TTL_SECONDS", "90"))
+    REALTIME_HEARTBEAT_SECONDS = int(os.getenv("REALTIME_HEARTBEAT_SECONDS", "25"))
+    REALTIME_MESSAGE_RATE_LIMIT = int(os.getenv("REALTIME_MESSAGE_RATE_LIMIT", "25"))
+    REALTIME_MESSAGE_RATE_WINDOW_SECONDS = int(os.getenv("REALTIME_MESSAGE_RATE_WINDOW_SECONDS", "10"))
+
     # Security. There are intentionally no production-capable default secrets.
     JWT_ACCESS_SECRET_KEY = os.getenv("JWT_ACCESS_SECRET_KEY", "")
     JWT_REFRESH_SECRET_KEY = os.getenv("JWT_REFRESH_SECRET_KEY", "")
