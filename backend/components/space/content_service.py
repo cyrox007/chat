@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.identity.model import Persona
@@ -19,6 +19,15 @@ from components.space.membership_service import (
 )
 from components.space.model import SpaceEvent, SpaceHistoryEntry, SpaceRule
 from components.space.service import get_space
+
+
+def _db_datetime(value: datetime | None) -> datetime | None:
+    """Persist all event timestamps as naive UTC to match the existing DB DateTime columns."""
+    if value is None:
+        return None
+    if value.tzinfo is not None:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
 
 
 async def _require_manager(db: AsyncSession, space_uid: UUID, viewer_uid: UUID | str):
@@ -177,13 +186,20 @@ async def create_event(
     payload: SpaceEventCreateRequest,
 ) -> dict:
     room, account, _ = await _require_manager(db, space_uid, viewer_uid)
+    starts_at = _db_datetime(payload.starts_at)
+    ends_at = _db_datetime(payload.ends_at)
+    if ends_at is not None and ends_at <= starts_at:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error_type": "invalid_event_time_range"},
+        )
     event = SpaceEvent(
         room_uid=room.uid,
         created_by_account_uid=account.uid,
         title=payload.title,
         description=payload.description,
-        starts_at=payload.starts_at,
-        ends_at=payload.ends_at,
+        starts_at=starts_at,
+        ends_at=ends_at,
         status="scheduled",
     )
     db.add(event)
@@ -207,6 +223,11 @@ async def update_event(
         raise HTTPException(status_code=404, detail={"error_type": "space_event_not_found"})
 
     changes = payload.model_dump(exclude_unset=True)
+    if "starts_at" in changes:
+        changes["starts_at"] = _db_datetime(changes["starts_at"])
+    if "ends_at" in changes:
+        changes["ends_at"] = _db_datetime(changes["ends_at"])
+
     next_starts_at = changes.get("starts_at", event.starts_at)
     next_ends_at = changes.get("ends_at", event.ends_at)
     if next_ends_at is not None and next_ends_at <= next_starts_at:
