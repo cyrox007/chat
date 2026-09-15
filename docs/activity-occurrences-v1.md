@@ -2,94 +2,125 @@
 
 Development line after `0.5.1-alpha.1`: `0.5.2-alpha.x`.
 
-## Why this slice exists
+## Зачем нужен этот slice
 
-Recurring `SpaceActivity` is intentionally a compact template. `next_starts_at` is useful for display, but reminders, attendance and future native push need a concrete occurrence identity.
+Recurring `SpaceActivity` остаётся компактным шаблоном. `next_starts_at` достаточно для простого отображения, но reminders и будущий push требуют стабильной identity конкретной встречи.
 
-PubChat therefore adds a bounded occurrence layer instead of expanding recurring activities forever.
+Поэтому PubChat добавляет bounded occurrence layer вместо бесконечного расширения recurring Activities.
 
 ## ActivityOccurrence
 
-`ActivityOccurrence` is a concrete scheduled instance of an Activity template.
+Concrete scheduled instance Activity template.
 
-Rules:
-- unique by `(activity_uid, starts_at)`;
-- generated only inside a bounded rolling horizon;
-- cancelled Activity does not generate new occurrences;
-- deleting Activity cascades occurrences;
-- occurrence identity is stable once materialized;
-- recurrence template remains canonical and unchanged.
+Инварианты:
 
-Initial materialization horizon: 45 days. The service may materialize fewer rows when enough occurrences are already available.
+- unique `(activity_uid, starts_at)`;
+- materialization только в rolling horizon до 45 дней;
+- cancelled Activity не создаёт новые occurrences;
+- удаление Activity каскадно удаляет occurrence rows;
+- recurring template остаётся canonical;
+- repeated materialization идемпотентна;
+- monthly recurrence считается от исходного calendar anchor и не накапливает drift после февраля/коротких месяцев.
 
 ## Reminder preference
 
-A member may opt into reminders for an Activity series.
+Reminder — приватное Account state и всегда opt-in.
 
-Initial lead times are allowlisted:
-- 15 minutes;
-- 60 minutes;
-- 1 day.
+Allowlisted lead time:
 
-A reminder preference is personal Account state. It is not visible to Space managers or other members and does not affect discovery, reputation or RSVP counts.
+- 15 минут;
+- 60 минут;
+- 1 день.
+
+Manager Space не видит preferences участников. Reminder не меняет RSVP, reputation, discovery или achievements.
+
+Активных reminder preferences на Account допускается не больше 200 — этот лимит совпадает с bounded reconciliation pass, поэтому старые preferences не могут голодать за пределами query limit.
 
 ## Notification inbox
 
-`UserNotification` is a private Account-owned inbox entry.
+`UserNotification` — private Account-owned inbox entry.
 
-Initial Stage 5.3 notification kind:
-- `activity_reminder`.
+Первый kind: `activity_reminder`.
 
-Properties:
-- idempotent dedupe key;
-- title/body snapshot for stable history;
-- optional Space/Activity/Occurrence context for navigation;
-- read/unread state;
-- no cross-account read API.
+Свойства:
 
-The first SPA implementation calls the same server-side reconciliation service on app bootstrap / inbox refresh. A future worker or native push scheduler can call the same service; notification business rules must not live in Vue.
+- idempotent account-scoped dedupe;
+- snapshot title/body сохраняет смысл истории;
+- Space/Activity/Occurrence context используется только для navigation;
+- context FK использует `SET NULL`, поэтому удаление исходного Activity не стирает уже полученное уведомление;
+- read/unread;
+- нет cross-account read/list API.
 
-This means `0.5.2` provides reliable in-app reminders while the user is active/returns to PubChat. Background OS push is explicitly a later delivery adapter, not faked by the SPA.
+## Reconciliation
 
-## Reminder reconciliation
+`POST /notifications/v1/sync` — явная command operation.
 
-For each enabled reminder preference:
-1. materialize a bounded occurrence window;
-2. find occurrences whose reminder time has passed but whose meeting has not become stale;
-3. insert notification with DB-level dedupe;
-4. never duplicate the same occurrence + lead-time reminder.
+Для каждого разрешённого reminder:
 
-A small grace window after occurrence start allows an app returning near start time to surface the reminder. Very old occurrences do not create delayed spam.
+1. backend повторно проверяет Account и текущее active membership/ownership;
+2. materialize-ит bounded occurrence window;
+3. выбирает occurrence, для которого наступило reminder time;
+4. не создаёт слишком старые delayed reminders за пределами grace window;
+5. пишет notification через DB-level dedupe;
+6. commit выполняется server-side.
 
-## Invariants
+GET endpoints не создают состояние.
 
-- recurring template remains canonical;
-- bounded occurrence rows only;
-- Account reminder preferences are private;
-- notification ownership is server-authoritative;
-- notification links never bypass Space membership/visibility checks;
-- no engagement score/streak/pressure mechanics;
-- reminders are opt-in;
-- backend API remains reusable for future Android/iOS clients.
+Dedupe рассчитан как один reminder на concrete occurrence. Изменение lead time не создаёт второй notification для того же occurrence.
 
-## First UI
+## Реализованный API
 
-- reminder control inside Space Activity;
-- personal notification inbox;
-- unread indicator in app shell;
-- clear loading/empty/error/read states;
-- mobile-first layout;
-- no browser permission prompt in this slice.
+- `GET /activity-occurrences/v1/activities/{activity_uid}`;
+- `POST /notifications/v1/sync`;
+- `GET /notifications/v1/unread-count`;
+- `GET /notifications/v1`;
+- `GET /notifications/v1/spaces/{space_uid}/reminders`;
+- `PUT /notifications/v1/activities/{activity_uid}/reminder`;
+- `DELETE /notifications/v1/activities/{activity_uid}/reminder`;
+- `PATCH /notifications/v1/{notification_uid}/read`;
+- `POST /notifications/v1/read-all`.
+
+## Реализованный SPA UX
+
+- reminder control внутри Activity;
+- один batch request загружает reminder state всего Space — без HTTP N+1;
+- lead presets: 15 минут / час / день;
+- личный экран `/notifications`;
+- loading/error/empty/read states;
+- переход из notification в обычный Space Life route;
+- спокойный bell/unread badge в app shell;
+- sync при восстановлении authenticated shell и периодически во время активной сессии;
+- mobile bottom navigation не перегружена notification item.
+
+UI правила: [`ui-ux-notifications.md`](ui-ux-notifications.md).
+
+## Delivery boundary
+
+`0.5.2` обеспечивает in-app reminders. Background browser/native push в этот checkpoint не входит.
+
+Business rules находятся в backend reconciliation service, поэтому будущий worker/native push adapter сможет использовать тот же домен без переноса правил в Vue.
+
+## Privacy / anti-spam invariants
+
+- reminders opt-in;
+- preferences принадлежат только Account;
+- один notification максимум на occurrence;
+- Account должен сохранять актуальный доступ к Space для reconciliation;
+- notification context не является пропуском в Space;
+- нет streak, score, engagement reward или urgency-pressure механик;
+- no cross-account inbox API;
+- bounded preferences + bounded occurrence horizon обеспечивают bounded work per sync.
 
 ## Release gate
 
-Before `0.5.2-alpha.1`:
-- additive migrations only;
-- one Alembic head;
-- occurrence materialization/dedupe contracts;
-- reminder ownership/privacy contracts;
-- notification ownership/read contracts;
-- production SPA build;
-- final time-zone, privacy and notification-spam self-review;
-- version bump only after green functional exact-head CI;
-- second exact-head CI on the versioned release head.
+До `0.5.2-alpha.1`:
+
+- additive migration graph и одна Alembic head;
+- occurrence/reminder/inbox contract tests;
+- frontend production build;
+- notification ownership/timezone/spam/privacy self-review;
+- documentation/roadmap/UI Kit sync;
+- functional exact-head CI;
+- version bump только после зелёного functional gate;
+- второй exact-head CI на versioned release head;
+- merge только после второго gate.
