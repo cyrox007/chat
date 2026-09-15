@@ -84,6 +84,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["appellant_account_uid"], ["accounts.uid"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["reviewer_account_uid"], ["accounts.uid"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("uid"),
+        sa.UniqueConstraint("action_uid", "appellant_account_uid", name="uq_moderation_appeal_action_appellant"),
     )
     op.create_index("ix_moderation_appeals_action_status", "moderation_appeals", ["action_uid", "status"])
     op.create_index("ix_moderation_appeals_appellant", "moderation_appeals", ["appellant_account_uid", "created_at"])
