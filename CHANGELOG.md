@@ -2,9 +2,55 @@
 
 Формат версий: `MAJOR.MINOR.PATCH-channel.N` до стабильного `1.0.0`.
 
-## [Unreleased] — 0.4.0-alpha.0
+## [Unreleased] — 0.5.0-alpha.0
 
-Stage 4: Living Spaces & Social Core. Функциональный scope реализован, но версия ещё не назначена релизным checkpoint: требуется exact-head quality gate и отдельный version bump.
+Stage 5: Product Identity & Engagement. Первый slice строится поверх выпущенного `0.4.0-alpha.1` и пока не является релизом.
+
+### Persona Appearance
+- allowlisted accent/background/avatar-frame presets;
+- короткая status line;
+- appearance отделён от Account/security/trust/permissions;
+- public appearance подчиняется существующим profile privacy/block rules.
+
+### Space Appearance
+- theme/cover presets, ambient icon и welcome line;
+- изменение оформления доступно только scoped owner/moderator;
+- оформление не меняет visibility, membership policy, permissions или discovery power.
+
+### Recurring Activities
+- versioned `/activities/v1` contract;
+- activity types и recurrence rules из allowlist;
+- RSVP `interested` / `going`;
+- active membership требуется для RSVP;
+- creator или scoped manager может редактировать activity;
+- bulk RSVP projection без N+1 на списке;
+- engagement timestamps возвращаются как explicit UTC (`Z`).
+
+### SPA / UI/UX
+- экран «Стиль образа»;
+- экран «Жизнь пространства»;
+- routes и context navigation;
+- mobile-first customization/activity surfaces.
+
+### Инварианты первого slice
+- cosmetics != trust/reputation/permissions;
+- Space appearance != discovery ranking power;
+- нет внутренней валюты, loot boxes, marketplace или pay-to-status;
+- recurring rule хранится как шаблон и не материализует бесконечную цепочку строк в БД.
+
+### Release gate
+Перед выпуском `0.5.0-alpha.x` обязательны:
+- синхронизация с `main@0.4.0-alpha.1`;
+- additive migration graph с одной Alembic head;
+- backend compile/import/contracts;
+- frontend production build;
+- privacy/scoped-role self-review;
+- public appearance/UI Kit polish;
+- canonical version bump и повторный exact-head CI.
+
+## [0.4.0-alpha.1] — 2026-09-15
+
+Stage 4: Living Spaces & Social Core. Первый alpha-checkpoint продуктового социального ядра PubChat.
 
 ### Living Spaces
 - канонический `/spaces/v1` domain поверх legacy `rooms/messages` без destructive rewrite;
@@ -57,16 +103,26 @@ Stage 4: Living Spaces & Social Core. Функциональный scope реа�
 - mobile-first навигация;
 - rules/events/history surfaces;
 - Safety Center и manager moderation UI;
-- terminology приведена к концепции PubChat: Space, участие, ограничение доступа, апелляция.
+- terminology приведена к концепции PubChat: Space, участие, ограничение доступа, апелляция;
+- legacy UTC timestamps нормализуются на SPA Space boundary.
 
-### Release gate
-Перед фиксацией `0.4.0-alpha.1` обязательны:
-- backend compile/import/contracts;
-- ровно одна Alembic head;
-- frontend production build;
-- final privacy/permission self-review;
-- canonical `VERSION` bump;
-- повторный exact-head CI уже на финальном номере версии.
+### Quality gate
+Перед version bump успешно прошли:
+- backend dependency install, compile и FastAPI import;
+- realtime security regression guard;
+- ровно одна Alembic migration head;
+- все backend contract tests;
+- SPA security regression guard;
+- production Vite build;
+- final privacy/permission/migration self-review.
+
+После version bump выполнен повторный exact-head CI; PR #4 слит только после его успешного завершения.
+
+### Известный технический долг
+- race вокруг member capacity при конкурентных join/approve будет отдельно harden перед beta;
+- нужен platform-level fallback для апелляций, если в Space нет второго независимого manager;
+- legacy `users/rooms/room_members/room_bans` остаются compatibility backbone для части домена;
+- до beta нужны реальные PostgreSQL + Redis integration tests, migration rehearsal, observability и load testing.
 
 ## [0.3.0-alpha.1] — 2026-09-15
 
