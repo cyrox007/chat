@@ -26,6 +26,14 @@ def _utc_naive(value: datetime) -> datetime:
     return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
+def _utc_iso(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return f"{value.isoformat()}Z"
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def _persona_appearance_projection(item: PersonaAppearance | None, persona_uid: UUID) -> dict:
     return {
         "persona_uid": str(persona_uid),
@@ -33,7 +41,7 @@ def _persona_appearance_projection(item: PersonaAppearance | None, persona_uid: 
         "background_preset": item.background_preset if item else "soft",
         "avatar_frame_preset": item.avatar_frame_preset if item else "none",
         "status_line": item.status_line if item else None,
-        "updated_at": item.updated_at.isoformat() if item and item.updated_at else None,
+        "updated_at": _utc_iso(item.updated_at) if item else None,
     }
 
 
@@ -44,7 +52,7 @@ def _space_appearance_projection(item: SpaceAppearance | None, space_uid: UUID) 
         "cover_preset": item.cover_preset if item else "soft-gradient",
         "ambient_icon": item.ambient_icon if item else None,
         "welcome_line": item.welcome_line if item else None,
-        "updated_at": item.updated_at.isoformat() if item and item.updated_at else None,
+        "updated_at": _utc_iso(item.updated_at) if item else None,
     }
 
 
@@ -134,7 +142,7 @@ def _activity_projection(
         "title": activity.title,
         "description": activity.description,
         "activity_type": activity.activity_type,
-        "starts_at": activity.starts_at.isoformat(),
+        "starts_at": _utc_iso(activity.starts_at),
         "recurrence": activity.recurrence,
         "status": activity.status,
         "rsvp": {
@@ -142,8 +150,8 @@ def _activity_projection(
             "going": counts.get("going", 0),
             "viewer": viewer_rsvp,
         },
-        "created_at": activity.created_at.isoformat() if activity.created_at else None,
-        "updated_at": activity.updated_at.isoformat() if activity.updated_at else None,
+        "created_at": _utc_iso(activity.created_at),
+        "updated_at": _utc_iso(activity.updated_at),
     }
 
 
