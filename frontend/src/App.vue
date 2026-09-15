@@ -6,6 +6,8 @@ import { useStore } from 'vuex';
 import HeaderComponent from './components/HeaderComponent/index.vue';
 import ReplyNotifications from '@/components/Notifications/ReplyNotifications.vue';
 import MessageNotifications from './components/Notifications/MessageNotifications.vue';
+import PwaInstallPrompt from '@/components/Pwa/PwaInstallPrompt.vue';
+import PwaUpdateNotice from '@/components/Pwa/PwaUpdateNotice.vue';
 
 const store = useStore();
 const router = useRouter();
@@ -102,6 +104,8 @@ watch(() => store.getters.isAuth, (isAuthenticated, wasAuthenticated) => {
 		<ReplyNotifications />
 		<MessageNotifications />
 		<HeaderComponent />
+		<PwaInstallPrompt />
+		<PwaUpdateNotice />
 
 		<transition name="fade">
 			<div
