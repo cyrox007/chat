@@ -1,8 +1,6 @@
 # PubChat — руководство пользователя
 
-Документ описывает пользовательские функции PubChat. Если функция помечена **In development**, она существует только в активной ветке и ещё не считается частью выпущенного `main`.
-
-Текущий release: `0.5.1-alpha.1`.
+Документ описывает пользовательские функции выпущенного checkpoint PubChat `0.5.2-alpha.1`.
 
 ## 1. Account и Persona
 
@@ -19,150 +17,74 @@ PubChat разделяет учётную запись и публичный о�
 
 ### Вход и восстановление сессии
 
-После перезагрузки страницы SPA не хранит access JWT на диске. Клиент пытается восстановить новую короткую access-сессию через refresh cookie. Если refresh больше недействителен, пользователь возвращается на экран входа.
+После перезагрузки страницы SPA не хранит access JWT на диске. Клиент восстанавливает короткую access-сессию через refresh cookie. Если refresh больше недействителен, пользователь возвращается на экран входа.
 
 ## 2. Профиль и приватность
 
-В профиле можно изменить:
+В профиле можно управлять отображаемым именем, bio, location, social intent и политикой личных сообщений.
 
-- отображаемое имя;
-- bio;
-- город и страну;
-- social intent;
-- правила личных сообщений;
-- разрешение на отображение location.
-
-Social intent сейчас используется как социальный контекст: «хочу пообщаться», «открыт знакомствам», «ищу компанию для игры», «только знакомые», «спокойный режим».
-
-### Кто может писать лично
-
-Доступны политики:
+Политики DM:
 
 - `everyone` — новый DM может начать любой доступный пользователь;
 - `shared_spaces` — требуется общее активное Space;
 - `mutual` — требуется взаимная friendship;
 - `nobody` — новые личные разговоры закрыты.
 
-Account-level block всегда имеет приоритет над DM policy.
+Account-level block всегда имеет приоритет.
 
 ## 3. Стиль Persona
 
-Раздел «Стиль образа» позволяет выбирать allowlisted cosmetic presets:
+Раздел «Стиль образа» позволяет выбрать allowlisted cosmetic presets: accent, фон, рамку аватара и короткую status line.
 
-- accent;
-- фон;
-- рамку аватара;
-- короткую status line.
-
-Оформление не влияет на trust, permissions, moderation power, discovery ranking или возможность писать другим людям.
-
-Публичный appearance показывается только если viewer имеет право видеть сам профиль.
+Оформление не влияет на trust, permissions, moderation power или discovery ranking. Публичный appearance показывается только если viewer имеет право видеть сам профиль.
 
 ## 4. Living Spaces
 
-Space — основная социальная единица PubChat. Это не просто чат, а живое сообщество с участниками, ролями, правилами, событиями, историей и собственным оформлением.
+Space — основная социальная единица PubChat: сообщество с участниками, ролями, правилами, событиями, историей и оформлением.
 
-### Discovery
-
-Главный экран показывает доступные пространства. Карточка помогает понять:
-
-- что это за Space;
-- его цель/описание;
-- кто и насколько активно там присутствует;
-- что происходит;
-- оформление/атмосферу.
-
-Cosmetics не используются как платный ranking signal.
-
-### Visibility
+Visibility:
 
 - **public** — виден в discovery;
 - **unlisted** — обычно доступен по прямой ссылке;
 - **private** — invite-only.
 
-### Membership policy
+Membership policy:
 
 - **open** — можно войти сразу;
 - **request** — пользователь отправляет заявку;
 - **invite** — требуется приглашение.
 
-Private Space работает как invite-only и не должен превращаться в скрытый способ обхода membership policy.
-
-### Роли внутри Space
-
-- owner;
-- moderator;
-- member.
-
-Эти роли scoped: moderator конкретного Space не становится platform moderator.
+Scoped роли: `owner`, `moderator`, `member`. Moderator одного Space не становится platform moderator.
 
 ## 5. Разговор в Space
 
-После входа в Space открывается realtime-разговор. Интерфейс различает состояния:
-
-- connecting;
-- authenticating;
-- connected;
-- reconnecting;
-- offline;
-- restricted.
-
-При временном обрыве сети SPA пытается восстановить соединение без перезагрузки страницы. Composer блокируется, когда транспорт действительно недоступен.
+После входа открывается realtime-разговор. SPA различает `connecting`, `authenticating`, `connected`, `reconnecting`, `offline`, `restricted` и восстанавливает соединение без полной перезагрузки страницы.
 
 WebSocket использует одноразовый короткоживущий ticket. Bearer/JWT не передаётся в URL.
 
 ## 6. Люди и социальные связи
 
-Раздел «Люди» использует privacy-aware discovery.
+Раздел «Люди» использует privacy-aware discovery. Доступны follow/unfollow, friend request, accept/reject/remove friendship и block/unblock.
 
-Доступны:
-
-- follow/unfollow;
-- friend request;
-- accept/reject friendship;
-- remove friendship;
-- block/unblock.
-
-### Block
-
-Block действует на Account-level и проверяется в обе стороны. Он влияет на discovery, прямой профиль, DM и Conversation Round responses. Новая Persona не должна обходить существующую блокировку Account.
+Block действует на Account-level в обе стороны и влияет на discovery, профиль, DM и Conversation Round responses.
 
 ## 7. Приглашения в Spaces
 
-Manager закрытого пространства может найти Persona и отправить account-bound invite. Получатель видит приглашение в разделе «Приглашения» и может:
-
-- принять;
-- отклонить.
-
-При принятии backend повторно проверяет актуальные capacity, ban/restriction, block и membership conditions. Старое приглашение не является вечным пропуском.
+Manager закрытого пространства может отправить account-bound invite. Получатель видит его в «Приглашениях» и принимает либо отклоняет. При accept backend повторно проверяет актуальные capacity, restrictions, block и membership conditions.
 
 ## 8. Личные сообщения
 
-Раздел «Сообщения» работает через отдельный realtime channel. После reconnect клиент восстанавливает активный dialog/status subscriptions и дедуплицирует повторно доставленные сообщения.
-
-Read receipt можно изменить только для сообщения, получателем которого является текущий Account.
+Раздел «Сообщения» работает через отдельный realtime channel. После reconnect клиент восстанавливает активный диалог и subscriptions. Read receipt можно изменить только для сообщения, получателем которого является текущий Account.
 
 ## 9. Центр пространства
 
-В «Центре пространства» доступны community-функции.
-
-### Rules
-
-Правила читают участники, изменяют owner/moderator. Правила принадлежат Space и не исчезают при удалении аккаунта автора.
-
-### Events
-
-События имеют время, статус и scoped управление. Время нормализуется backend в UTC.
-
-### History
-
-История — append-only журнал значимых community changes. Она не является публичным журналом конфликтов и не раскрывает приватные moderation reports.
+В «Центре пространства» находятся Rules, Events и append-only History. Rules/Events управляются scoped roles. История сообщества не раскрывает приватные moderation reports.
 
 ## 10. Жизнь пространства
 
-Раздел «Жизнь пространства» объединяет оформление и Activities.
+Раздел «Жизнь пространства» объединяет Space Appearance и Activities.
 
-### Space Appearance
+### Appearance
 
 Owner/moderator может выбрать тему, cover preset, ambient icon и welcome line. Обычный participant видит оформление, но не меняет его.
 
@@ -170,99 +92,71 @@ Owner/moderator может выбрать тему, cover preset, ambient icon �
 
 Участник может создать социальную активность: разговор, викторину, игру, совместный просмотр, творчество или локальную встречу.
 
-Activity содержит:
+Activity содержит название, описание, тип, дату/время, recurrence `none/daily/weekly/monthly` и RSVP.
 
-- название и описание;
-- тип;
-- дату/время;
-- recurrence `none/daily/weekly/monthly`;
-- RSVP.
+Recurring Activity хранится как один шаблон. Backend вычисляет ближайший `next_starts_at`; бесконечная серия строк в БД не создаётся.
 
-Recurring Activity хранится как один шаблон. Backend вычисляет ближайший `next_starts_at`; бесконечные строки событий не создаются.
-
-### RSVP
-
-Можно отметить:
-
-- «Интересно»;
-- «Иду»;
-- снять отметку.
-
-RSVP доступен только активному участнику Space.
+RSVP: «Интересно», «Иду» или снять отметку.
 
 ## 11. Conversation Rounds
 
-Conversation Round — социальный prompt внутри конкретной Activity.
+Conversation Round — social prompt внутри Activity.
 
-Форматы:
+Форматы: `icebreaker`, `choice`, `story_chain`. На Activity может быть только один открытый round. Каждый Account имеет максимум один response; повторная отправка обновляет собственный ответ.
 
-- `icebreaker` — вопрос для начала разговора;
-- `choice` — выбор между двумя вариантами;
-- `story_chain` — текстовая цепочка/тема.
-
-Activity creator или scoped manager открывает и закрывает round. На Activity может быть только один открытый round.
-
-Каждый Account имеет максимум один response на round; повторная отправка обновляет свой ответ. Для choice показывается распределение, но нет победителя.
-
-Conversation Rounds не имеют score, rank, prize, stake, currency или pay-to-win механики.
+Нет score, rank, winner, prize, stake, currency или pay-to-win механики.
 
 ## 12. Достижения
 
-Earned achievements выдаёт только backend system hooks. Пользователь не может вызвать grant endpoint.
+Earned achievements выдаёт только backend system hooks. Первые отметки: `first_host`, `conversation_starter`, `first_round_response`.
 
-Первые достижения:
-
-- `first_host` — создана первая Activity;
-- `conversation_starter` — открыт первый Conversation Round;
-- `first_round_response` — дан первый ответ в round.
-
-В профиле виден публичный shelf. В собственной истории можно видеть дополнительный source/context. Чужим пользователям этот контекст не раскрывается.
-
-Достижения — косметическая история участия, а не рейтинг человека.
+Публично виден shelf. Дополнительный source/context доступен только владельцу. Достижения — косметическая история участия, а не рейтинг человека.
 
 ## 13. Safety Center
 
-В разделе «Безопасность» пользователь может:
-
-- выбрать Space и участника;
-- отправить report;
-- видеть статус своих reports;
-- видеть применённые к нему moderation actions;
-- подать апелляцию, если она доступна.
+В «Безопасности» пользователь может отправить report на участника конкретного Space, видеть статус своих reports, видеть применённые к нему moderation actions и подать доступную апелляцию.
 
 Reports не публикуются всему Space.
 
 ## 14. Moderation queue
 
-Owner/moderator Space получает отдельную очередь для scoped moderation.
+Owner/moderator имеет отдельную scoped queue. Решения: warning или restrict access с причиной и при необходимости сроком. Апелляция рассматривается отдельно; автор исходного решения не должен сам подтверждать собственную апелляцию.
 
-Поддерживаются решения типа:
+В интерфейсе нет «тюрьмы», «надзирателей» и игровой метафоры наказаний.
 
-- warning;
-- restrict access.
+## 15. Напоминания и notification inbox
 
-Решение содержит причину и при необходимости срок. Restrict синхронизируется с compatibility `RoomBan` и realtime disconnect.
+В `0.5.2-alpha.1` Activities получили concrete bounded occurrences и opt-in in-app reminders.
 
-Апелляция рассматривается отдельно. Автор исходного решения не должен подтверждать собственную апелляцию; overturn снимает именно связанное ограничение.
+### Как включить напоминание
 
-В UI сознательно нет «тюрьмы», «надзирателей» и игровой метафоры наказаний.
+1. Откройте Space.
+2. Перейдите в «Жизнь».
+3. Найдите нужную Activity.
+4. Выберите срок: за 15 минут, за час или за день.
+5. Нажмите «Напомнить».
 
-## 15. Напоминания и уведомления — In development (`0.5.2-alpha.x`)
+Настройку можно изменить или отключить в той же карточке.
 
-В активной ветке разрабатываются concrete Activity Occurrences и приватный notification inbox.
+### Где смотреть уведомления
 
-План/текущая реализация:
+В верхней панели есть bell indicator. Раздел «Напоминания» показывает личный inbox. Карточку можно открыть, после чего PubChat ведёт в обычный Space Life route и повторно применяет все membership/visibility правила.
 
-- recurrence materializes только в bounded horizon;
-- пользователь сам включает reminder;
-- доступные lead times: 15 минут, 1 час, 1 день;
-- reminders принадлежат Account и не видны manager Space;
-- максимум одно reminder notification на occurrence;
-- личный inbox с unread/read/read-all;
-- переход из notification ведёт через обычный Space route и не обходит membership/visibility checks;
-- на этом этапе нет browser/native push — только честный in-app sync.
+Можно отметить одно уведомление или все как прочитанные.
 
-До merge PR эта функция не считается выпущенной.
+### Правила reminders
+
+- reminders включаются только пользователем;
+- они принадлежат Account и не видны manager Space;
+- максимум одно notification на concrete occurrence;
+- максимум 200 активных Activity reminders на Account;
+- recurring occurrences materialize только в bounded horizon;
+- приложение периодически выполняет idempotent in-app sync;
+- browser/native push пока не используется.
+
+### Время и DST
+
+Activity сейчас хранит canonical UTC instant. Для recurring schedule пока не сохраняется IANA timezone name, поэтому при переходе летнего/зимнего времени локальное wall-clock время weekly/monthly серии может сдвинуться на час. Reminder следует фактическому UTC schedule. Это известное alpha-ограничение и будет исправлено до beta на backend, а не client-side костылём.
 
 ## 16. Что PubChat сознательно не делает
 
@@ -272,4 +166,5 @@ Owner/moderator Space получает отдельную очередь для 
 - не делает dating swipe основным сценарием;
 - не превращает achievements в leaderboard;
 - не использует casino/loot-box/stake механику;
+- не включает reminders без согласия пользователя;
 - не скрывает причины moderation decisions за игровой терминологией.
