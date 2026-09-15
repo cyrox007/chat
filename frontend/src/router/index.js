@@ -47,6 +47,12 @@ const router = createRouter({
 			meta: { title: 'Стиль образа — PubChat', requestAuth: true },
 		},
 		{
+			path: '/achievements',
+			name: 'achievements',
+			component: () => import('../views/AchievementsView.vue'),
+			meta: { title: 'Достижения — PubChat', requestAuth: true },
+		},
+		{
 			path: '/spaces/:uid',
 			name: 'space',
 			component: () => import('../views/MainView.vue'),

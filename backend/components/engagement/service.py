@@ -7,7 +7,9 @@ from fastapi import HTTPException
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from components.achievement.service import grant_achievement
 from components.engagement.model import ActivityRSVP, PersonaAppearance, SpaceActivity, SpaceAppearance
+from components.engagement.round_model import ConversationRound
 from components.engagement.schemas import (
     ActivityCreateRequest,
     ActivityRSVPRequest,
@@ -277,6 +279,15 @@ async def create_activity(
         status="scheduled",
     )
     db.add(activity)
+    await db.flush()
+    await grant_achievement(
+        db,
+        account_uid=account.uid,
+        code="first_host",
+        source_kind="activity_created",
+        source_uid=activity.uid,
+        context_room_uid=room.uid,
+    )
     await db.commit()
     await db.refresh(activity)
     return await _single_activity_projection(db, activity, account.uid)
@@ -304,6 +315,20 @@ async def update_activity(
     for field, value in changes.items():
         setattr(activity, field, value)
     activity.updated_at = datetime.utcnow()
+
+    if changes.get("status") == "cancelled":
+        round_result = await db.execute(
+            select(ConversationRound).where(
+                ConversationRound.activity_uid == activity.uid,
+                ConversationRound.status == "open",
+            )
+        )
+        now = datetime.utcnow()
+        for round_item in round_result.scalars().all():
+            round_item.status = "closed"
+            round_item.closed_at = now
+            round_item.updated_at = now
+
     await db.commit()
     await db.refresh(activity)
     return await _single_activity_projection(db, activity, account.uid)

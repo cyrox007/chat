@@ -2,6 +2,59 @@
 
 Формат версий: `MAJOR.MINOR.PATCH-channel.N` до стабильного `1.0.0`.
 
+## [0.5.1-alpha.1] — 2026-09-15
+
+Stage 5.2: Earned Achievements & Conversation Rounds. Второй engagement-checkpoint поверх `0.5.0-alpha.1`.
+
+### Earned achievements
+- system-only каталог и выдача достижений;
+- read-only `/achievements/v1` API;
+- public shelf подчиняется profile privacy/block policy;
+- собственная история может показывать source/context, публичная — никогда;
+- первые системные отметки: `first_host`, `conversation_starter`, `first_round_response`;
+- один Account получает каждый код максимум один раз;
+- клиент не имеет achievement grant endpoint;
+- достижения не меняют trust, permissions, moderation power, reputation или discovery ranking.
+
+### Conversation Rounds
+- Activity-scoped `icebreaker`, `choice`, `story_chain`;
+- один открытый round на Activity на уровне PostgreSQL;
+- один response на Account+round, повторный ответ обновляет существующую запись;
+- активное membership обязательно для участия;
+- Activity creator или scoped owner/moderator управляет round;
+- Account-level block фильтрует ответы в обе стороны;
+- prompt/response ограничены по длине;
+- score, rank, winner, prize, stake, currency/payment отсутствуют из DTO/модели;
+- отмена Activity атомарно завершает её открытый round.
+
+### SPA / UI/UX
+- achievement shelf в Persona profile;
+- отдельная собственная история достижений;
+- Conversation Rounds встроены внутрь Activity в «Жизни пространства»;
+- choice показывает распределение ответов, но не объявляет победителя;
+- текстовые раунды поддерживают редактирование собственного ответа;
+- creator/manager может завершить round;
+- mobile-first presentation без отдельного «игрового аккаунта».
+
+### Abuse / privacy review
+- achievement source/context не раскрывается чужим пользователям;
+- private/blocked Persona не обходится через achievement API;
+- blocked Accounts не видят ответы друг друга в rounds;
+- bounded rows: один response на Account+round и один open round на Activity;
+- rounds используют существующие membership/moderation границы, а не параллельную trust-систему;
+- достижения выдаются только backend system hooks и идемпотентны.
+
+### Quality gate
+До version bump успешно прошли:
+- additive migration graph с одной Alembic head;
+- backend compile/import/security/contracts;
+- SPA security guard + production build;
+- final abuse/privacy/permissions self-review;
+- roadmap/versioning/UI Kit sync;
+- functional exact-head CI на frozen feature head.
+
+После version bump выполняется повторный exact-head CI уже на `0.5.1-alpha.1`; merge разрешён только после его успешного завершения.
+
 ## [0.5.0-alpha.1] — 2026-09-15
 
 Stage 5: Product Identity & Engagement. Первый alpha-checkpoint визуальной идентичности и повторных социальных активностей поверх `0.4.0-alpha.1`.
@@ -105,7 +158,7 @@ Stage 4: Living Spaces & Social Core. Первый alpha-checkpoint продук
 - one moderation action per report на уровне БД;
 - original decision maker не может рассматривать собственную апелляцию;
 - overturn отзывает именно связанное ограничение;
-- повторный restrict отзывает предыдущее активное ограничение и закрывает его незавершённую апелляцию;
+- повторный restrict отзывает предыдущее активное решение и закрывает его pending appeal;
 - закрытые/уже обработанные жалобы нельзя повторно использовать для нового action;
 - private report metadata проверяется только после scoped manager authorization.
 

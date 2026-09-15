@@ -61,6 +61,8 @@
 				<p>{{ contactPolicyDescription }}</p>
 			</section>
 
+			<AchievementShelf :account-uid="profile.uid" :is-self="profile.is_self" />
+
 			<section v-if="profile.is_self && isEditing" class="profile-card settings-card">
 				<header class="settings-header">
 					<div>
@@ -142,6 +144,7 @@ import { useStore } from 'vuex';
 import AuthService from '@/API/AuthService';
 import CSRFService from '@/API/CSRFService';
 import EngagementService from '@/API/EngagementService';
+import AchievementShelf from '@/components/Profile/AchievementShelf.vue';
 
 const route = useRoute();
 const router = useRouter();

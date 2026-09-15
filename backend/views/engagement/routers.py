@@ -1,8 +1,10 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, status
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from components.achievement.service import grant_achievement
 from components.auth.middleware import auth_middle
 from components.engagement.batch import SpaceAppearanceBatchRequest, get_space_appearance_batch
 from components.engagement.queries import get_my_persona_appearance
@@ -120,6 +122,23 @@ def install(app: FastAPI) -> None:
         db: AsyncSession = Depends(Database.session_generator),
     ):
         item = await create_activity(db, space_uid, current_user["user_uid"], payload)
+
+        # Activity creation is already committed by the existing Stage 5 service.
+        # Achievement recording is cosmetic and must never turn a successfully
+        # created Activity into a failed HTTP response.
+        try:
+            await grant_achievement(
+                db,
+                account_uid=UUID(str(current_user["user_uid"])),
+                code="first_host",
+                source_kind="activity_created",
+                source_uid=UUID(item["uid"]),
+                context_room_uid=space_uid,
+            )
+            await db.commit()
+        except SQLAlchemyError:
+            await db.rollback()
+
         return {"status": "ok", "activity": item}
 
     @activities.patch("/spaces/{space_uid}/{activity_uid}")

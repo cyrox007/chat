@@ -61,11 +61,11 @@ UI/UX развивается **параллельно** с архитектур�
 
 Stage 3 включён в релизную базу `0.3.0-alpha.1`.
 
-## Stage 4 — Living Spaces & social core 🚧 release gate
+## Stage 4 — Living Spaces & social core ✅ merged
 
 Цель: реализовать продуктовую основу PubChat и заменить legacy `Room` продуктовой моделью Living Spaces без destructive rewrite.
 
-### Реализовано
+Реализовано:
 
 - versioned `/spaces/v1` contract поверх legacy `rooms/messages`;
 - additive `space_settings`, `space_memberships`, `space_tags` и backfill;
@@ -99,18 +99,9 @@ Stage 3 включён в релизную базу `0.3.0-alpha.1`.
 - legacy tag backfill не зависит от locale PostgreSQL и безопасен для Unicode;
 - UI/UX обновляется одновременно с доменом, включая mobile states.
 
-### Gate для `0.4.0-alpha.1`
+Stage 4 выпущен как `0.4.0-alpha.1` после двухступенчатого exact-head CI.
 
-- exact-head backend compile/import/tests;
-- ровно одна Alembic migration head;
-- production SPA build;
-- final privacy/permission self-review;
-- обновление `CHANGELOG.md`;
-- bump canonical `VERSION`;
-- повторный exact-head CI уже на версии `0.4.0-alpha.1`;
-- только затем PR переводится из draft и сливается в `main`.
-
-### Осознанный технический долг после alpha checkpoint
+### Осознанный технический долг после Stage 4
 
 - устранить race вокруг member capacity при конкурентных join/approve;
 - добавить platform-level fallback для апелляций, если в Space нет второго независимого manager;
@@ -118,30 +109,72 @@ Stage 3 включён в релизную базу `0.3.0-alpha.1`.
 - расширить integration tests реальной PostgreSQL/Redis средой;
 - observability, metrics и нагрузочные сценарии до beta.
 
-## Stage 5 — Product identity & engagement
+## Stage 5 — Product identity & engagement 🚧 active
 
-Цель: дать PubChat собственный характер поверх уже устойчивого social core.
+Цель: дать PubChat собственный характер и причины возвращаться поверх устойчивого social core — без покупки социального влияния и без азартной экономики.
 
-Планируемый scope:
+### Stage 5.1 — Persona / Space identity + recurring Activities ✅ merged
 
-- Persona customization;
-- оформление Living Spaces;
-- achievements без pay-to-status;
-- совместные события и recurring activities;
-- social-first mini-games, которые создают повод разговаривать;
-- creator support;
-- косметическая экономика без pay-to-win;
-- более качественный discovery/ranking Spaces без покупки социального влияния;
-- PWA/mobile shell после стабилизации web/realtime.
+Выпущено как `0.5.0-alpha.1`:
 
-Параллельный UI/UX scope:
+- Persona Appearance: allowlisted accent/background/avatar-frame presets + status line;
+- privacy-aware appearance в обычном Persona profile;
+- Space Appearance: theme/cover/icon/welcome line;
+- privacy-aware bounded batch projection без HTTP N+1;
+- cosmetics не влияют на discovery ranking;
+- recurring Activities `none/daily/weekly/monthly` как canonical templates;
+- explicit timezone input и UTC `Z` output;
+- вычисляемый `next_starts_at` без бесконечной материализации occurrence rows;
+- RSVP `interested/going`;
+- creator/scoped manager может отменять Activity;
+- экран «Стиль образа», Space appearance в discovery и «Жизнь пространства».
 
-- визуальная индивидуальность Persona;
-- customization Spaces;
-- social-first game surfaces;
-- creator support flows;
-- polished onboarding;
-- унификация и постепенное удаление legacy styles/components.
+### Stage 5.2 — Earned Achievements & Conversation Rounds 🚧 release gate
+
+Development line: `0.5.1-alpha.0`.
+
+Реализовано:
+
+- system-only achievements catalog + account awards;
+- read-only `/achievements/v1` API;
+- achievement source/context доступен только владельцу Account;
+- публичный achievement shelf подчиняется profile privacy/block;
+- достижения `first_host`, `conversation_starter`, `first_round_response`;
+- достижения не дают trust/permissions/reputation/discovery advantage;
+- Activity-scoped Conversation Rounds: `icebreaker`, `choice`, `story_chain`;
+- один open round на Activity — PostgreSQL invariant;
+- один response на Account+round;
+- active Space membership обязательно для участия;
+- Activity creator или scoped owner/moderator управляет round;
+- Account-level block скрывает round responses в обе стороны;
+- отмена Activity завершает open round в той же транзакции;
+- public Persona achievement shelf;
+- собственная история достижений;
+- Conversation Rounds встроены в «Жизнь пространства»;
+- choice показывает распределение, но не определяет победителя;
+- отсутствуют score/rank/prize/stake/currency/payment поля.
+
+Gate перед `0.5.1-alpha.1`:
+
+- additive migration graph с одной Alembic head;
+- backend compile/import/security/contracts;
+- SPA security guard + production build;
+- abuse/privacy/permissions self-review;
+- changelog/versioning/UI kit sync;
+- canonical `VERSION` bump только после зелёного functional exact-head CI;
+- повторный exact-head CI уже на `0.5.1-alpha.1`;
+- затем PR переводится из draft и сливается в `main`.
+
+### Следующие Stage 5 slices
+
+После `0.5.1` рассматриваются отдельно и только после product review:
+
+- дополнительные social activity templates без leaderboard/stakes;
+- creator support без продажи прав/trust;
+- косметическая экономика без pay-to-win/pay-to-status;
+- улучшение discovery quality без покупки социального влияния;
+- PWA/mobile shell после стабилизации web/realtime;
+- polished onboarding и дальнейшее удаление legacy styles/components.
 
 ## Pre-beta hardening
 
@@ -162,6 +195,8 @@ Stage 3 включён в релизную базу `0.3.0-alpha.1`.
 - Space moderator != platform moderator.
 - Деньги не покупают trust и moderation power.
 - Блокировка Account не обходится новой Persona.
+- Achievements != reputation/permissions.
+- Social games создают разговор, а не победителей и ставки.
 - Communication quality first.
 - Никакой тюремной терминологии.
 - UI/UX развивается одновременно с доменной моделью.
