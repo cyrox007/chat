@@ -25,6 +25,7 @@
 - [`architecture.md`](architecture.md) — модули, домены, данные и границы ответственности.
 - [`client-architecture.md`](client-architecture.md) — SPA-first/API-first модель клиента.
 - [`api-and-realtime.md`](api-and-realtime.md) — HTTP API, auth/session и WebSocket v2.
+- [`security-and-privacy.md`](security-and-privacy.md) — security model, privacy boundaries и review checklist.
 - [`development.md`](development.md) — ветки, миграции, тесты и CI.
 - [`operations.md`](operations.md) — production-конфигурация и эксплуатационные ограничения.
 - [`release-checklist.md`](release-checklist.md) — release gate.
