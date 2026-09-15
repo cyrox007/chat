@@ -9,10 +9,11 @@ from settings import config
 
 logger = setup_logger(__name__)
 
+
 class Database:
     _engine = None
     _async_session_maker = None
-    
+
     @classmethod
     def get_engine(cls):
         if cls._engine is None:
@@ -27,7 +28,7 @@ class Database:
             )
             logger.info("Database engine initialized")
         return cls._engine
-    
+
     @classmethod
     def sessionmaker(cls):
         if cls._async_session_maker is None:
@@ -35,42 +36,45 @@ class Database:
                 bind=cls.get_engine(),
                 expire_on_commit=False,
                 autoflush=False,
-                class_=AsyncSession
+                class_=AsyncSession,
             )
         return cls._async_session_maker
-    
+
     @classmethod
     async def get_session(cls) -> AsyncSession:
-        """Основной метод получения сессии, совместимый с вашим декоратором"""
+        """Return a connected async session for legacy decorators and services."""
         session = cls.sessionmaker()()
         try:
-            # Проверка соединения с явным указанием text()
             await session.execute(text("SELECT 1"))
             return session
-        except (InterfaceError, OperationalError) as e:
+        except (InterfaceError, OperationalError) as exc:
             await session.close()
-            logger.error(f"Database connection error: {str(e)}")
+            logger.error("Database connection error: %s", exc)
             raise
-    
+
     @classmethod
     async def session_generator(cls) -> AsyncGenerator[AsyncSession, None]:
-        """Для FastAPI Depends"""
+        """FastAPI dependency for code that uses Depends."""
         session = await cls.get_session()
         try:
             yield session
         finally:
             await session.close()
-    
+
     @classmethod
     async def health_check(cls) -> bool:
+        session = None
         try:
-            async with cls.get_session() as session:
-                await session.execute(text("SELECT 1"))
+            session = await cls.get_session()
+            await session.execute(text("SELECT 1"))
             return True
-        except Exception as e:
-            logger.error(f"Health check failed: {str(e)}")
+        except Exception as exc:
+            logger.error("Health check failed: %s", exc)
             return False
-    
+        finally:
+            if session is not None:
+                await session.close()
+
     @classmethod
     async def dispose(cls):
         if cls._engine:
