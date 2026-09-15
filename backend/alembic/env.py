@@ -32,6 +32,7 @@ from components.identity.model import (
     PrivacySettings,
     RolePermission,
 )
+from components.space.model import SpaceMembership, SpaceSettings, SpaceTag
 
 target_metadata = User.__table__.metadata
 
