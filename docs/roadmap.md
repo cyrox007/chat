@@ -4,7 +4,7 @@
 
 Released: **`0.5.2-alpha.1`**.
 
-Next development line: **`0.5.3-alpha.0`** — Creator support & cosmetic economy foundation.
+In development: **`0.5.3-alpha.0`** — Creator Support & Cosmetic Gifts.
 
 PubChat остаётся alpha: основные продуктовые контуры сформированы, но production-like hardening, creator/discovery maturity и pre-beta эксплуатационные проверки ещё не завершены.
 
@@ -50,23 +50,47 @@ Earned achievements и Conversation Rounds без score/winner/prize/stake, ин
 
 Browser/native push не входит в `0.5.2`; domain inbox и reconciliation теперь являются базой для будущего delivery adapter.
 
-## Stage 5.4 — Creator support & cosmetic economy 🚧 `0.5.3-alpha.0`
+## Stage 5.4 — Creator Support & Cosmetic Gifts 🚧 `0.5.3-alpha.0`
 
-Цель: дать создателям и участникам способы поддерживать пространства и выражать отношение косметически, не превращая деньги в власть.
+Цель: дать людям спокойный способ благодарить Persona и поддерживать Spaces, не превращая gifts или будущие деньги в социальную власть.
 
-Первый slice:
+### Реализовано в ветке
 
-- `CreatorProfile` / support eligibility без влияния на trust;
-- каталог косметических gifts и entitlements;
-- immutable ownership/support ledger;
-- получение и отображение gifts в Persona/Space context;
-- privacy-aware sender/recipient projections;
-- manager не получает moderation/discovery boost за поддержку;
-- no paid role / no paid trust / no paid ban immunity;
-- сначала mock/internal support records, реальные payments только после отдельного financial/security review;
-- UI/UX без агрессивных донатных механик и dark patterns.
+- opt-in `CreatorSupportProfile` для Persona;
+- opt-in `SpaceSupportSettings` для Spaces;
+- allowlisted `GiftDefinition` catalog без price/currency;
+- append-only `SupportLedgerEntry` с snapshot labels;
+- `CosmeticEntitlement`, отделённый от permissions/trust/reputation;
+- Persona gifts соблюдают profile privacy + Account-level block;
+- Space gifts требуют active membership;
+- self-gift Persona запрещён;
+- owner не может отправлять gift собственному Space;
+- максимум 20 внутренних gifts с Account за rolling 24h;
+- публичный shelf показывает только gift + aggregate count;
+- sender/message доступны только recipient/manager private history;
+- historical ledger переживает удаление Persona/Space через `SET NULL` live references + snapshots;
+- `/support/v1` contract;
+- Persona opt-in/history встроены в «Стиль образа»;
+- support shelf + gift picker встроены в Persona profile;
+- отдельный `/spaces/:uid/support` с Space shelf, gift flow и manager settings/history;
+- desktop/app-menu context navigation без нового mobile bottom-nav item;
+- contract regressions запрещают payment/balance/price/power fields и ledger mutation routes;
+- отдельный domain-document `creator-support-v1.md`.
 
-Release gate: additive migrations, server-side entitlement rules, abuse/privacy review, SPA build, exact-head CI → version bump → второй CI.
+### Product boundary
+
+`0.5.3` остаётся бесплатным/internal support slice. В нём нет checkout, payment provider, wallet, currency, balance, payout, refund/chargeback, paid discovery, paid trust, paid moderation role или paid ban immunity.
+
+Реальные payments требуют отдельного financial/security review и отдельной transaction/fraud/idempotency модели.
+
+### Осталось до `0.5.3-alpha.1`
+
+- финальный abuse/privacy/permissions self-review;
+- docs/API/UI Kit sync;
+- functional exact-head backend/frontend CI на frozen head;
+- version bump + changelog/version docs;
+- второй exact-head CI на versioned head;
+- squash merge в `main`.
 
 ## Stage 5.5 — Discovery quality
 
@@ -74,8 +98,9 @@ Release gate: additive migrations, server-side entitlement rules, abuse/privacy 
 - intent/interests/shared-context recommendations;
 - freshness/activity signals и diversity controls;
 - block/privacy invariants;
-- отсутствие покупки органического trust/ranking;
-- объяснимые recommendation reasons там, где они полезны.
+- отсутствие покупки organic trust/ranking;
+- explainable recommendation reasons там, где они полезны;
+- support/gift counts не становятся discovery ranking signal.
 
 ## Stage 5.6 — Web application maturity
 
@@ -101,14 +126,16 @@ Release gate: additive migrations, server-side entitlement rules, abuse/privacy 
 - DB profiling;
 - Redis failure/recovery;
 - slow-client/backpressure scenarios;
-- notification reconciliation load/idempotency tests.
+- notification reconciliation load/idempotency tests;
+- support/gift abuse-rate and concurrent-send hardening before monetization.
 
 ### Security/privacy
 - session/cookie/CSRF review;
 - upload/media review;
 - moderation/report/appeal review;
 - privacy side-channel review;
-- Account block coverage для всех social surfaces.
+- Account block coverage для всех social surfaces;
+- financial threat model before any real payment provider integration.
 
 ### Operations
 - structured logs/metrics/error tracking;
