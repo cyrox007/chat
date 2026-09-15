@@ -14,16 +14,24 @@ from components.engagement.schemas import (
 
 class EngagementContractTests(unittest.TestCase):
     def test_versioned_engagement_routes_are_registered(self):
-        paths = {route.path for route in app.routes}
-        expected = {
-            "/appearance/v1/personas/{persona_uid}",
-            "/appearance/v1/me/persona",
-            "/appearance/v1/spaces/{space_uid}",
-            "/activities/v1/spaces/{space_uid}",
-            "/activities/v1/spaces/{space_uid}/{activity_uid}",
-            "/activities/v1/{activity_uid}/rsvp",
+        route_methods = {
+            (route.path, method)
+            for route in app.routes
+            for method in (getattr(route, "methods", None) or set())
         }
-        self.assertTrue(expected.issubset(paths))
+        expected = {
+            ("/appearance/v1/me/persona", "GET"),
+            ("/appearance/v1/me/persona", "PATCH"),
+            ("/appearance/v1/personas/{persona_uid}", "GET"),
+            ("/appearance/v1/spaces/{space_uid}", "GET"),
+            ("/appearance/v1/spaces/{space_uid}", "PATCH"),
+            ("/activities/v1/spaces/{space_uid}", "GET"),
+            ("/activities/v1/spaces/{space_uid}", "POST"),
+            ("/activities/v1/spaces/{space_uid}/{activity_uid}", "PATCH"),
+            ("/activities/v1/{activity_uid}/rsvp", "PUT"),
+            ("/activities/v1/{activity_uid}/rsvp", "DELETE"),
+        }
+        self.assertTrue(expected.issubset(route_methods))
 
     def test_persona_appearance_is_cosmetic_only(self):
         fields = PersonaAppearanceUpdateRequest.model_fields
