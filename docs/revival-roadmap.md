@@ -8,7 +8,7 @@ UI/UX развивается **параллельно** с архитектур�
 
 Базовые правила UI/UX зафиксированы в `docs/ui-ux-kit.md`.
 
-## Stage 1 — Foundation & security baseline
+## Stage 1 — Foundation & security baseline ✅ merged
 
 Цель: сделать старое ядро безопасной отправной точкой, не меняя продукт целиком.
 
@@ -20,7 +20,7 @@ UI/UX развивается **параллельно** с архитектур�
 - исправить базовый DB health-check lifecycle;
 - добавить минимальный CI для Python syntax и frontend build.
 
-## Stage 2 — Identity v2
+## Stage 2 — Identity v2 ✅ merged
 
 Цель: перестать использовать монолитную таблицу `users` как identity + profile + security + reputation одновременно.
 
@@ -47,54 +47,65 @@ UI/UX развивается **параллельно** с архитектур�
 - public/private profile projections в интерфейсе;
 - системные feedback/error/loading patterns.
 
-## Stage 3 — Realtime v2
+## Stage 3 — Realtime v2 🚧 merge gate
 
 Цель: сделать realtime устойчивым и масштабируемым.
 
+Реализовано в `revival/realtime-v2`:
+
 - WebSocket auth без JWT в URL;
-- short-lived socket ticket или auth handshake;
-- Redis pub/sub;
-- presence;
+- one-time scoped socket tickets и auth handshake;
+- Redis pub/sub и distributed delivery;
+- distributed presence;
 - heartbeat;
-- reconnect/resume;
-- idempotent message IDs;
+- reconnect/resume с client state machine;
+- server-side idempotency по client event id (`frontId`);
 - rate limiting;
 - multi-worker support;
-- backpressure и telemetry.
+- browser access JWT только в памяти SPA;
+- privacy-aware DM policy на сервере;
+- исправление ownership read receipts;
+- cross-worker Space restrictions;
+- CI security regression guards.
 
 Параллельный UI/UX scope:
 
 - reconnect/offline states без пугающих full-screen ошибок;
-- delivery state сообщений;
-- presence/typing;
-- устойчивый mobile composer;
-- unread/reply navigation;
-- compact/comfortable chat density.
+- connection state в Spaces и DM;
+- composer блокируется, когда transport не принимает действия;
+- сохранение контекста при reconnect;
+- mobile-first Space и messenger surfaces;
+- терминология «пространство / ограничить доступ» вместо legacy punitive language.
 
-## Stage 4 — Spaces & social graph
+До merge этап проходит полный diff-review, backend contracts, security guards и production frontend build.
 
-Цель: реализовать продуктовую основу PubChat.
+## Stage 4 — Spaces & social graph ⏭ next
 
-- Living Spaces;
+Цель: реализовать продуктовую основу PubChat и заменить legacy `Room` продуктовой моделью Living Spaces без destructive rewrite.
+
+Первый scope:
+
+- `Space` domain contract поверх/вместо legacy Room projection;
 - membership и scoped roles;
-- friends/follow/block;
-- social intent;
-- privacy;
-- discovery;
-- events;
-- transparent moderation;
-- reports/appeals;
-- reputation отдельно от permissions.
+- friends/follow/block как account relationships;
+- social intent в discovery и коммуникации;
+- privacy-aware discovery;
+- правила пространства и membership policy;
+- transparent moderation actions;
+- reports/appeals foundation;
+- reputation отдельно от permissions;
+- события как часть Living Space history.
 
 Параллельный UI/UX scope:
 
-- Space discovery;
+- Space discovery вместо простого списка комнат;
 - Space header/presence/activity/history;
-- member and role surfaces;
+- member and scoped-role surfaces;
 - community rules;
-- events;
+- события;
 - consent-first DM entry points;
-- transparent moderation and appeal flows.
+- transparent moderation and appeal flows;
+- empty/loading/offline/mobile states как обязательная часть каждого flow.
 
 ## Stage 5 — Product identity
 
@@ -129,3 +140,4 @@ UI/UX развивается **параллельно** с архитектур�
 - Никакой тюремной терминологии.
 - UI/UX развивается одновременно с доменной моделью.
 - Mobile является полноценным основным сценарием, а не уменьшенной desktop-версией.
+- SPA является первым клиентом, но backend/API/realtime contracts проектируются reusable для будущих Android/iOS клиентов.
