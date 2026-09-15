@@ -1,4 +1,4 @@
-"""enforce exact target for support ledger
+"""enforce compatible target shape for support ledger
 
 Revision ID: k0a6d4f88002
 Revises: k0a6d4f88001
@@ -19,8 +19,8 @@ def upgrade() -> None:
     op.create_check_constraint(
         "ck_support_ledger_exact_target",
         "support_ledger_entries",
-        "(target_kind = 'persona' AND target_persona_uid IS NOT NULL AND target_room_uid IS NULL) OR "
-        "(target_kind = 'space' AND target_persona_uid IS NULL AND target_room_uid IS NOT NULL)",
+        "(target_kind = 'persona' AND target_room_uid IS NULL) OR "
+        "(target_kind = 'space' AND target_persona_uid IS NULL)",
     )
 
 
