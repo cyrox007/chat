@@ -5,7 +5,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.engagement.model import SpaceActivity
@@ -41,6 +41,10 @@ REASON_LABELS = {
 
 def _reason(code: str) -> dict:
     return {"code": code, "label": REASON_LABELS[code]}
+
+
+def _normalize_topic(value: str) -> str:
+    return " ".join(str(value).split()).strip().casefold()
 
 
 def _parse_created_at(value: str | None) -> datetime | None:
@@ -93,9 +97,13 @@ async def _viewer_context(
         purposes = {str(purpose) for (purpose,) in purpose_result.all() if purpose}
 
         tag_result = await db.execute(
-            select(SpaceTag.slug).where(SpaceTag.room_uid.in_(room_uids))
+            select(SpaceTag.label).where(SpaceTag.room_uid.in_(room_uids))
         )
-        tags = {str(slug).casefold() for (slug,) in tag_result.all() if slug}
+        tags = {
+            _normalize_topic(label)
+            for (label,) in tag_result.all()
+            if label and _normalize_topic(label)
+        }
 
     persona_result = await db.execute(
         select(Persona.social_intent)
@@ -148,11 +156,7 @@ async def _upcoming_by_room(
     )
     for room_uid, title, starts_at in event_result.all():
         candidates[room_uid].append(
-            {
-                "kind": "event",
-                "title": title,
-                "starts_at": starts_at,
-            }
+            {"kind": "event", "title": title, "starts_at": starts_at}
         )
 
     occurrence_result = await db.execute(
@@ -173,17 +177,12 @@ async def _upcoming_by_room(
     )
     for room_uid, title, starts_at in occurrence_result.all():
         candidates[room_uid].append(
-            {
-                "kind": "activity",
-                "title": title,
-                "starts_at": starts_at,
-            }
+            {"kind": "activity", "title": title, "starts_at": starts_at}
         )
 
     result: dict[UUID, dict] = {}
     for room_uid, items in candidates.items():
-        nearest = min(items, key=lambda item: item["starts_at"])
-        result[room_uid] = nearest
+        result[room_uid] = min(items, key=lambda item: item["starts_at"])
     return result
 
 
@@ -219,9 +218,9 @@ def _score_space(
         reasons.append(_reason("upcoming_activity"))
 
     space_tags = {
-        str(tag).strip().casefold()
+        _normalize_topic(tag)
         for tag in (space.get("tags") or [])
-        if str(tag).strip()
+        if _normalize_topic(tag)
     }
     shared_tag_count = len(space_tags & viewer_tags)
     if shared_tag_count:
@@ -245,7 +244,7 @@ def _score_space(
     member_count = max(0, int(space.get("member_count") or 0))
     score += min(6.0, math.log2(member_count + 1))
 
-    # Keep explanation compact and stable. Score itself intentionally stays server-only.
+    # Score stays server-only. Client receives a compact explanation instead.
     return score, reasons[:3]
 
 
@@ -266,7 +265,6 @@ def _diversify(items: list[dict]) -> list[dict]:
                     if best_score - candidate["_score"] <= 8:
                         chosen_index = index
                         break
-
         result.append(remaining.pop(chosen_index))
 
     return result
