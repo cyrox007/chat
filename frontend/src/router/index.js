@@ -41,6 +41,12 @@ const router = createRouter({
 			meta: { title: 'Разговор — PubChat', requestAuth: true },
 		},
 		{
+			path: '/spaces/:uid/community',
+			name: 'space-community',
+			component: () => import('../views/SpaceCommunityView.vue'),
+			meta: { title: 'Центр пространства — PubChat', requestAuth: true },
+		},
+		{
 			path: '/profile',
 			name: 'Profile',
 			component: () => import('../views/ProfileView.vue'),
