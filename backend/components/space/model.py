@@ -123,7 +123,7 @@ class SpaceRule(Database.Base):
 
     uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     room_uid = Column(UUID(as_uuid=True), ForeignKey("rooms.uid", ondelete="CASCADE"), nullable=False)
-    created_by_account_uid = Column(UUID(as_uuid=True), ForeignKey("accounts.uid", ondelete="CASCADE"), nullable=False)
+    created_by_account_uid = Column(UUID(as_uuid=True), ForeignKey("accounts.uid", ondelete="SET NULL"), nullable=True)
     title = Column(String(120), nullable=False)
     body = Column(Text, nullable=False)
     position = Column(Integer, nullable=False, default=0)
@@ -140,7 +140,7 @@ class SpaceEvent(Database.Base):
 
     uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     room_uid = Column(UUID(as_uuid=True), ForeignKey("rooms.uid", ondelete="CASCADE"), nullable=False)
-    created_by_account_uid = Column(UUID(as_uuid=True), ForeignKey("accounts.uid", ondelete="CASCADE"), nullable=False)
+    created_by_account_uid = Column(UUID(as_uuid=True), ForeignKey("accounts.uid", ondelete="SET NULL"), nullable=True)
     title = Column(String(120), nullable=False)
     description = Column(Text, nullable=True)
     starts_at = Column(DateTime, nullable=False)
