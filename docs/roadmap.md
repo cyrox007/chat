@@ -2,11 +2,11 @@
 
 ## Текущий статус
 
-Released: **`0.5.3-alpha.1`**.
+Released: **`0.5.4-alpha.1`**.
 
-Next development line: **`0.5.4-alpha.0`** — Discovery quality.
+Next development line: **`0.5.5-alpha.0`** — Web application maturity.
 
-PubChat остаётся alpha: основные продуктовые контуры сформированы, но production-like hardening, discovery maturity и pre-beta эксплуатационные проверки ещё не завершены.
+PubChat остаётся alpha: основные продуктовые контуры сформированы, но production-like hardening, web/PWA maturity и pre-beta эксплуатационные проверки ещё не завершены.
 
 ## Завершённые checkpoints
 
@@ -70,32 +70,40 @@ Browser/native push не входит в `0.5.2`; domain inbox и reconciliation
 - Persona opt-in/history встроены в «Стиль образа»;
 - support shelf + gift picker встроены в Persona profile;
 - отдельный `/spaces/:uid/support` с Space shelf, gift flow и manager settings/history;
-- desktop/app-menu context navigation без нового mobile bottom-nav item;
-- contract regressions запрещают payment/balance/price/power fields и ledger mutation routes;
-- отдельный domain-document `creator-support-v1.md`.
+- contract regressions запрещают payment/balance/price/power fields и ledger mutation routes.
 
-`0.5.3` остаётся бесплатным/internal support slice. В нём нет checkout, payment provider, wallet, currency, balance, payout, refund/chargeback, paid discovery, paid trust, paid moderation role или paid ban immunity.
+`0.5.3` остаётся бесплатным/internal support slice. Реальные payments требуют отдельного financial/security review и transaction/fraud/idempotency модели.
 
-Реальные payments требуют отдельного financial/security review и отдельной transaction/fraud/idempotency модели.
+### Stage 5.5 — Discovery Quality ✅ `0.5.4-alpha.1`
 
-## Stage 5.5 — Discovery quality 🚧 `0.5.4-alpha.0`
+- новый `/discovery/v1/spaces`; стабильный `/spaces/v1` catalog не сломан;
+- eligibility/privacy применяется до ranking;
+- Account-level block подавляет новую owner-led публичную рекомендацию;
+- недавняя активность считается по разным авторам, а не raw message volume;
+- учитываются upcoming Activity/Event, shared topics/purpose, explicit social intent, modest freshness/member-count context;
+- private/unlisted Space без active membership не раскрывает внутренний upcoming context;
+- server-only score не входит в API;
+- до трёх объяснимых причин «Почему здесь»;
+- bounded candidate pool до 200 Spaces;
+- diversity pass уменьшает однообразие purpose без обхода filters/privacy;
+- legacy `Room.rating`, gifts/support, price/currency/payment не участвуют в ranking;
+- SPA Discovery переведён на новый endpoint и показывает reasons + nearest allowed upcoming item;
+- отдельные domain и UX contracts для organic discovery.
 
-Следующий продуктовый slice.
+Известное alpha-ограничение organic-v1: candidate pool пока начинается с bounded canonical catalog, отсортированного по новизне. Очень старый Space вне первых 200 кандидатов может не попасть в персонализированный ranking даже при новой активности. До beta candidate generation будет собираться из нескольких bounded источников (recent activity/upcoming/shared context), а не через unbounded scan.
 
-- activity-aware Space discovery;
-- intent/interests/shared-context recommendations;
-- freshness/activity signals и diversity controls;
-- block/privacy invariants;
-- отсутствие покупки organic trust/ranking;
-- explainable recommendation reasons там, где они полезны;
-- support/gift counts не становятся discovery ranking signal.
+## Stage 5.6 — Web application maturity 🚧 `0.5.5-alpha.0`
 
-## Stage 5.6 — Web application maturity
+Следующий продуктово-технический slice:
 
-- PWA shell/installability;
-- notification worker adapter и подготовка native push contracts;
+- PWA manifest/installability и offline shell;
+- service-worker strategy без кеширования security-sensitive API/auth responses;
+- notification worker adapter foundation и reusable delivery contracts;
 - frontend state/testing cleanup;
-- дальнейшее удаление legacy styles/components.
+- route/error/loading/offline consistency;
+- дальнейшее удаление legacy styles/components;
+- accessibility pass для новых Stage 5 surfaces;
+- подготовка SPA contracts к future Android/iOS clients без browser-only business logic.
 
 ## Stage 6 — Pre-beta hardening
 
@@ -115,7 +123,8 @@ Browser/native push не входит в `0.5.2`; domain inbox и reconciliation
 - Redis failure/recovery;
 - slow-client/backpressure scenarios;
 - notification reconciliation load/idempotency tests;
-- support/gift abuse-rate and concurrent-send hardening before monetization.
+- support/gift abuse-rate hardening before monetization;
+- discovery candidate generation beyond newest-catalog bias.
 
 ### Security/privacy
 - session/cookie/CSRF review;
@@ -154,6 +163,8 @@ Beta назначается только когда launch-critical journeys р�
 - Space moderator != Platform moderator.
 - Деньги не покупают trust/moderation authority.
 - Account block нельзя обойти другой Persona.
+- Discovery ranking не расширяет eligibility/privacy.
+- Organic discovery нельзя купить через gift/support.
 - Communication quality first.
 - Никакой тюремной терминологии.
 - SPA — первый клиент, contracts reusable для Android/iOS.
