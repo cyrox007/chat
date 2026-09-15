@@ -68,8 +68,8 @@ class SpaceCreateRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_visibility_policy(self):
-        if self.visibility == "private" and self.join_policy == "open":
-            raise ValueError("Private spaces cannot use open join policy")
+        if self.visibility == "private" and self.join_policy != "invite":
+            raise ValueError("Private spaces must use invite-only join policy")
         return self
 
 
