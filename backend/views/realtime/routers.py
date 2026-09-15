@@ -1,10 +1,15 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
+from components.identity.model import Account
 from components.realtime import RealtimeUnavailable, realtime_service
 from components.realtime.schemas import RealtimeTicketRequest
 from components.room.model import Room, RoomBan
+from components.space.model import SpaceMembership
 from database import Database
 
 
@@ -27,11 +32,36 @@ def install(app: FastAPI) -> None:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail={"error_type": "room_not_found"},
                 )
-            if await RoomBan.is_user_banned(db, payload.room_uid, account_uid):
+
+            normalized_account_uid = UUID(str(account_uid))
+            account = await db.get(Account, normalized_account_uid)
+            legacy_user_uid = (
+                account.legacy_user_uid
+                if account and account.legacy_user_uid
+                else normalized_account_uid
+            )
+
+            if await RoomBan.is_user_banned(db, payload.room_uid, legacy_user_uid):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail={"error_type": "room_access_denied"},
+                    detail={"error_type": "space_access_denied"},
                 )
+
+            membership_result = await db.execute(
+                select(SpaceMembership.uid).where(
+                    SpaceMembership.room_uid == payload.room_uid,
+                    SpaceMembership.account_uid == normalized_account_uid,
+                    SpaceMembership.status == "active",
+                ).limit(1)
+            )
+            has_active_membership = membership_result.scalar_one_or_none() is not None
+            is_owner = room.owner_uid == legacy_user_uid
+            if not is_owner and not has_active_membership:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"error_type": "space_membership_required"},
+                )
+
             resource_uid = payload.room_uid
 
         try:
