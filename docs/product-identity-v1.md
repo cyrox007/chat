@@ -1,6 +1,6 @@
 # PubChat Stage 5 — Product Identity & Engagement
 
-Рабочая линия после `0.4.0-alpha.1`: `0.5.0-alpha.x`.
+Рабочая линия после выпущенного `0.4.0-alpha.1`: `0.5.0-alpha.x`.
 
 ## Цель
 
@@ -10,15 +10,14 @@
 
 ### Persona Appearance
 
-Persona может управлять собственным визуальным образом независимо от Account/security:
+Persona управляет собственным визуальным образом независимо от Account/security:
 
 - accent/theme preset;
 - profile background preset;
 - avatar frame preset;
-- status line;
-- optional compact visual badges.
+- status line.
 
-Appearance — косметический слой. Он не влияет на trust, permissions, moderation или discovery ranking.
+Appearance — косметический слой. Он не влияет на trust, permissions, moderation или discovery ranking. Публичное чтение appearance выполняется только после той же privacy/block проверки, которая разрешает просмотр Persona-профиля. Если профиль скрыт, appearance не становится обходным каналом утечки.
 
 ### Space Appearance
 
@@ -29,23 +28,41 @@ Living Space получает визуальную индивидуальнос�
 - ambient icon/emoji;
 - short welcome line.
 
-Оформлением управляют только scoped owner/moderator согласно отдельным permissions. Оно не меняет membership policy и не повышает discovery rank за деньги.
+Оформлением управляют только scoped owner/moderator. Оно не меняет membership policy, permissions и discovery rank.
+
+Для Space Discovery используется bounded batch contract до 100 UID. Он возвращает только те Spaces, которые viewer вправе разрешить: public/unlisted или private при ownership/active membership. Недоступные private UID просто не возвращаются. Это сохраняет privacy и убирает HTTP N+1 на карточках discovery.
 
 ### Recurring Activities
 
-События Stage 4 получают социальную надстройку — Activity:
+Activity — социальная надстройка над Living Space для повторных встреч:
 
-- recurring schedule;
 - host/creator;
-- activity type;
+- allowlisted activity type;
+- базовый `starts_at` с обязательной explicit timezone;
+- recurrence rule `none/daily/weekly/monthly`;
 - lightweight participant intent (`going` / `interested`);
-- optional template for future social-first games.
+- creator или scoped manager может отменить activity.
 
 Activity существует для повторных встреч и разговора, а не для азартной механики.
 
-`recurrence` хранится как компактное правило (`none/daily/weekly/monthly`) вместе с базовым `starts_at`. В первом slice PubChat **не материализует заранее бесконечную серию строк в БД** и не запускает cron, создающий события на годы вперёд. Текущая запись является шаблоном регулярной активности. Вычисление ближайших occurrence/окон будет отдельным сервисным слоем, когда появятся reminder/notification механики. Это сохраняет модель предсказуемой для SPA и будущих native-клиентов.
+`recurrence` хранится как компактное правило вместе с базовым `starts_at`. PubChat **не материализует заранее бесконечную серию строк в БД** и не запускает cron, создающий события на годы вперёд. API вычисляет `next_starts_at` при чтении, сохраняя одну canonical запись-шаблон. Все engagement timestamps наружу сериализуются как explicit UTC (`Z`).
 
 RSVP относится к Activity-шаблону и означает устойчивое намерение участвовать в этой активности. Когда позже появятся occurrence-specific attendance/reminders, они будут отдельной сущностью и не изменят текущий контракт задним числом.
+
+Список Activities загружает RSVP counters и viewer RSVP bulk-запросами, без N+1 на каждую карточку.
+
+## SPA / UI
+
+Первый slice включает:
+
+- экран «Стиль образа»;
+- privacy-aware appearance в обычном профиле Persona;
+- Space appearance в Discovery без влияния на сортировку;
+- экран «Жизнь пространства»;
+- ближайший occurrence recurring activity;
+- RSVP `Интересно` / `Иду`;
+- отмену activity creator/manager;
+- mobile-first routes и context navigation.
 
 ## Инварианты
 
@@ -54,7 +71,7 @@ RSVP относится к Activity-шаблону и означает усто�
 - Cosmetics != permissions.
 - Space appearance != discovery power.
 - Paid cosmetic content, если появится позже, не даёт moderation/trust/reputation преимуществ.
-- Все новые UI surfaces должны работать mobile-first в SPA и использовать существующий UI Kit.
+- Все новые UI surfaces работают mobile-first в SPA и используют существующий UI Kit.
 - Backend contracts проектируются reusable для будущих Android/iOS клиентов.
 
 ## Не входит в первый slice
@@ -65,15 +82,22 @@ RSVP относится к Activity-шаблону и означает усто�
 - loot boxes / casino mechanics;
 - marketplace;
 - transfer/sale of Account, Persona, Space roles or reputation;
-- competitive ranking, который можно купить.
+- competitive ranking, который можно купить;
+- occurrence-specific reminders/attendance history.
 
 ## Release gate первого slice
 
-- additive migrations only;
+- Stage 5 branch синхронизирован с `main@0.4.0-alpha.1`;
+- additive migration only;
+- одна Alembic head;
 - typed `/appearance/v1` and `/activities/v1` contracts;
 - no privileged fields in client-writable DTO;
 - privacy/scoped-role enforcement server-side;
+- bounded batch appearance contract;
+- explicit timezone/UTC API contract;
 - contract tests;
 - production SPA build;
 - mobile Persona/Space customization surfaces;
-- no Stage 5 merge until Stage 4 is released and Stage 5 rebased/synchronized with `main`.
+- final privacy/permissions/migration self-review;
+- canonical version bump только после зелёного functional exact-head CI;
+- повторный exact-head CI уже на финальной версии перед merge.
