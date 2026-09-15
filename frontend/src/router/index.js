@@ -35,6 +35,12 @@ const router = createRouter({
 			meta: { title: 'Приглашения — PubChat', requestAuth: true },
 		},
 		{
+			path: '/safety',
+			name: 'safety',
+			component: () => import('../views/SafetyCenterView.vue'),
+			meta: { title: 'Безопасность — PubChat', requestAuth: true },
+		},
+		{
 			path: '/spaces/:uid',
 			name: 'space',
 			component: () => import('../views/MainView.vue'),
@@ -45,6 +51,12 @@ const router = createRouter({
 			name: 'space-community',
 			component: () => import('../views/SpaceCommunityView.vue'),
 			meta: { title: 'Центр пространства — PubChat', requestAuth: true },
+		},
+		{
+			path: '/spaces/:uid/moderation',
+			name: 'space-moderation',
+			component: () => import('../views/SpaceModerationView.vue'),
+			meta: { title: 'Модерация пространства — PubChat', requestAuth: true },
 		},
 		{
 			path: '/profile',
