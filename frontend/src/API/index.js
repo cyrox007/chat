@@ -1,5 +1,6 @@
 import axios from "axios";
 import store from "@/stores";
+import { clearAccessToken, getAccessToken, setAccessToken } from "@/API/session";
 
 const $api = axios.create({
     withCredentials: true,
@@ -10,10 +11,12 @@ let isRefreshing = false;
 let failedQueue = [];
 
 const clearSessionStorage = () => {
-    localStorage.removeItem('access_token');
+    clearAccessToken();
     localStorage.removeItem('auth');
     localStorage.removeItem('user');
     localStorage.removeItem('identity');
+    // Remove bearer tokens left by pre-Realtime-v2 builds.
+    localStorage.removeItem('access_token');
 };
 
 const expireSession = () => {
@@ -39,7 +42,7 @@ const processQueue = (error = null, accessToken = null) => {
 };
 
 $api.interceptors.request.use((config) => {
-    const accessToken = localStorage.getItem('access_token');
+    const accessToken = getAccessToken();
     if (accessToken) {
         config.headers.Authorization = `Bearer ${accessToken}`;
     }
@@ -83,7 +86,7 @@ $api.interceptors.response.use(
                     { withCredentials: true }
                 );
                 const accessToken = refreshResponse.data.access_token;
-                localStorage.setItem('access_token', accessToken);
+                setAccessToken(accessToken);
                 originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                 processQueue(null, accessToken);
                 return $api(originalRequest);
@@ -96,8 +99,7 @@ $api.interceptors.response.use(
             }
         }
 
-        // 403 means "authenticated but not allowed". It must never silently log
-        // a user out (e.g. opening an admin-only screen as a normal member).
+        // 403 is an authorization decision, not an expired session.
         return Promise.reject(error);
     }
 );
