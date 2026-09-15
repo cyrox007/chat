@@ -1,71 +1,66 @@
 import jwt
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
-from settings import config
-from utils.logger import setup_logger  # Импортируем централизованный логгер
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
 
-# Создаем логгер для этого модуля
+from settings import config
+from utils.logger import setup_logger
+
 logger = setup_logger(__name__)
 
-def create_access_token(payload: Dict[str, Any]) -> str:
-    """Генерация JWT access-токена"""
-    try:
-        user_uid = str(payload.get("user_uid"))  # Преобразуем user_uid в строку
-        if not user_uid:
-            raise ValueError("user_uid is required")
 
-        logger.debug(f"Генерация access-токена для пользователя: {user_uid}")
-        return jwt.encode(
-            {
-                "sub": user_uid,  # Основной идентификатор пользователя
-                "exp": datetime.utcnow() + timedelta(minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES),
-                "type": "access",
-                #"data": {k: v for k, v in payload.items() if k != "user_uid"},  # Исключаем user_uid из data
-            },
-            config.JWT_ACCESS_SECRET_KEY,
-            algorithm=config.JWT_ALGORITHM,
-        )
-    except Exception as e:
-        logger.error(f"Ошибка генерации access-токена: {e}")
-        raise
+def _security_ready():
+    config.ensure_security_settings()
+
+
+def create_access_token(payload: Dict[str, Any]) -> str:
+    """Generate a signed short-lived access token."""
+    _security_ready()
+    user_uid = str(payload.get("user_uid") or "")
+    if not user_uid:
+        raise ValueError("user_uid is required")
+
+    return jwt.encode(
+        {
+            "sub": user_uid,
+            "exp": datetime.now(timezone.utc)
+            + timedelta(minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES),
+            "type": "access",
+        },
+        config.JWT_ACCESS_SECRET_KEY,
+        algorithm=config.JWT_ALGORITHM,
+    )
 
 
 def create_refresh_token(payload: Dict[str, Any]) -> str:
-    """Генерация JWT refresh-токена"""
-    try:
-        user_uid = str(payload.get("user_uid"))  # Преобразуем user_uid в строку
-        if not user_uid:
-            raise ValueError("user_uid is required")
+    """Generate a signed refresh token."""
+    _security_ready()
+    user_uid = str(payload.get("user_uid") or "")
+    if not user_uid:
+        raise ValueError("user_uid is required")
 
-        logger.debug(f"Генерация refresh-токена для пользователя: {user_uid}")
-        return jwt.encode(
-            {
-                "sub": user_uid,  # Основной идентификатор пользователя
-                "exp": datetime.utcnow() + timedelta(days=config.REFRESH_TOKEN_EXPIRE_DAYS),
-                "type": "refresh",
-                #"jti": jti,
-                #"data": {k: v for k, v in payload.items() if k != "user_uid"},  # Исключаем user_uid из data
-            },
-            config.JWT_REFRESH_SECRET_KEY,
-            algorithm=config.JWT_ALGORITHM,
-        )
-    except Exception as e:
-        logger.error(f"Ошибка генерации refresh-токена: {e}")
-        raise
+    return jwt.encode(
+        {
+            "sub": user_uid,
+            "exp": datetime.now(timezone.utc)
+            + timedelta(days=config.REFRESH_TOKEN_EXPIRE_DAYS),
+            "type": "refresh",
+        },
+        config.JWT_REFRESH_SECRET_KEY,
+        algorithm=config.JWT_ALGORITHM,
+    )
 
 
 def validate_access_token(token: str) -> Optional[Dict[str, Any]]:
-    """Валидация access-токена"""
+    """Validate an access token without ever writing token material to logs."""
+    _security_ready()
     try:
         if not token:
             logger.warning("Получен пустой access-токен")
             return None
-        
-        # Безопасное извлечение токена из заголовка
-        if token.startswith("Bearer "):
-            token = token.split(" ")[1]
 
-        logger.debug(f"Валидация access-токена: {token[:10]}...")  # Логируем начало токена
+        if token.startswith("Bearer "):
+            token = token.split(" ", 1)[1]
+
         payload = jwt.decode(
             token,
             config.JWT_ACCESS_SECRET_KEY,
@@ -78,25 +73,28 @@ def validate_access_token(token: str) -> Optional[Dict[str, Any]]:
             return None
 
         sub = payload.get("sub")
-        if not isinstance(sub, str):  # Проверяем, что sub — строка
+        if not isinstance(sub, str):
             logger.warning("Subject must be a string")
             return None
 
-        logger.info(f"Access-токен успешно валидирован для пользователя: {sub}")
         return {"user_uid": sub}
 
     except jwt.ExpiredSignatureError:
         logger.info("Истек срок действия access-токена")
         return None
-    except jwt.InvalidTokenError as e:
-        logger.warning(f"Невалидный access-токен: {e}")
+    except jwt.InvalidTokenError as exc:
+        logger.warning("Невалидный access-токен: %s", exc)
         return None
 
 
 def validate_refresh_token(token: str) -> Optional[Dict[str, Any]]:
-    """Валидация refresh-токена"""
+    """Validate a refresh token without ever writing token material to logs."""
+    _security_ready()
     try:
-        logger.debug(f"Валидация refresh-токена: {token[:10]}...")  # Логируем начало токена
+        if not token:
+            logger.warning("Получен пустой refresh-токен")
+            return None
+
         payload = jwt.decode(
             token,
             config.JWT_REFRESH_SECRET_KEY,
@@ -109,16 +107,15 @@ def validate_refresh_token(token: str) -> Optional[Dict[str, Any]]:
             return None
 
         sub = payload.get("sub")
-        if not isinstance(sub, str):  # Проверяем, что sub — строка
+        if not isinstance(sub, str):
             logger.warning("Subject must be a string")
             return None
 
-        logger.info(f"Refresh-токен успешно валидирован для пользователя: {sub}")
         return {"user_uid": sub}
 
     except jwt.ExpiredSignatureError:
         logger.info("Истек срок действия refresh-токена")
         return None
-    except jwt.InvalidTokenError as e:
-        logger.warning(f"Невалидный refresh-токен: {e}")
+    except jwt.InvalidTokenError as exc:
+        logger.warning("Невалидный refresh-токен: %s", exc)
         return None

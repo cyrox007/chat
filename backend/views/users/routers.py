@@ -1,80 +1,82 @@
 from fastapi import Depends, FastAPI, APIRouter, status
 
 from components.auth.middleware import auth_middle
+from components.auth.permissions import validate_profile_update
 from views.users import handlers
 
 
 def install(app: FastAPI):
-    router = APIRouter(prefix='/users')
+    router = APIRouter(prefix="/users")
 
     router.add_api_route(
-        '/registration',
-        methods=['POST'],
+        "/registration",
+        methods=["POST"],
         status_code=status.HTTP_201_CREATED,
-        endpoint=handlers.register
+        endpoint=handlers.register,
     )
     router.add_api_route(
-        '/check-username',
-        methods=['POST'],
+        "/check-username",
+        methods=["POST"],
         status_code=status.HTTP_200_OK,
-        endpoint=handlers.check_username
+        endpoint=handlers.check_username,
     )
     router.add_api_route(
-        '/check-email',
-        methods=['POST'],
+        "/check-email",
+        methods=["POST"],
         status_code=status.HTTP_200_OK,
-        endpoint=handlers.check_email
+        endpoint=handlers.check_email,
     )
     router.add_api_route(
-        '/check-phone',
-        methods=['POST'],
+        "/check-phone",
+        methods=["POST"],
         status_code=status.HTTP_200_OK,
-        endpoint=handlers.check_phone
+        endpoint=handlers.check_phone,
     )
     router.add_api_route(
-        '/login',
-        methods=['POST'],
+        "/login",
+        methods=["POST"],
         status_code=status.HTTP_200_OK,
-        endpoint=handlers.login
+        endpoint=handlers.login,
     )
     router.add_api_route(
-        '/logout',
-        methods=['GET'],
+        "/logout",
+        methods=["GET"],
         status_code=status.HTTP_200_OK,
-        endpoint=handlers.logout
+        endpoint=handlers.logout,
     )
     router.add_api_route(
-        '/by-uids',
-        methods=['POST'],
+        "/by-uids",
+        methods=["POST"],
         status_code=status.HTTP_200_OK,
-        endpoint=handlers.get_users_by_uids
+        endpoint=handlers.get_users_by_uids,
+        dependencies=[Depends(auth_middle)],
     )
     router.add_api_route(
-        '/{user_uid}',
-        methods=['GET'],
+        "/{user_uid}",
+        methods=["GET"],
         status_code=status.HTTP_200_OK,
         endpoint=handlers.get_user_by_uid,
-        dependencies=[Depends(auth_middle)]
+        dependencies=[Depends(auth_middle)],
     )
     router.add_api_route(
-        '/statuses',
-        methods=['POST'],
+        "/statuses",
+        methods=["POST"],
         status_code=status.HTTP_200_OK,
         endpoint=handlers.get_user_statuses,
-        dependencies=[Depends(auth_middle)]
+        dependencies=[Depends(auth_middle)],
     )
     router.add_api_route(
-        '/delete',
-        methods=['DELETE'],
+        "/delete",
+        methods=["DELETE"],
         status_code=status.HTTP_200_OK,
         endpoint=handlers.delete_user,
-        dependencies=[Depends(auth_middle)]
+        dependencies=[Depends(auth_middle)],
     )
     router.add_api_route(
-        '/update',
-        methods=['PUT'],
+        "/update",
+        methods=["PUT"],
         status_code=status.HTTP_200_OK,
         endpoint=handlers.update_profile,
-        dependencies=[Depends(auth_middle)]
+        dependencies=[Depends(auth_middle), Depends(validate_profile_update)],
     )
     app.include_router(router)
