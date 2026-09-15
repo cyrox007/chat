@@ -21,6 +21,10 @@ export default class AuthService {
 		return $api.get('/identity/v2/me');
 	}
 
+	static async getProfile(accountUid) {
+		return $api.get(`/identity/v2/profiles/${accountUid}`);
+	}
+
 	static async updatePersona(data) {
 		return $api.patch('/identity/v2/persona', data);
 	}
