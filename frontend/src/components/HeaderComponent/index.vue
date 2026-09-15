@@ -11,6 +11,7 @@
 				<RouterLink :to="{ name: 'people' }">Люди</RouterLink>
 				<RouterLink :to="{ name: 'messenger' }">Сообщения</RouterLink>
 				<RouterLink v-if="spaceContextRoute" class="context-link" :to="spaceContextRoute"><i class="fas fa-landmark" aria-hidden="true"></i>Центр</RouterLink>
+				<RouterLink v-if="spaceLifeRoute" class="context-link" :to="spaceLifeRoute"><i class="fas fa-mug-hot" aria-hidden="true"></i>Жизнь</RouterLink>
 			</nav>
 
 			<div class="topbar-actions">
@@ -40,8 +41,14 @@
 						<RouterLink role="menuitem" :to="profileRoute" @click="closeDropdown">
 							<i class="fas fa-user-circle" aria-hidden="true"></i><span>Мой образ</span>
 						</RouterLink>
+						<RouterLink role="menuitem" :to="{ name: 'persona-style' }" @click="closeDropdown">
+							<i class="fas fa-palette" aria-hidden="true"></i><span>Стиль образа</span>
+						</RouterLink>
 						<RouterLink v-if="spaceContextRoute" role="menuitem" :to="spaceContextRoute" @click="closeDropdown">
 							<i class="fas fa-landmark" aria-hidden="true"></i><span>Центр пространства</span>
+						</RouterLink>
+						<RouterLink v-if="spaceLifeRoute" role="menuitem" :to="spaceLifeRoute" @click="closeDropdown">
+							<i class="fas fa-mug-hot" aria-hidden="true"></i><span>Жизнь пространства</span>
 						</RouterLink>
 						<RouterLink role="menuitem" :to="{ name: 'invitations' }" @click="closeDropdown">
 							<i class="fas fa-envelope-open-text" aria-hidden="true"></i><span>Приглашения</span>
@@ -93,11 +100,13 @@ const isAuthenticated = computed(() => store.getters.isAuth);
 const currentUser = computed(() => store.getters.getUser || {});
 const isAdmin = computed(() => ['admin', 'superadmin'].includes(currentUser.value.global_role));
 const profileRoute = computed(() => ({ name: 'UserProfile', params: { uid: currentUser.value.uid } }));
-const spaceContextRoute = computed(() => {
+const spaceUid = computed(() => {
 	const uid = route.params?.uid;
-	if (!uid || !['space', 'space-community', 'space-moderation'].includes(String(route.name || ''))) return null;
-	return { name: 'space-community', params: { uid } };
+	if (!uid || !['space', 'space-community', 'space-life', 'space-moderation'].includes(String(route.name || ''))) return null;
+	return uid;
 });
+const spaceContextRoute = computed(() => spaceUid.value ? { name: 'space-community', params: { uid: spaceUid.value } } : null);
+const spaceLifeRoute = computed(() => spaceUid.value ? { name: 'space-life', params: { uid: spaceUid.value } } : null);
 const avatarFallback = computed(() => (currentUser.value.display_name || currentUser.value.username || '?').slice(0, 1).toUpperCase());
 const avatarUrl = computed(() => {
 	const avatar = currentUser.value.avatar;
