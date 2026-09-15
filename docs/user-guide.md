@@ -1,6 +1,6 @@
 # PubChat — руководство пользователя
 
-Документ описывает пользовательские функции выпущенного checkpoint PubChat `0.5.2-alpha.1`.
+Документ описывает пользовательские функции выпущенного checkpoint PubChat `0.5.3-alpha.1`.
 
 ## 1. Account и Persona
 
@@ -66,7 +66,7 @@ WebSocket использует одноразовый короткоживущи
 
 Раздел «Люди» использует privacy-aware discovery. Доступны follow/unfollow, friend request, accept/reject/remove friendship и block/unblock.
 
-Block действует на Account-level в обе стороны и влияет на discovery, профиль, DM и Conversation Round responses.
+Block действует на Account-level в обе стороны и влияет на discovery, профиль, DM, Conversation Round responses и gifts.
 
 ## 7. Приглашения в Spaces
 
@@ -158,13 +158,49 @@ Owner/moderator имеет отдельную scoped queue. Решения: warn
 
 Activity сейчас хранит canonical UTC instant. Для recurring schedule пока не сохраняется IANA timezone name, поэтому при переходе летнего/зимнего времени локальное wall-clock время weekly/monthly серии может сдвинуться на час. Reminder следует фактическому UTC schedule. Это известное alpha-ограничение и будет исправлено до beta на backend, а не client-side костылём.
 
-## 16. Что PubChat сознательно не делает
+## 16. Поддержка Persona и Spaces
+
+В `0.5.3-alpha.1` появились бесплатные внутренние gifts как спокойный способ сказать «спасибо». Это не магазин и не платёжная система.
+
+### Persona support
+
+В «Стиле образа» владелец может отдельно включить получение gifts и добавить короткую подпись. По умолчанию support выключен.
+
+В обычном Persona profile отображается агрегированный shelf: вид gift и количество. Другой пользователь может открыть picker и отправить один из allowlisted gestures, если support включён и privacy/block policy разрешает взаимодействие.
+
+Владелец видит свою private received history с sender label и optional message. Эта история не показывается другим пользователям.
+
+### Space support
+
+У Space есть отдельный раздел «Поддержка» `/spaces/:uid/support`.
+
+- shelf показывает агрегированные gifts;
+- отправлять gift может только active member при включённом support;
+- owner/moderator управляет opt-in settings;
+- owner/moderator видит private received history;
+- owner не может отправлять gift собственному Space.
+
+### Правила support
+
+- gift бесплатный и не имеет цены/валюты;
+- support не меняет trust, permissions, moderation power или discovery ranking;
+- sender не получает score/rank/streak;
+- Persona нельзя подарить gift самому себе;
+- Account-level block применяется и к support;
+- максимум 20 внутренних gifts с Account за rolling 24 часа;
+- параллельные sends одного Account сериализуются server-side для соблюдения лимита;
+- публичный shelf не показывает sender/message;
+- append-only ledger сохраняет historical snapshot даже после удаления исходной Persona/Space;
+- реальных checkout/payment/wallet/balance/refund/payout функций в `0.5.3` нет.
+
+## 17. Что PubChat сознательно не делает
 
 - не продаёт moderation roles;
 - не продаёт trust;
 - не использует платный рейтинг человека;
 - не делает dating swipe основным сценарием;
-- не превращает achievements в leaderboard;
+- не превращает achievements или gifts в leaderboard;
 - не использует casino/loot-box/stake механику;
-- не включает reminders без согласия пользователя;
+- не включает reminders или support без согласия пользователя;
+- не использует gift count как discovery/trust signal;
 - не скрывает причины moderation decisions за игровой терминологией.

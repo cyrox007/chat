@@ -38,6 +38,13 @@ from components.engagement.occurrence_model import ActivityOccurrence
 from components.engagement.round_model import ConversationRound, ConversationRoundResponse
 from components.notification.model import ActivityReminderPreference, UserNotification
 from components.moderation.model import ModerationAction, ModerationAppeal, ModerationReport
+from components.support.model import (
+    CosmeticEntitlement,
+    CreatorSupportProfile,
+    GiftDefinition,
+    SpaceSupportSettings,
+    SupportLedgerEntry,
+)
 from components.space.model import (
     SpaceEvent,
     SpaceHistoryEntry,

@@ -50,6 +50,8 @@
 				<button class="ui-button" type="submit" :disabled="saving">{{ saving ? 'Сохраняем…' : 'Сохранить стиль' }}</button>
 			</div>
 		</form>
+
+		<SupportSettings />
 	</main>
 </template>
 
@@ -57,6 +59,7 @@
 import { onMounted, reactive, ref } from 'vue';
 
 import EngagementService from '@/API/EngagementService';
+import SupportSettings from '@/components/Profile/SupportSettings.vue';
 
 const loading = ref(true);
 const saving = ref(false);

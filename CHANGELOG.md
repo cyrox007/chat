@@ -2,6 +2,51 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.5.3-alpha.1] — 2026-09-15
+
+Stage 5.4 — Creator Support & Cosmetic Gifts.
+
+### Support domain
+- opt-in Persona support и Space support settings;
+- allowlisted cosmetic gift catalog без price/currency;
+- append-only support ledger с sender/target snapshot labels;
+- cosmetic entitlements отделены от trust/permissions/reputation;
+- Persona gifts подчиняются profile privacy + Account-level block;
+- Space gifts требуют active membership;
+- self-gift Persona и owner→own-Space gift запрещены;
+- максимум 20 внутренних gifts с Account за rolling 24h;
+- anti-spam count защищён Account row lock от concurrent bypass;
+- public shelf показывает только gift + aggregate count;
+- sender/message остаются private recipient/manager history;
+- historical ledger сохраняется после удаления live target через `SET NULL` references + snapshots.
+
+### SPA / UX
+- support opt-in и private received history в «Стиле образа»;
+- Persona support shelf + calm gift picker в profile;
+- отдельный `/spaces/:uid/support`;
+- Space shelf/gift flow;
+- owner/moderator settings и private received history;
+- contextual desktop/app-menu navigation без отдельного mobile bottom-nav item;
+- no donor leaderboard, streak, urgency, wallet или currency UI.
+
+### Product/security boundaries
+- `/support/v1` typed contract;
+- writable DTO не содержит price/amount/currency/balance/score/rank/trust/role/payment fields;
+- support ledger не имеет public PATCH/DELETE API;
+- gift count не влияет на moderation, trust, permissions или discovery ranking;
+- реальные checkout/payment provider/payout/refund/chargeback flows отсутствуют и требуют отдельного financial/security review.
+
+### Quality gate
+До version bump успешно прошли:
+- additive migration graph с одной Alembic head;
+- backend compile/import/security/contracts;
+- SPA security regression guard + production build;
+- support abuse/privacy/permissions self-review;
+- docs/API/security/UI Kit sync;
+- functional exact-head CI на frozen feature head.
+
+После version bump выполняется повторный exact-head CI уже на `0.5.3-alpha.1`; merge разрешён только после его успешного завершения.
+
 ## [0.5.2-alpha.1] — 2026-09-15
 
 Stage 5.3 — Activity Occurrences & Notifications.

@@ -11,6 +11,7 @@
 				<RouterLink :to="{ name: 'messenger' }">Сообщения</RouterLink>
 				<RouterLink v-if="spaceContextRoute" class="context-link" :to="spaceContextRoute">Центр</RouterLink>
 				<RouterLink v-if="spaceLifeRoute" class="context-link" :to="spaceLifeRoute">Жизнь</RouterLink>
+				<RouterLink v-if="spaceSupportRoute" class="context-link" :to="spaceSupportRoute">Поддержка</RouterLink>
 			</nav>
 
 			<div class="topbar-actions">
@@ -42,6 +43,7 @@
 						<RouterLink role="menuitem" :to="{ name: 'notifications' }" @click="closeDropdown"><i class="far fa-bell"></i><span>Напоминания</span><small v-if="unreadNotifications" class="menu-count">{{ unreadLabel }}</small></RouterLink>
 						<RouterLink v-if="spaceContextRoute" role="menuitem" :to="spaceContextRoute" @click="closeDropdown"><i class="fas fa-landmark"></i><span>Центр пространства</span></RouterLink>
 						<RouterLink v-if="spaceLifeRoute" role="menuitem" :to="spaceLifeRoute" @click="closeDropdown"><i class="fas fa-mug-hot"></i><span>Жизнь пространства</span></RouterLink>
+						<RouterLink v-if="spaceSupportRoute" role="menuitem" :to="spaceSupportRoute" @click="closeDropdown"><i class="fas fa-gift"></i><span>Поддержка пространства</span></RouterLink>
 						<RouterLink role="menuitem" :to="{ name: 'invitations' }" @click="closeDropdown"><i class="fas fa-envelope-open-text"></i><span>Приглашения</span></RouterLink>
 						<RouterLink role="menuitem" :to="{ name: 'safety' }" @click="closeDropdown"><i class="fas fa-shield-halved"></i><span>Безопасность</span></RouterLink>
 						<RouterLink v-if="isAdmin" role="menuitem" :to="{ name: 'AdminDashboard' }" @click="closeDropdown"><i class="fas fa-user-shield"></i><span>Управление</span></RouterLink>
@@ -82,11 +84,12 @@ const isAdmin = computed(() => ['admin', 'superadmin'].includes(currentUser.valu
 const profileRoute = computed(() => ({ name: 'UserProfile', params: { uid: currentUser.value.uid } }));
 const spaceUid = computed(() => {
 	const uid = route.params?.uid;
-	if (!uid || !['space', 'space-community', 'space-life', 'space-moderation'].includes(String(route.name || ''))) return null;
+	if (!uid || !['space', 'space-community', 'space-life', 'space-support', 'space-moderation'].includes(String(route.name || ''))) return null;
 	return uid;
 });
 const spaceContextRoute = computed(() => spaceUid.value ? { name: 'space-community', params: { uid: spaceUid.value } } : null);
 const spaceLifeRoute = computed(() => spaceUid.value ? { name: 'space-life', params: { uid: spaceUid.value } } : null);
+const spaceSupportRoute = computed(() => spaceUid.value ? { name: 'space-support', params: { uid: spaceUid.value } } : null);
 const avatarFallback = computed(() => (currentUser.value.display_name || currentUser.value.username || '?').slice(0, 1).toUpperCase());
 const avatarUrl = computed(() => currentUser.value.avatar ? (/^https?:\/\//.test(currentUser.value.avatar) ? currentUser.value.avatar : `${apiBaseUrl}${currentUser.value.avatar}`) : '');
 const unreadLabel = computed(() => unreadNotifications.value > 99 ? '99+' : String(unreadNotifications.value));

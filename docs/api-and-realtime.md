@@ -69,6 +69,40 @@ POST /activity-occurrences/v1/activities/{activity_uid}/sync
 
 Reminder preferences никогда не запрашиваются для чужого Account через API.
 
+### `/support/v1`
+
+Выпущено в `0.5.3-alpha.1`. Consent-first internal gifts и cosmetic entitlements без payment/wallet/currency semantics.
+
+Основные operations:
+
+```text
+GET   /support/v1/catalog
+GET   /support/v1/me/profile
+PATCH /support/v1/me/profile
+GET   /support/v1/me/received
+GET   /support/v1/accounts/{account_uid}/shelf
+GET   /support/v1/personas/{persona_uid}/shelf
+POST  /support/v1/personas/{persona_uid}/gifts
+GET   /support/v1/spaces/{space_uid}/settings
+PATCH /support/v1/spaces/{space_uid}/settings
+GET   /support/v1/spaces/{space_uid}/shelf
+POST  /support/v1/spaces/{space_uid}/gifts
+GET   /support/v1/spaces/{space_uid}/received
+```
+
+Правила:
+
+- Persona/Space support выключен по умолчанию и включается владельцем/manager’ом;
+- Persona send/shelf подчиняется profile privacy и Account-level block;
+- Space send требует active membership;
+- Space settings/history доступны только scoped manager там, где операция требует управления;
+- public shelf агрегирует только gift + count и не раскрывает sender/message;
+- own/manager received history приватна;
+- ledger не имеет PATCH/DELETE API;
+- writable contract не содержит price/currency/balance/points/rank/trust/role/payment fields;
+- sender anti-spam limit сериализуется Account row lock;
+- gifts не меняют permissions, moderation power или discovery ranking.
+
 ## Realtime v2
 
 ### Handshake без credentials в URL
@@ -125,3 +159,4 @@ Privacy-sensitive API может намеренно отвечать `404`, чт
 8. Contract/regression coverage.
 9. Credentials не попадают в URL.
 10. Contract пригоден для SPA и будущих native clients.
+11. Cosmetic/support data не становится trust/permission/ranking signal автоматически.

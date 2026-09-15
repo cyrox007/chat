@@ -129,6 +129,22 @@ Engagement-поверхности должны усиливать разгово
 - запрещены confetti/jackpot/streak/leaderboard визуальные паттерны по умолчанию;
 - blocked Accounts не должны визуально появляться друг у друга через round surface.
 
+#### Support shelf & gift picker
+
+Creator support является вторичной социальной поверхностью, а не магазином.
+
+- публичный shelf показывает только icon/name/count;
+- counts не сортируют людей/Spaces и визуально не превращаются в «уровень популярности»;
+- sender/message никогда не появляются в публичном shelf;
+- собственная/manager received history визуально отделена от публичного профиля;
+- CTA — спокойный «Поддержать», без urgency/limited offer/countdown;
+- gift picker показывает смысл gesture, а не денежную «ценность»;
+- support opt-in объясняет, что функция не влияет на trust/permissions/discovery;
+- нет donor leaderboard, top supporter, streak, jackpot, confetti или whale-pattern;
+- нет wallet/balance/currency UI;
+- Space support живёт на контекстной странице и не получает отдельный пункт mobile bottom navigation;
+- support failure не ломает базовый Persona/Space surface.
+
 #### Activity + Round hierarchy
 
 Порядок визуального веса:
@@ -196,7 +212,7 @@ Moderation surface показывает:
 
 Опасные действия используют confirmation с ясным последствием, а не абстрактное «Вы уверены?».
 
-Engagement не создаёт отдельную moderation-систему: жалобы, ограничения, block и appeals продолжают использовать общий Safety/Moderation домен.
+Engagement/support не создаёт отдельную moderation-систему: жалобы, ограничения, block и appeals продолжают использовать общий Safety/Moderation домен.
 
 ## Responsive model
 
@@ -205,6 +221,8 @@ Engagement не создаёт отдельную moderation-систему: ж�
 Главная платформа UX. Один основной контекст на экран. Вторичные панели открываются bottom sheet/full-screen panel. Composer всегда остаётся доступным и не прыгает при появлении клавиатуры.
 
 Conversation Round на narrow viewport разворачивается внутри Activity в одну колонку; choice options становятся полноширинными touch targets, а список ответов остаётся вторичным раскрываемым блоком.
+
+Gift picker на narrow viewport использует 1–2 колонки и полноширинный submit; Space support остаётся contextual route, а не пятым элементом bottom navigation.
 
 ### Tablet
 
@@ -259,5 +277,6 @@ Feature не считается завершённой, если:
 - важное состояние кодируется только цветом;
 - пользователь не понимает, что произойдёт после destructive action;
 - screen нарушает Account != Persona или Reputation != Permission;
-- engagement UI создаёт leaderboard/pay-to-status pressure;
+- engagement/support UI создаёт leaderboard/pay-to-status pressure;
+- gift UI создаёт wallet/currency semantics до появления реального financial domain;
 - новая функция ухудшает путь к общению.

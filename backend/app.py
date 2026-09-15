@@ -37,6 +37,7 @@ def create_app() -> FastAPI:
     from views.service import routers as service_routes
     from views.social import routers as social_routes
     from views.spaces import routers as spaces_routes
+    from views.support import routers as support_routes
     from views.users import routers as user_routes
 
     app = FastAPI(title="PubChat API", version=PROJECT_VERSION, lifespan=lifespan)
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
     achievement_routes.install(app)
     realtime_routes.install(app)
     notification_routes.install(app)
+    support_routes.install(app)
     user_routes.install(app)
     social_routes.install(app)
     spaces_routes.install(app)
