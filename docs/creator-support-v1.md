@@ -1,87 +1,163 @@
 # PubChat Stage 5.4 — Creator Support & Cosmetic Gifts
 
-Development line: `0.5.3-alpha.x`.
+Development line after `0.5.2-alpha.1`: `0.5.3-alpha.x`.
 
-## Цель
+## Зачем нужен этот slice
 
-Дать пользователям спокойный способ сказать «спасибо» Persona или Space и сохранить историю поддержки, не превращая PubChat в магазин социального влияния.
+PubChat позволяет благодарить людей и поддерживать атмосферу Spaces, но не превращает деньги или количество подарков в социальную власть.
 
-Первый checkpoint **не содержит реальных платежей**. Gifts — внутренние бесплатные cosmetic gestures. Эта граница намеренна: финансовый checkout, провайдеры, refunds/chargebacks и платёжная безопасность требуют отдельного review.
+Первый support slice намеренно **не является платёжной системой**. Он вводит consent-first social gifts, append-only history и cosmetic entitlements без checkout, wallet, currency, price, paid ranking или purchaseable permissions.
 
-## Инварианты
+## Базовые инварианты
 
-- support opt-in: Persona/Space сами включают получение gifts;
-- gift не меняет trust, role, permissions, moderation power или discovery ranking;
-- нет balance/wallet/price/currency/points/score/rank;
-- Persona нельзя подарить gift самому себе;
-- owner не может отправить gift собственному Space;
-- Space gift требует active membership;
-- Persona gift соблюдает profile privacy и Account-level block;
-- не более 20 внутренних gifts с одного Account за rolling 24 часа;
-- публичный shelf показывает только gift + aggregate count;
-- sender/message доступны только приватной recipient/manager history;
-- support ledger append-only через публичный API;
-- ledger хранит snapshot labels, чтобы историческая запись сохраняла смысл после rename/delete;
-- cosmetic entitlement не является authority entitlement.
+- support всегда opt-in для Persona и Space;
+- gift — социальный gesture, а не единица валюты;
+- количество gifts не является рейтингом Persona/Space;
+- support не влияет на trust, moderation authority, scoped roles, permissions, discovery ranking или ban/appeal outcome;
+- sender не получает score, streak, rank или reward за отправку;
+- Account-level block нельзя обойти gift API;
+- profile visibility применяется до Persona gift/shelf projection;
+- Space gift требует актуальное active membership;
+- owner не может отправлять gifts собственному Space;
+- self-gift Persona запрещён;
+- один Account может отправить не более 20 внутренних gifts за rolling 24h;
+- реальные payments не входят в `0.5.3`.
 
-## Domain model
+## Consent settings
 
-- `CreatorSupportProfile` — opt-in и короткая публичная заметка Persona support;
-- `SpaceSupportSettings` — opt-in Space;
-- `GiftDefinition` — allowlisted cosmetic catalog;
-- `SupportLedgerEntry` — immutable support history;
-- `CosmeticEntitlement` — живой cosmetic artifact для Persona или Space.
+### Persona
 
-## Начальный каталог
+`CreatorSupportProfile` принадлежит Account и применяется к primary Persona текущей Identity v2.
 
-- ☕ Тёплая кружка — Persona/Space;
-- ✨ Искра — Persona/Space;
-- 👏 Аплодисменты — Persona/Space;
-- 💐 Букет — Persona;
-- 🏮 Фонарик — Space.
+Поля:
 
-В каталоге нет цены. Реальная monetization не моделируется как скрытый numeric field.
+- `enabled` — разрешено ли другим людям отправлять gifts;
+- `note` — короткая необязательная подпись владельца.
 
-## API
+По умолчанию support выключен.
 
-Development prefix: `/support/v1`.
+### Space
 
-План первого checkpoint:
+`SpaceSupportSettings` принадлежит Space. Изменять settings могут только scoped owner/moderator. По умолчанию support выключен.
 
-- catalog;
-- собственные support settings;
-- собственная received history;
-- Persona public shelf + send gift;
+## Gift catalog
+
+`GiftDefinition` — allowlisted server-owned каталог.
+
+Первый набор:
+
+- `applause` 👏;
+- `bouquet` 💐;
+- `lantern` 🏮;
+- `spark` ✨;
+- `warm_cup` ☕.
+
+Каждый gift имеет target scope `persona`, `space` или `both`.
+
+В модели и writable DTO отсутствуют `price`, `amount`, `currency`, `balance`, `points`, `score`, `rank`, `trust`, `role`, `permission`, `payment`, `winner`, `prize`.
+
+## Append-only support ledger
+
+`SupportLedgerEntry` фиксирует факт социального gesture.
+
+Хранятся sender reference, target kind, optional live Persona/Space reference, snapshot target label, snapshot sender label, gift code, optional message и timestamp.
+
+Ledger не имеет PATCH/DELETE API. Target foreign keys используют `SET NULL`, поэтому удаление Persona/Space не переписывает историю. Snapshot labels сохраняют человеческий смысл старой записи.
+
+DB constraint запрещает несовместимую вторую target reference, но разрешает historical row без live target после `SET NULL`.
+
+## Cosmetic entitlement
+
+Каждый отправленный gift создаёт `CosmeticEntitlement` для живой Persona или Space.
+
+Entitlement:
+
+- отделён от ledger history;
+- привязан ровно к одной живой цели;
+- не является permission/trust/reputation;
+- удаляется вместе с Persona/Space;
+- не создаёт доступ к закрытому профилю или Space.
+
+## Visibility model
+
+### Public shelf
+
+Публичная projection показывает только gift icon/name/description и aggregate count.
+
+Публичный shelf **не показывает** sender, message, время отправки или support ledger UID и не является leaderboard.
+
+### Private Persona history
+
+Владелец Account может видеть свою полученную историю с sender label/message. Чужой Account не имеет API для этой истории.
+
+### Private Space history
+
+Scoped owner/moderator может видеть received history своего Space. Обычный member/visitor — нет.
+
+## Abuse boundaries
+
+- maximum 20 gifts per Account / rolling 24h;
+- support disabled отклоняет отправку server-side;
+- inactive/deleted Account не может отправлять gift;
+- blocked Persona pair не может взаимодействовать через support;
+- Space sender должен оставаться active member на момент отправки;
+- public shelf агрегирован и не создаёт sender-presence side channel;
+- messages не выводятся в публичный shelf;
+- нет urgency timers, streaks, jackpot/confetti и donor leaderboard.
+
+Rate-limit первого бесплатного slice является anti-spam boundary, а не financial fraud control. Перед реальными payments потребуется отдельная transaction/idempotency/fraud/chargeback модель.
+
+## Реализованный API
+
+Prefix: `/support/v1`.
+
+Реализованы:
+
+- gift catalog;
+- own Persona support settings;
+- own received history;
+- Persona shelf по Persona UID и Account UID + send gift;
 - Space support settings;
-- Space public shelf + send gift;
+- Space shelf + send gift;
 - manager-only Space received history.
 
-Публичный shelf не должен раскрывать sender/message. Ledger mutation endpoints не создаются.
+Support ledger не имеет mutation endpoints.
 
-## Abuse boundary
+## Реализованный SPA UX
 
-Первый rate limit реализуется server-side по durable ledger. Поскольку gifts бесплатны и не дают ranking/power, это допустимый alpha baseline. До любых реальных платежей необходимы transactional/fraud controls, idempotent provider events, refunds/chargebacks и отдельная financial threat model.
+### Persona
 
-## UI/UX
+- opt-in toggle и note в «Стиле образа»;
+- собственная private received history;
+- aggregated shelf в обычном Persona profile;
+- gift picker для допустимого viewer.
 
-- calm «Поддержать» вместо агрессивного donate CTA;
-- никаких countdown/limited offer/whale/top donor паттернов;
-- shelf вторичен по отношению к Persona/Space content;
-- counts не используются как social authority score;
-- consent toggle и пояснение последствий должны быть понятными;
-- gift picker показывает смысл жеста, а не «ценность».
+### Space
+
+- отдельный `/spaces/:uid/support` context route;
+- aggregated shelf;
+- gift picker только при active membership и enabled support;
+- manager settings + private received history;
+- контекстная ссылка «Поддержка» в desktop/app menu;
+- mobile bottom navigation не получает отдельный support item.
+
+## Financial boundary
+
+`0.5.3` не содержит checkout, payment provider, wallet, internal currency, balances, withdrawals/payouts, refunds/chargebacks, paid discovery, paid trust, paid moderation role или paid ban immunity.
+
+Если позже появятся реальные payments, они добавляются отдельным review и отдельными contracts поверх существующего social-support домена, а не через превращение gift count в социальный рейтинг.
 
 ## Release gate
 
-Перед `0.5.3-alpha.1`:
+До `0.5.3-alpha.1`:
 
-- additive migration и одна Alembic head;
-- support/privacy/block/permission contracts;
-- отсутствие financial/power fields в API regression tests;
-- SPA production build;
-- abuse/privacy/UI review;
-- documentation sync;
+- additive migration graph и одна Alembic head;
+- support contract regression tests;
+- backend compile/import;
+- frontend production build;
+- abuse/privacy/permissions self-review;
+- docs/UI Kit sync;
 - functional exact-head CI;
-- version bump;
-- второй exact-head CI;
-- merge только после второго gate.
+- version bump только после зелёного functional gate;
+- второй exact-head CI на versioned head;
+- squash merge только после второго gate.
