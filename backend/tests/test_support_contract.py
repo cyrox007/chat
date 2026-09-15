@@ -24,6 +24,7 @@ class SupportContractTests(unittest.TestCase):
             ("/support/v1/me/profile", "GET"),
             ("/support/v1/me/profile", "PATCH"),
             ("/support/v1/me/received", "GET"),
+            ("/support/v1/accounts/{account_uid}/shelf", "GET"),
             ("/support/v1/personas/{persona_uid}/shelf", "GET"),
             ("/support/v1/personas/{persona_uid}/gifts", "POST"),
             ("/support/v1/spaces/{space_uid}/settings", "GET"),
@@ -55,7 +56,7 @@ class SupportContractTests(unittest.TestCase):
         self.assertFalse(CreatorSupportProfile.__table__.c.enabled.default.arg)
         self.assertFalse(SpaceSupportSettings.__table__.c.enabled.default.arg)
 
-    def test_exact_target_constraints_exist(self):
+    def test_target_constraints_and_history_fks(self):
         ledger_constraints = {
             constraint.name for constraint in SupportLedgerEntry.__table__.constraints if constraint.name
         }
@@ -64,6 +65,10 @@ class SupportContractTests(unittest.TestCase):
         }
         self.assertIn("ck_support_ledger_exact_target", ledger_constraints)
         self.assertIn("ck_cosmetic_entitlement_exact_target", entitlement_constraints)
+        persona_fk = next(iter(SupportLedgerEntry.__table__.c.target_persona_uid.foreign_keys))
+        room_fk = next(iter(SupportLedgerEntry.__table__.c.target_room_uid.foreign_keys))
+        self.assertEqual(persona_fk.ondelete, "SET NULL")
+        self.assertEqual(room_fk.ondelete, "SET NULL")
 
     def test_internal_gift_rate_limit_is_bounded(self):
         self.assertGreater(MAX_GIFTS_PER_DAY, 0)
