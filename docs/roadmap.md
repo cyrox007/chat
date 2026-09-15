@@ -6,148 +6,119 @@ Released: **`0.5.1-alpha.1`**.
 
 In development: **`0.5.2-alpha.0`** — Activity Occurrences & Notifications.
 
-PubChat остаётся alpha: продуктовые контуры уже сформированы, но production-like hardening и часть engagement/creator/discovery задач ещё не завершены.
+PubChat остаётся alpha: основные продуктовые контуры сформированы, но production-like hardening и следующие engagement/creator/discovery slices ещё не завершены.
 
-## Завершённые этапы
+## Завершённые checkpoints
 
 ### Stage 1 — Foundation & Security ✅ `0.1.0-alpha.1`
 
-- зафиксирована новая концепция PubChat;
-- закрыты критические authorization/data exposure проблемы legacy backend;
-- исправлены secrets/logging/DB health issues;
-- введён CI.
+Security baseline, server-side RBAC, legacy data exposure fixes и CI.
 
 ### Stage 2 — Identity v2 ✅ `0.2.0-alpha.1`
 
-- Account/Persona/Credential/IdentitySession;
-- PrivacySettings и AccountRelationship;
-- platform RBAC foundation;
-- Persona-first onboarding;
-- новый SPA shell и design tokens.
+Account/Persona/Credential/IdentitySession, privacy, relationships, Persona-first onboarding и SPA shell.
 
 ### Stage 3 — Realtime v2 ✅ `0.3.0-alpha.1`
 
-- one-time ticket handshake без credential в WebSocket URL;
-- Redis pub/sub/presence/rate limits/idempotency;
-- multi-worker delivery;
-- heartbeat/reconnect/resume;
-- memory-only browser access JWT;
-- privacy-aware DM policy.
+One-time WebSocket tickets, Redis pub/sub/presence, multi-worker delivery, heartbeat/reconnect, rate limits/idempotency и memory-only access JWT.
 
 ### Stage 4 — Living Spaces & Social Core ✅ `0.4.0-alpha.1`
 
-- `/spaces/v1`, canonical memberships и scoped roles;
-- Space Discovery/create/join/request/invite;
-- People/social graph/friend/follow/block;
-- privacy-aware discovery;
-- Rules, Events, History;
-- Safety Center;
-- reports/actions/appeals и manager moderation queue;
-- terminology без тюремной метафоры.
+Canonical Spaces/memberships/scoped roles, social graph, privacy-aware discovery, invitations, Rules/Events/History и transparent moderation/appeals.
 
 ### Stage 5.1 — Product Identity & Activities ✅ `0.5.0-alpha.1`
 
-- Persona Appearance;
-- Space Appearance;
-- recurring Activities;
-- RSVP;
-- `next_starts_at`;
-- mobile-first customization/activity UI.
+Persona/Space Appearance, recurring Activities, RSVP, `next_starts_at` и mobile-first customization/activity UI.
 
 ### Stage 5.2 — Social Engagement ✅ `0.5.1-alpha.1`
 
-- earned achievements;
-- public shelf + private own history;
-- Conversation Rounds: icebreaker/choice/story_chain;
-- anti-competitive invariants: нет score/winner/prize/stake;
-- block/membership/scoped-role integration.
+Earned achievements и Conversation Rounds без score/winner/prize/stake, интегрированные с block/membership/scoped roles.
 
 ## Stage 5.3 — Activity Occurrences & Notifications 🚧 `0.5.2-alpha.0`
 
-Цель: превратить recurring Activity из абстрактного шаблона в понятные ближайшие встречи и opt-in напоминания.
+Цель: concrete upcoming meetings и opt-in in-app reminders поверх recurring Activity template.
 
-### Уже реализовано в ветке
+### Реализовано в ветке
 
-- bounded `ActivityOccurrence` rows;
-- 45-day materialization horizon;
+- bounded `ActivityOccurrence` rows и 45-day horizon;
 - unique Activity+start invariant;
-- recurrence utility и regression для monthly anchor;
-- private reminder preferences;
-- lead time 15m / 60m / 1d;
-- private notification inbox;
+- monthly recurrence regression без calendar drift после короткого месяца;
+- side-effect-free occurrence GET + explicit POST materialization command;
+- private reminder preferences: 15m / 60m / 1d;
+- максимум 200 активных reminders на Account, согласованный с bounded sync;
+- private notification inbox, unread/read/read-all;
 - one reminder max per occurrence;
 - explicit idempotent reconciliation/sync;
 - `/activity-occurrences/v1` и `/notifications/v1`;
-- Notification SPA service;
+- reminder controls в Space Life с одним batch preferences request;
 - `/notifications` screen;
-- обновление основной документации проекта.
+- спокойный unread bell и periodic in-app sync в app shell;
+- отдельный notification UX contract;
+- полностью реструктурированная документация проекта.
 
 ### Осталось до `0.5.2-alpha.1`
 
-- batch reminder state integration в Space Life;
-- app-shell unread indicator + sync lifecycle;
-- ownership/timezone/spam/privacy self-review;
-- UI Kit/release checklist sync;
-- exact-head CI;
-- bump `VERSION`;
+- финальный ownership/timezone/spam/privacy self-review;
+- exact-head backend/frontend CI;
+- исправить только найденные gate regressions;
+- после зелёного functional gate обновить `VERSION`/`CHANGELOG`/version docs;
 - второй exact-head CI;
 - squash merge в `main`.
 
-Browser/native push не входит в этот checkpoint: сначала стабилизируется in-app notification domain.
+### Осознанное calendar limitation
+
+Activity хранит timezone-aware input как UTC instant, но пока не сохраняет IANA timezone name. Recurrence поэтому UTC-anchored: при DST локальное wall-clock время weekly/monthly встречи может сдвинуться на час. Reminders следуют canonical UTC schedule. IANA timezone + DST wall-clock semantics входят в pre-beta hardening и не должны исправляться только на client-side.
+
+Browser/native push не входит в `0.5.2`: сначала стабилизируется domain inbox и reconciliation.
 
 ## Stage 5.4 — Creator support & cosmetic economy
 
-Планируется после notification slice.
-
-Цели:
+Следующий продуктовый slice после `0.5.2`.
 
 - creator support без покупки власти;
-- косметические каталоги/подарки;
-- прозрачные ownership/entitlement records;
-- никаких paid trust/moderation/discovery guarantees;
-- fraud/chargeback boundaries до реальных платежей;
-- UI, где support не превращает общение в витрину донатов.
+- cosmetic gifts/catalog/entitlements;
+- прозрачная ownership history;
+- никакого paid trust/moderation/discovery guarantee;
+- fraud/chargeback boundaries до включения реальных платежей;
+- support UX не должен превращать общение в витрину донатов.
 
-Реальные payments не должны включаться до отдельного financial/security review.
+Реальные payments требуют отдельного financial/security review.
 
 ## Stage 5.5 — Discovery quality
 
 - activity-aware Space discovery;
-- рекомендации по intent/interests/shared context;
-- freshness/activity signals;
-- diversity controls;
+- intent/interests/shared-context recommendations;
+- freshness/activity signals и diversity controls;
 - block/privacy invariants;
-- отсутствие платной покупки органического trust/ranking;
-- объяснимые причины рекомендаций там, где это полезно.
+- отсутствие покупки органического trust/ranking;
+- объяснимые recommendation reasons там, где они полезны.
 
 ## Stage 5.6 — Web application maturity
 
-- PWA shell/offline-safe static experience;
-- installability;
-- notification worker adapter после стабилизации domain inbox;
-- подготовка contracts для native push;
+- PWA shell/installability;
+- notification worker adapter и подготовка native push contracts;
 - frontend state/testing cleanup;
 - дальнейшее удаление legacy styles/components.
 
 ## Stage 6 — Pre-beta hardening
 
-Это обязательный gate перед `beta`, а не необязательная полировка.
+Обязательный gate перед beta.
 
 ### Data/migrations
 
-- PostgreSQL integration test environment;
+- PostgreSQL integration environment;
 - Redis integration tests;
-- full migration rehearsal с legacy schema/data copy;
+- migration rehearsal на копии legacy schema/data;
 - backup/restore drill;
-- member-capacity concurrency hardening.
+- member-capacity concurrency hardening;
+- IANA timezone storage и DST-correct recurring wall-clock semantics.
 
 ### Reliability/performance
 
-- realtime load tests;
-- Space discovery load tests;
-- DB query profiling;
-- Redis failure/recovery scenarios;
-- slow client/backpressure scenarios;
+- realtime/discovery load tests;
+- DB profiling;
+- Redis failure/recovery;
+- slow-client/backpressure scenarios;
 - notification reconciliation load/idempotency tests.
 
 ### Security/privacy
@@ -156,43 +127,31 @@ Browser/native push не входит в этот checkpoint: сначала с�
 - upload/media review;
 - moderation/report/appeal review;
 - privacy side-channel review;
-- Account-level block coverage для всех новых social surfaces.
+- Account block coverage для всех social surfaces.
 
 ### Operations
 
-- structured logs;
-- metrics;
-- error tracking;
+- structured logs/metrics/error tracking;
 - status/incident process;
 - deployment/recovery documentation;
-- shared/object storage решение.
+- shared/object storage.
 
 ### UX/accessibility
 
 - keyboard/focus audit;
 - contrast/accessibility pass;
-- narrow/mobile viewport pass;
+- mobile/narrow viewport pass;
 - error/empty/offline consistency;
 - onboarding usability;
 - terminology audit.
 
 ## Beta
 
-Первая beta назначается только когда:
-
-- все launch-critical user journeys работают end-to-end;
-- нет известных P0/P1 launch blockers;
-- production-like PostgreSQL/Redis gate пройден;
-- migration/backup/recovery rehearsed;
-- observability работает;
-- responsive/accessibility baseline подтверждён;
-- architecture-level rewrites прекращаются и фокус смещается на stabilization.
-
-Ориентир версии: `0.9.0-beta.1`, но номер не назначается заранее ради календаря.
+Beta назначается только когда launch-critical journeys работают end-to-end, production-like gates пройдены, observability доступна и нет известных P0/P1 blockers. Ориентир `0.9.0-beta.1` не является календарным обещанием.
 
 ## Stable 1.0
 
-`1.0.0` — первый public stable release с явным compatibility commitment API/data contracts.
+`1.0.0` — первый public stable release с explicit API/data compatibility commitment.
 
 ## Постоянные инварианты
 
@@ -203,5 +162,5 @@ Browser/native push не входит в этот checkpoint: сначала с�
 - Account block нельзя обойти другой Persona.
 - Communication quality first.
 - Никакой тюремной терминологии.
-- SPA — первый клиент, API/realtime reusable для Android/iOS.
-- UI/UX развивается вместе с доменной моделью, а не после backend.
+- SPA — первый клиент, contracts reusable для Android/iOS.
+- UI/UX развивается вместе с доменной моделью.
