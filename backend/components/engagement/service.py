@@ -1,7 +1,8 @@
+from collections import defaultdict
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -120,18 +121,12 @@ async def update_space_appearance(
     return _space_appearance_projection(item, room.uid)
 
 
-async def _activity_projection(
-    db: AsyncSession,
+def _activity_projection(
     activity: SpaceActivity,
-    viewer_account_uid: UUID,
+    counts: dict[str, int] | None = None,
+    viewer_rsvp: str | None = None,
 ) -> dict:
-    counts_result = await db.execute(
-        select(ActivityRSVP.status, func.count(ActivityRSVP.account_uid))
-        .where(ActivityRSVP.activity_uid == activity.uid)
-        .group_by(ActivityRSVP.status)
-    )
-    counts = {key: int(value) for key, value in counts_result.all()}
-    viewer_rsvp = await db.get(ActivityRSVP, (activity.uid, viewer_account_uid))
+    counts = counts or {}
     return {
         "uid": str(activity.uid),
         "space_uid": str(activity.room_uid),
@@ -145,11 +140,26 @@ async def _activity_projection(
         "rsvp": {
             "interested": counts.get("interested", 0),
             "going": counts.get("going", 0),
-            "viewer": viewer_rsvp.status if viewer_rsvp else None,
+            "viewer": viewer_rsvp,
         },
         "created_at": activity.created_at.isoformat() if activity.created_at else None,
         "updated_at": activity.updated_at.isoformat() if activity.updated_at else None,
     }
+
+
+async def _single_activity_projection(
+    db: AsyncSession,
+    activity: SpaceActivity,
+    viewer_account_uid: UUID,
+) -> dict:
+    counts_result = await db.execute(
+        select(ActivityRSVP.status, func.count(ActivityRSVP.account_uid))
+        .where(ActivityRSVP.activity_uid == activity.uid)
+        .group_by(ActivityRSVP.status)
+    )
+    counts = {key: int(value) for key, value in counts_result.all()}
+    viewer_rsvp = await db.get(ActivityRSVP, (activity.uid, viewer_account_uid))
+    return _activity_projection(activity, counts, viewer_rsvp.status if viewer_rsvp else None)
 
 
 async def list_activities(
@@ -170,10 +180,36 @@ async def list_activities(
         .limit(limit)
         .offset(offset)
     )
-    items = []
-    for activity in result.scalars().all():
-        items.append(await _activity_projection(db, activity, account.uid))
-    return items, total
+    activities = result.scalars().all()
+    if not activities:
+        return [], total
+
+    activity_uids = [activity.uid for activity in activities]
+    counts_result = await db.execute(
+        select(ActivityRSVP.activity_uid, ActivityRSVP.status, func.count(ActivityRSVP.account_uid))
+        .where(ActivityRSVP.activity_uid.in_(activity_uids))
+        .group_by(ActivityRSVP.activity_uid, ActivityRSVP.status)
+    )
+    counts_by_activity: dict[UUID, dict[str, int]] = defaultdict(dict)
+    for activity_uid, rsvp_status, count in counts_result.all():
+        counts_by_activity[activity_uid][rsvp_status] = int(count)
+
+    viewer_result = await db.execute(
+        select(ActivityRSVP.activity_uid, ActivityRSVP.status).where(
+            ActivityRSVP.activity_uid.in_(activity_uids),
+            ActivityRSVP.account_uid == account.uid,
+        )
+    )
+    viewer_by_activity = {activity_uid: rsvp_status for activity_uid, rsvp_status in viewer_result.all()}
+
+    return [
+        _activity_projection(
+            activity,
+            counts_by_activity.get(activity.uid),
+            viewer_by_activity.get(activity.uid),
+        )
+        for activity in activities
+    ], total
 
 
 async def create_activity(
@@ -197,7 +233,7 @@ async def create_activity(
     db.add(activity)
     await db.commit()
     await db.refresh(activity)
-    return await _activity_projection(db, activity, account.uid)
+    return await _single_activity_projection(db, activity, account.uid)
 
 
 async def update_activity(
@@ -224,7 +260,7 @@ async def update_activity(
     activity.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(activity)
-    return await _activity_projection(db, activity, account.uid)
+    return await _single_activity_projection(db, activity, account.uid)
 
 
 async def set_activity_rsvp(
@@ -249,7 +285,7 @@ async def set_activity_rsvp(
         item.status = payload.status
         item.updated_at = datetime.utcnow()
     await db.commit()
-    return await _activity_projection(db, activity, account.uid)
+    return await _single_activity_projection(db, activity, account.uid)
 
 
 async def clear_activity_rsvp(
@@ -269,4 +305,4 @@ async def clear_activity_rsvp(
         )
     )
     await db.commit()
-    return await _activity_projection(db, activity, account.uid)
+    return await _single_activity_projection(db, activity, account.uid)
