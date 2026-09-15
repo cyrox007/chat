@@ -43,11 +43,22 @@ const connectionNotice = computed(() => {
 	return null;
 });
 
+const stopAuthenticatedServices = async () => {
+	store.dispatch('notifications/stopPolling');
+	store.dispatch('notifications/clear');
+	await store.dispatch('messenger/disconnectMessenger');
+	await store.dispatch('chat/disconnectSocket');
+};
+
 const ensureSessionAndConnect = async () => {
 	if (!store.getters.isAuth) return;
 	try {
 		await store.dispatch('syncIdentity');
-		await store.dispatch('messenger/connectMessenger');
+		await Promise.all([
+			store.dispatch('messenger/connectMessenger'),
+			store.dispatch('notifications/sync').catch(() => null),
+		]);
+		store.dispatch('notifications/startPolling');
 		const room = store.getters['chat/getCurrentRoom'];
 		if (room?.uid) await store.dispatch('chat/connectSocket', room.uid);
 		bootstrapError.value = false;
@@ -57,6 +68,7 @@ const ensureSessionAndConnect = async () => {
 };
 
 const handleSessionExpired = async () => {
+	await stopAuthenticatedServices();
 	await store.dispatch('clearUser');
 	if (router.currentRoute.value.name !== 'login') {
 		await router.replace({ name: 'login', query: { reason: 'session' } });
@@ -73,6 +85,7 @@ const handleOnline = () => {
 	if (!store.getters.isAuth) return;
 	store.dispatch('messenger/reconnectIfNeeded');
 	store.dispatch('chat/reconnectIfNeeded');
+	store.dispatch('notifications/sync').catch(() => null);
 };
 
 onMounted(async () => {
@@ -84,6 +97,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+	store.dispatch('notifications/stopPolling');
 	window.removeEventListener('pubchat:session-expired', handleSessionExpired);
 	window.removeEventListener('offline', handleOffline);
 	window.removeEventListener('online', handleOnline);
@@ -93,8 +107,7 @@ watch(() => store.getters.isAuth, (isAuthenticated, wasAuthenticated) => {
 	if (isAuthenticated && !wasAuthenticated) {
 		ensureSessionAndConnect();
 	} else if (!isAuthenticated && wasAuthenticated) {
-		store.dispatch('messenger/disconnectMessenger');
-		store.dispatch('chat/disconnectSocket');
+		stopAuthenticatedServices();
 	}
 });
 </script>
