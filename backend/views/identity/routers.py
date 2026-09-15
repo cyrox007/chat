@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, FastAPI, Request, Response, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
@@ -6,6 +6,7 @@ from components.identity.schemas import (
     LoginRequest,
     PersonaUpdateRequest,
     PrivacyUpdateRequest,
+    ProfilesBatchRequest,
     RegisterRequest,
 )
 from components.identity.service import (
@@ -108,6 +109,25 @@ def install(app: FastAPI):
     ):
         account = await get_account_by_uid(db, current_user["user_uid"])
         return {"status": "ok", **(await build_identity_projection(db, account))}
+
+    @router.post("/profiles/batch")
+    async def batch_profiles(
+        payload: ProfilesBatchRequest,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        profiles = []
+        for account_uid in dict.fromkeys(payload.account_uids):
+            try:
+                account = await get_account_by_uid(db, str(account_uid))
+                profiles.append(
+                    await build_public_profile(db, account, current_user["user_uid"])
+                )
+            except HTTPException as exc:
+                if exc.status_code in {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND}:
+                    continue
+                raise
+        return {"status": "ok", "profiles": profiles}
 
     @router.get("/profiles/{account_uid}")
     async def public_profile(
