@@ -40,6 +40,7 @@ class Config:
     REALTIME_HEARTBEAT_SECONDS = int(os.getenv("REALTIME_HEARTBEAT_SECONDS", "25"))
     REALTIME_MESSAGE_RATE_LIMIT = int(os.getenv("REALTIME_MESSAGE_RATE_LIMIT", "25"))
     REALTIME_MESSAGE_RATE_WINDOW_SECONDS = int(os.getenv("REALTIME_MESSAGE_RATE_WINDOW_SECONDS", "10"))
+    REALTIME_IDEMPOTENCY_TTL_SECONDS = int(os.getenv("REALTIME_IDEMPOTENCY_TTL_SECONDS", "600"))
 
     # Security. There are intentionally no production-capable default secrets.
     JWT_ACCESS_SECRET_KEY = os.getenv("JWT_ACCESS_SECRET_KEY", "")
