@@ -1,9 +1,10 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Query, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
+from components.engagement.queries import get_my_persona_appearance
 from components.engagement.schemas import (
     ActivityCreateRequest,
     ActivityRSVPRequest,
@@ -28,6 +29,16 @@ from database import Database
 def install(app: FastAPI) -> None:
     appearance = APIRouter(prefix="/appearance/v1", tags=["appearance-v1"])
     activities = APIRouter(prefix="/activities/v1", tags=["activities-v1"])
+
+    @appearance.get("/me/persona")
+    async def my_persona_appearance(
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        item = await get_my_persona_appearance(db, current_user["user_uid"])
+        if item is None:
+            raise HTTPException(status_code=409, detail={"error_type": "primary_persona_missing"})
+        return {"status": "ok", "appearance": item}
 
     @appearance.get("/personas/{persona_uid}")
     async def persona_appearance(
