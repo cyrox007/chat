@@ -24,6 +24,7 @@ def create_app() -> FastAPI:
     from views.admin import routers as admin_routers
     from views.achievements import routers as achievement_routes
     from views.csrf import routers as csrf_routes
+    from views.discovery import routers as discovery_routes
     from views.engagement import round_routers as engagement_round_routes
     from views.engagement import routers as engagement_routes
     from views.identity import routers as identity_routes
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
     realtime_routes.install(app)
     notification_routes.install(app)
     support_routes.install(app)
+    discovery_routes.install(app)
     user_routes.install(app)
     social_routes.install(app)
     spaces_routes.install(app)
