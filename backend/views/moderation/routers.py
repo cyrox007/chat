@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, FastAPI, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
+from components.moderation.consistency import supersede_previous_restrictions
 from components.moderation.schemas import (
     ModerationActionCreateRequest,
     ModerationAppealCreateRequest,
@@ -120,6 +121,13 @@ def install(app: FastAPI) -> None:
         db: AsyncSession = Depends(Database.session_generator),
     ):
         item = await create_action(db, space_uid, current_user["user_uid"], payload)
+        if payload.action_type == "restrict":
+            await supersede_previous_restrictions(
+                db,
+                space_uid=space_uid,
+                target_account_uid=payload.target_account_uid,
+                keep_action_uid=UUID(item["uid"]),
+            )
         return {"status": "ok", "action": item}
 
     @router.get("/spaces/{space_uid}/actions")
