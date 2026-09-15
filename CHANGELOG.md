@@ -2,6 +2,27 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.5.4-alpha.1] — 2026-09-15
+
+Stage 5.5 — Explainable Organic Discovery.
+
+- новый `/discovery/v1/spaces`, отдельно от стабильного `/spaces/v1` catalog;
+- eligibility/privacy/block policy применяется до ranking;
+- activity signal считается по distinct recent authors, а не raw message volume;
+- учитываются nearest allowed Activity/Event, shared topics/purpose, explicit social intent и modest freshness/member-count context;
+- private/unlisted Space без active membership не раскрывает внутренний upcoming context;
+- server-only ranking score не входит в public API;
+- до трёх объяснимых причин «Почему здесь»;
+- bounded candidate pool до 200 Spaces;
+- diversity pass уменьшает однообразие purpose без обхода filters/privacy;
+- legacy `Room.rating`, gifts/support, price/currency/payment не участвуют в ranking;
+- SPA Space Discovery переведён на новый endpoint и показывает reasons + ближайший допустимый upcoming item;
+- добавлены `discovery-v1.md` и `ui-ux-discovery.md`.
+
+Известное alpha-ограничение: organic-v1 начинает bounded pool с canonical catalog, отсортированного по новизне. Очень старый Space вне первых 200 кандидатов может не попасть в ranking даже после новой активности. До beta candidate generation будет собираться из нескольких bounded источников без unbounded scan.
+
+Quality gate: functional exact-head backend/frontend CI → version/docs sync → повторный exact-head CI перед merge.
+
 ## [0.5.3-alpha.1] — 2026-09-15
 
 Stage 5.4 — Creator Support & Cosmetic Gifts.
@@ -36,16 +57,7 @@ Stage 5.4 — Creator Support & Cosmetic Gifts.
 - gift count не влияет на moderation, trust, permissions или discovery ranking;
 - реальные checkout/payment provider/payout/refund/chargeback flows отсутствуют и требуют отдельного financial/security review.
 
-### Quality gate
-До version bump успешно прошли:
-- additive migration graph с одной Alembic head;
-- backend compile/import/security/contracts;
-- SPA security regression guard + production build;
-- support abuse/privacy/permissions self-review;
-- docs/API/security/UI Kit sync;
-- functional exact-head CI на frozen feature head.
-
-После version bump выполняется повторный exact-head CI уже на `0.5.3-alpha.1`; merge разрешён только после его успешного завершения.
+Quality gate: functional exact-head backend/frontend CI → version/docs sync → второй exact-head CI → squash merge.
 
 ## [0.5.2-alpha.1] — 2026-09-15
 
