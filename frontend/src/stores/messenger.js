@@ -1,25 +1,48 @@
-import axios from "axios";
+import RealtimeService from '@/API/RealtimeService';
+
+let messengerReconnectTimer = null;
+let messengerHeartbeatTimer = null;
+let messengerConnectionGeneration = 0;
+
+const clearReconnectTimer = () => {
+	if (messengerReconnectTimer) clearTimeout(messengerReconnectTimer);
+	messengerReconnectTimer = null;
+};
+
+const clearHeartbeatTimer = () => {
+	if (messengerHeartbeatTimer) clearInterval(messengerHeartbeatTimer);
+	messengerHeartbeatTimer = null;
+};
+
+const messageKey = (message) => message?.uid || message?.frontId || null;
+
 export default {
 	namespaced: true,
 	state: {
 		socket: null,
 		isConnected: false,
+		connectionState: 'idle',
+		reconnectAttempt: 0,
+		realtimeNotice: null,
 		activeDialog: null,
 		conversations: {},
 		unreadCounts: {},
 		notifications: [],
-		onlineStatuses: {}, // { [userId]: boolean }
-		statusSubscriptions: new Set()
+		onlineStatuses: {},
+		statusSubscriptions: new Set(),
+		pendingReadReceipts: new Set(),
 	},
 	getters: {
 		getConversation: (state) => (userId) => state.conversations[userId] || [],
 		getUnreadCount: (state) => (userId) => state.unreadCounts[userId] || 0,
 		getActiveDialog: (state) => state.activeDialog,
 		isConnected: (state) => state.isConnected,
+		getConnectionState: (state) => state.connectionState,
+		getRealtimeNotice: (state) => state.realtimeNotice,
 		getNotifications: (state) => state.notifications,
 		hasUnreadNotifications: (state) => state.notifications.length > 0,
-		isUserOnline: (state) => (userId) => state.onlineStatuses[userId] || false,
-		getOnlineStatuses: (state) => state.onlineStatuses
+		isUserOnline: (state) => (userId) => Boolean(state.onlineStatuses[userId]),
+		getOnlineStatuses: (state) => state.onlineStatuses,
 	},
 	mutations: {
 		SET_SOCKET(state, socket) {
@@ -28,207 +51,263 @@ export default {
 		SET_CONNECTION_STATUS(state, status) {
 			state.isConnected = status;
 		},
+		SET_CONNECTION_STATE(state, status) {
+			state.connectionState = status;
+		},
+		SET_RECONNECT_ATTEMPT(state, attempt) {
+			state.reconnectAttempt = attempt;
+		},
+		SET_REALTIME_NOTICE(state, notice) {
+			state.realtimeNotice = notice;
+		},
 		SET_ACTIVE_DIALOG(state, userId) {
 			state.activeDialog = userId;
-			if (userId && state.unreadCounts[userId]) {
-				state.unreadCounts[userId] = 0;
-			}
+			if (userId && state.unreadCounts[userId]) state.unreadCounts[userId] = 0;
 		},
 		ADD_MESSAGE(state, { userId, message }) {
-			if (!state.conversations[userId]) {
-				state.conversations[userId] = [];
+			if (!state.conversations[userId]) state.conversations[userId] = [];
+			const key = messageKey(message);
+			const existingIndex = key
+				? state.conversations[userId].findIndex((item) => messageKey(item) === key)
+				: -1;
+			if (existingIndex >= 0) {
+				state.conversations[userId][existingIndex] = {
+					...state.conversations[userId][existingIndex],
+					...message,
+				};
+				return;
 			}
 			state.conversations[userId].push(message);
-
-			// Увеличиваем счетчик непрочитанных, если это не активный диалог
-			if (state.activeDialog !== userId) {
+			if (state.activeDialog !== userId && !message.isCurrentUser) {
 				state.unreadCounts[userId] = (state.unreadCounts[userId] || 0) + 1;
-
-				// Добавляем уведомление
 				state.notifications.push({
 					uid: message.uid,
 					sender: message.sender,
 					content: message.content,
 					timestamp: message.timestamp,
-					userId: userId,
+					userId,
 				});
 			}
 		},
+		MERGE_CONVERSATION(state, { userId, messages }) {
+			if (!state.conversations[userId]) state.conversations[userId] = [];
+			messages.forEach((message) => {
+				const key = messageKey(message);
+				const index = key
+					? state.conversations[userId].findIndex((item) => messageKey(item) === key)
+					: -1;
+				if (index >= 0) state.conversations[userId][index] = { ...state.conversations[userId][index], ...message };
+				else state.conversations[userId].push(message);
+			});
+			state.conversations[userId].sort((a, b) => {
+				const left = new Date(a.created_at || a.timestamp || 0).getTime();
+				const right = new Date(b.created_at || b.timestamp || 0).getTime();
+				return left - right;
+			});
+		},
 		CLEAR_NOTIFICATIONS(state) {
 			state.notifications = [];
-		},
-		SET_CONVERSATION(state, { userId, messages }) {
-			state.conversations[userId] = messages;
 		},
 		CLEAR_CONVERSATION(state, userId) {
 			delete state.conversations[userId];
 		},
 		MARK_MESSAGE_AS_READ(state, messageId) {
-			for (const userId in state.conversations) {
-				const messages = state.conversations[userId];
-				const message = messages.find(msg => msg.uid === messageId);
-				if (message) {
-					message.is_read = true;
-				}
-			}
+			Object.values(state.conversations).forEach((messages) => {
+				const message = messages.find((item) => item.uid === messageId);
+				if (message) message.is_read = true;
+			});
 		},
 		UPDATE_ONLINE_STATUS(state, { userId, isOnline }) {
 			state.onlineStatuses[userId] = isOnline;
 		},
 		UPDATE_STATUS_SUBSCRIPTIONS(state, { userIds, subscribe }) {
-			userIds.forEach(userId => {
-				if (subscribe) {
-					state.statusSubscriptions.add(userId);
-				} else {
-					state.statusSubscriptions.delete(userId);
-				}
+			userIds.forEach((userId) => {
+				if (subscribe) state.statusSubscriptions.add(userId);
+				else state.statusSubscriptions.delete(userId);
 			});
 		},
 		CLEAR_STATUS_SUBSCRIPTIONS(state) {
 			state.statusSubscriptions.clear();
-		}
+		},
+		ADD_PENDING_READ(state, messageId) {
+			state.pendingReadReceipts.add(messageId);
+		},
+		REMOVE_PENDING_READ(state, messageId) {
+			state.pendingReadReceipts.delete(messageId);
+		},
 	},
 	actions: {
-		async refreshToken({ commit, dispatch }) {
-			try {
+		async connectMessenger({ commit, state, dispatch }) {
+			clearReconnectTimer();
+			clearHeartbeatTimer();
+			messengerConnectionGeneration += 1;
+			const generation = messengerConnectionGeneration;
 
-				const refreshResponse = await axios.get(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000' }/refresh`, {
-					withCredentials: true,
-				});
-				const { status, access_token } = refreshResponse.data;
-				
-				localStorage.setItem('access_token', access_token);
-
-				return true;
-			} catch (error) {
-				console.error('Ошибка обновления токена:', error);
-				// Если не удалось обновить токен, выполняем выход
-				dispatch('logout');
-				throw error;
+			if (state.socket) {
+				try { state.socket.close(1000, 'Replacing connection'); } catch { /* noop */ }
+				commit('SET_SOCKET', null);
 			}
-		},
-		async connectMessenger({ commit, state, rootGetters, dispatch }) {
+
+			commit('SET_CONNECTION_STATUS', false);
+			commit('SET_CONNECTION_STATE', state.reconnectAttempt ? 'reconnecting' : 'connecting');
+
 			try {
-				// Закрываем предыдущее соединение
-				if (state.socket) {
-					state.socket.close();
-					commit('SET_SOCKET', null);
-					commit('SET_CONNECTION_STATUS', false);
+				const prepared = await RealtimeService.prepareSocket('messenger');
+				if (generation !== messengerConnectionGeneration) {
+					prepared.socket.close(1000, 'Stale connection');
+					return;
 				}
 
-				const token = localStorage.getItem('access_token');
-				if (!token) {
-					throw new Error('Токен не найден');
-				}
-
-				const wsServerUrl = import.meta.env.VITE_API_WS_SERVER_URL || 'ws://localhost:9000';
-				const socket = new WebSocket(`${wsServerUrl}/ws/${token}/messenger`);
-
+				const socket = prepared.socket;
 				commit('SET_SOCKET', socket);
 
 				socket.onopen = () => {
-					console.log('Messenger WebSocket соединение установлено');
-					commit('SET_CONNECTION_STATUS', true);
-					// Восстанавливаем подписки после подключения
-					dispatch('restoreStatusSubscriptions');
-				};
-
-				socket.onclose = async (event) => {
-					console.log('Messenger WebSocket соединение закрыто', event);
-					commit('SET_CONNECTION_STATUS', false);
-					
-					// Обработка случая, когда токен устарел (код 1008)
-					if (event.code === 1008 || event.code === 1006) {
-						console.log('Токен устарел, пытаемся обновить...');
-						try {
-							// Пытаемся обновить токен
-							await dispatch('messenger/refreshToken', null, { root: true });
-							// После успешного обновления переподключаемся
-							await dispatch('connectMessenger');
-						} catch (refreshError) {
-							console.error('Не удалось обновить токен:', refreshError);
-							// Если не удалось обновить токен, перенаправляем на страницу входа
-							// dispatch('auth/logout', null, { root: true });
-						}
-					}
-				};
-
-				socket.onerror = (error) => {
-					console.error('Messenger WebSocket ошибка:', error);
-					commit('SET_CONNECTION_STATUS', false);
+					if (generation !== messengerConnectionGeneration) return;
+					commit('SET_CONNECTION_STATE', 'authenticating');
+					socket.send(JSON.stringify({
+						type: 'auth',
+						ticket: prepared.ticket,
+						resume_token: state.activeDialog || null,
+					}));
 				};
 
 				socket.onmessage = (event) => {
+					if (generation !== messengerConnectionGeneration) return;
 					try {
 						const data = JSON.parse(event.data);
-						this.dispatch('messenger/handleMessengerMessage', data);
+						if (data.type === 'realtime_ready') {
+							commit('SET_CONNECTION_STATUS', true);
+							commit('SET_CONNECTION_STATE', 'connected');
+							commit('SET_RECONNECT_ATTEMPT', 0);
+							commit('SET_REALTIME_NOTICE', null);
+							clearHeartbeatTimer();
+							const heartbeatMs = Math.max(10, data.heartbeat_seconds || 25) * 1000;
+							messengerHeartbeatTimer = setInterval(() => {
+								if (socket.readyState === WebSocket.OPEN) {
+									socket.send(JSON.stringify({ type: 'heartbeat', action: 'heartbeat' }));
+								}
+							}, heartbeatMs);
+							dispatch('restoreStatusSubscriptions');
+							dispatch('flushPendingReadReceipts');
+							if (state.activeDialog) {
+								dispatch('requestConversation', {
+									otherUserId: state.activeDialog,
+									requestId: `resume-${Date.now()}`,
+								});
+							}
+							return;
+						}
+						dispatch('handleMessengerMessage', data);
 					} catch (error) {
-						console.error('Ошибка обработки сообщения мессенджера:', error);
+						console.error('Ошибка messenger realtime frame:', error);
 					}
 				};
 
+				socket.onclose = (event) => {
+					if (generation !== messengerConnectionGeneration) return;
+					clearHeartbeatTimer();
+					commit('SET_SOCKET', null);
+					commit('SET_CONNECTION_STATUS', false);
+					if (event.code === 1000) {
+						commit('SET_CONNECTION_STATE', 'idle');
+						return;
+					}
+					dispatch('scheduleReconnect');
+				};
+
+				socket.onerror = () => {
+					if (generation === messengerConnectionGeneration) commit('SET_CONNECTION_STATUS', false);
+				};
 			} catch (error) {
-				console.error('Ошибка подключения Messenger WebSocket:', error);
-				commit('SET_CONNECTION_STATUS', false);
-				throw error;
+				console.error('Не удалось подготовить messenger realtime:', error);
+				if (generation === messengerConnectionGeneration) dispatch('scheduleReconnect');
 			}
+		},
+
+		scheduleReconnect({ commit, state, dispatch }) {
+			clearReconnectTimer();
+			const attempt = state.reconnectAttempt + 1;
+			commit('SET_RECONNECT_ATTEMPT', attempt);
+			commit('SET_CONNECTION_STATE', navigator.onLine ? 'reconnecting' : 'offline');
+			const baseDelay = Math.min(1000 * (2 ** Math.min(attempt - 1, 5)), 30000);
+			messengerReconnectTimer = setTimeout(
+				() => dispatch('connectMessenger'),
+				baseDelay + Math.floor(Math.random() * 400),
+			);
+		},
+
+		reconnectIfNeeded({ state, dispatch }) {
+			if (!state.isConnected) dispatch('connectMessenger');
 		},
 
 		disconnectMessenger({ commit, state }) {
+			messengerConnectionGeneration += 1;
+			clearReconnectTimer();
+			clearHeartbeatTimer();
 			if (state.socket) {
-				state.socket.close();
-				commit('SET_SOCKET', null);
-				commit('SET_CONNECTION_STATUS', false);
+				try { state.socket.close(1000, 'Client disconnect'); } catch { /* noop */ }
 			}
+			commit('SET_SOCKET', null);
+			commit('SET_CONNECTION_STATUS', false);
+			commit('SET_CONNECTION_STATE', 'idle');
+			commit('SET_RECONNECT_ATTEMPT', 0);
 		},
 
-		handleMessengerMessage({ commit, rootGetters }, data) {
-			const currentUser = rootGetters['getUser'];
-
+		handleMessengerMessage({ commit, rootGetters, state, dispatch }, data) {
+			const currentUser = rootGetters.getUser;
 			switch (data.type) {
-				case 'private_message':
-					const isFromCurrentUser = data.sender_uid === currentUser.uid;
+				case 'private_message': {
+					const isFromCurrentUser = data.sender_uid === currentUser?.uid;
 					const otherUserId = isFromCurrentUser ? data.receiver_uid : data.sender_uid;
-
 					commit('ADD_MESSAGE', {
 						userId: otherUserId,
 						message: {
 							...data,
 							isCurrentUser: isFromCurrentUser,
-							timestamp: new Date(data.created_at),
+							timestamp: new Date(data.created_at || Date.now()),
 						},
 					});
-
-					if (!isFromCurrentUser) {
-						this.dispatch('messenger/playNotificationSound');
-					}
+					if (!isFromCurrentUser && state.activeDialog !== otherUserId) dispatch('playNotificationSound');
 					break;
-
+				}
 				case 'message_read':
-					// Обработка отметки о прочтении
-					commit('MARK_MESSAGE_AS_READ', data.message_id);
+					commit('MARK_MESSAGE_AS_READ', data.message_uid);
 					break;
-
-				case 'conversation':
-					// Загрузка истории переписки
-					commit('SET_CONVERSATION', {
-						userId: data.other_user_uid,
-						messages: data.messages.reverse().map(msg => ({
-							...msg,
-							isCurrentUser: msg.sender_uid === currentUser.uid,
-							timestamp: new Date(msg.created_at)
-						}))
-					});
+				case 'conversation': {
+					const messages = [...(data.messages || [])].reverse().map((message) => ({
+						...message,
+						isCurrentUser: message.sender_uid === currentUser?.uid,
+						timestamp: new Date(message.created_at || Date.now()),
+					}));
+					commit('MERGE_CONVERSATION', { userId: data.other_user_uid, messages });
 					break;
-
+				}
 				case 'status_update':
-					Object.entries(data.statuses).forEach(([userId, isOnline]) => {
+					Object.entries(data.statuses || {}).forEach(([userId, isOnline]) => {
 						commit('UPDATE_ONLINE_STATUS', { userId, isOnline });
 					});
 					break;
-
+				case 'ping':
+					if (state.socket?.readyState === WebSocket.OPEN) {
+						state.socket.send(JSON.stringify({ type: 'pong' }));
+					}
+					break;
+				case 'rate_limited':
+					commit('SET_REALTIME_NOTICE', {
+						type: 'warning',
+						message: 'Слишком много сообщений подряд. Попробуйте через несколько секунд.',
+					});
+					break;
+				case 'error':
+					commit('SET_REALTIME_NOTICE', {
+						type: data.error_type === 'dm_not_allowed' ? 'privacy' : 'error',
+						message: data.error_type === 'dm_not_allowed'
+							? 'Этот человек принимает личные сообщения только в выбранном им режиме общения.'
+							: 'Не удалось выполнить действие.',
+					});
+					break;
 				default:
-					console.warn('Неизвестный тип сообщения мессенджера:', data.type);
+					break;
 			}
 		},
 
@@ -237,84 +316,69 @@ export default {
 		},
 
 		sendPrivateMessage({ state }, messageData) {
-			if (state.socket && state.socket.readyState === WebSocket.OPEN) {
-				state.socket.send(JSON.stringify({
-					action: 'send_message',
-					...messageData
-				}));
-			} else {
-				throw new Error('Messenger WebSocket не подключен');
+			if (state.socket?.readyState !== WebSocket.OPEN || state.connectionState !== 'connected') {
+				throw new Error('Личные сообщения сейчас переподключаются');
 			}
+			state.socket.send(JSON.stringify({ action: 'send_message', ...messageData }));
 		},
 
 		requestConversation({ state }, { otherUserId, requestId }) {
-			if (state.socket && state.socket.readyState === WebSocket.OPEN) {
-				state.socket.send(JSON.stringify({
-					action: 'get_conversation',
-					other_user_uid: otherUserId,
-					request_id: requestId,
-				}));
-			}
+			if (state.socket?.readyState !== WebSocket.OPEN || state.connectionState !== 'connected') return;
+			state.socket.send(JSON.stringify({
+				action: 'get_conversation',
+				other_user_uid: otherUserId,
+				request_id: requestId,
+			}));
 		},
+
 		markMessageAsRead({ state, commit }, messageId) {
-			if (state.socket && state.socket.readyState === WebSocket.OPEN) {
-				// Отправляем запрос на сервер через WebSocket
-				state.socket.send(JSON.stringify({
-					action: 'mark_message_as_read',
-					message_uid: messageId,
-				}));
-			} else {
-				// Если WebSocket не подключен, сохраняем запрос в очередь
-				console.warn('WebSocket не подключен. Добавляем запрос в очередь...');
-				commit('ADD_PENDING_READ_REQUEST', messageId);
+			if (state.socket?.readyState === WebSocket.OPEN && state.connectionState === 'connected') {
+				state.socket.send(JSON.stringify({ action: 'mark_message_as_read', message_uid: messageId }));
+				return;
 			}
+			commit('ADD_PENDING_READ', messageId);
 		},
+
+		flushPendingReadReceipts({ state, commit }) {
+			if (state.socket?.readyState !== WebSocket.OPEN || state.connectionState !== 'connected') return;
+			[...state.pendingReadReceipts].forEach((messageId) => {
+				state.socket.send(JSON.stringify({ action: 'mark_message_as_read', message_uid: messageId }));
+				commit('REMOVE_PENDING_READ', messageId);
+			});
+		},
+
 		playNotificationSound() {
 			const audio = new Audio('/sounds/private_notification.mp3');
 			audio.preload = 'auto';
-
-			audio.addEventListener('canplaythrough', () => {
-				audio.play().catch((e) => {
-					console.error('Ошибка воспроизведения звука:', e);
-				});
-			});
-
-			audio.addEventListener('error', (e) => {
-				console.error('Ошибка загрузки аудио:', e);
-			});
-
-			audio.load();
+			audio.play().catch(() => {});
 		},
 
 		clearNotifications({ commit }) {
 			commit('CLEAR_NOTIFICATIONS');
 		},
+
 		subscribeToStatuses({ commit, state }, userIds) {
-			if (state.socket?.readyState === WebSocket.OPEN) {
-				state.socket.send(JSON.stringify({
-					action: 'subscribe_status',
-					userIds: Array.from(userIds)
-				}));
-				commit('UPDATE_STATUS_SUBSCRIPTIONS', { userIds, subscribe: true });
+			const normalized = [...new Set(userIds || [])];
+			commit('UPDATE_STATUS_SUBSCRIPTIONS', { userIds: normalized, subscribe: true });
+			if (state.socket?.readyState === WebSocket.OPEN && state.connectionState === 'connected') {
+				state.socket.send(JSON.stringify({ action: 'subscribe_status', userIds: normalized }));
 			}
 		},
 
-		// Отписка от статусов
 		unsubscribeFromStatuses({ commit, state }, userIds) {
-			if (state.socket?.readyState === WebSocket.OPEN) {
-				state.socket.send(JSON.stringify({
-					action: 'unsubscribe_status',
-					userIds: Array.from(userIds)
-				}));
-				commit('UPDATE_STATUS_SUBSCRIPTIONS', { userIds, subscribe: false });
+			const normalized = [...new Set(userIds || [])];
+			commit('UPDATE_STATUS_SUBSCRIPTIONS', { userIds: normalized, subscribe: false });
+			if (state.socket?.readyState === WebSocket.OPEN && state.connectionState === 'connected') {
+				state.socket.send(JSON.stringify({ action: 'unsubscribe_status', userIds: normalized }));
 			}
 		},
 
-		// При подключении восстанавливаем подписки
-		restoreStatusSubscriptions({ state, dispatch }) {
-			if (state.statusSubscriptions.size > 0) {
-				dispatch('subscribeToStatuses', [...state.statusSubscriptions]);
-			}
-		}
-	}
+		restoreStatusSubscriptions({ state }) {
+			if (!state.statusSubscriptions.size || state.socket?.readyState !== WebSocket.OPEN) return;
+			state.socket.send(JSON.stringify({
+				action: 'subscribe_status',
+				userIds: [...state.statusSubscriptions],
+			}));
+		},
+	},
 };

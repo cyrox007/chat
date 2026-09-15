@@ -1,563 +1,350 @@
 <template>
-	<div class="messenger-container">
-		<!-- Левая панель: список диалогов -->
-		<div class="conversations-list">
-			<div class="search-bar">
-				<input type="text" placeholder="Поиск пользователей..." v-model="searchQuery" disabled />
+	<main class="dm-shell" :class="{ 'dm-shell--conversation-open': activeDialog }">
+		<aside class="dm-list" aria-label="Личные разговоры">
+			<header class="dm-list__header">
+				<div>
+					<span class="dm-eyebrow">Личные разговоры</span>
+					<h1>Сообщения</h1>
+				</div>
+				<span class="connection-chip" :class="`connection-chip--${connectionState}`" role="status">
+					<span class="connection-chip__dot" aria-hidden="true"></span>
+					{{ connectionLabel }}
+				</span>
+			</header>
+
+			<label class="dm-search">
+				<i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+				<input v-model.trim="searchQuery" type="search" placeholder="Найти среди разговоров" />
+			</label>
+
+			<div v-if="realtimeNotice" class="dm-inline-notice" :class="`dm-inline-notice--${realtimeNotice.type}`" role="status">
+				<i class="fas fa-circle-info" aria-hidden="true"></i>
+				<span>{{ realtimeNotice.message }}</span>
 			</div>
-			<div class="conversations">
-				<!-- Если диалоги есть -->
-				<div v-if="dialogs.length > 0">
-					<div v-for="dialog in filteredDialogs" :key="dialog.partner_id" class="conversation-item"
-						:class="{ active: isActiveDialog(dialog.partner_id) }"
-						@click="openConversation(dialog.partner_id)">
-						<div class="user-avatar-container">
-							<div class="user-avatar">
-								<img :src="apiBaseUrl + dialog.partner.avatar || '/images/default-avatar.png'" alt="User Avatar" />
-							</div>
-							<span class="status-indicator" :class="getStatusClass(dialog.partner_id)"></span>
-						</div>
-						<div class="conversation-info">
-							<div class="user-name">{{ dialog.partner.username }}</div>
-							<div class="last-message">{{ dialog.last_message || 'Нет сообщений' }}</div>
-						</div>
-						<div class="unread-count" v-if="dialog.unread_count > 0">{{ dialog.unread_count }}</div>
+
+			<div class="conversation-list">
+				<button
+					v-for="dialog in filteredDialogs"
+					:key="dialog.partner_id"
+					type="button"
+					class="conversation-card"
+					:class="{ 'conversation-card--active': isActiveDialog(dialog.partner_id) }"
+					@click="openConversation(dialog.partner_id)"
+				>
+					<span class="conversation-avatar">
+						<img v-if="dialog.partner?.avatar" :src="resolveAvatar(dialog.partner.avatar)" alt="" />
+						<span v-else>{{ avatarFallback(dialog.partner?.username) }}</span>
+						<span class="presence-dot" :class="{ 'presence-dot--online': isOnline(dialog.partner_id) }" aria-hidden="true"></span>
+					</span>
+					<span class="conversation-copy">
+						<strong>{{ dialog.partner?.display_name || dialog.partner?.username || 'Участник PubChat' }}</strong>
+						<small>{{ dialog.last_message || 'Начните разговор' }}</small>
+					</span>
+					<span v-if="dialog.unread_count > 0" class="unread-badge" :aria-label="`${dialog.unread_count} непрочитанных`">
+						{{ dialog.unread_count > 99 ? '99+' : dialog.unread_count }}
+					</span>
+				</button>
+
+				<div v-if="!filteredDialogs.length" class="conversation-empty">
+					<div class="conversation-empty__icon" aria-hidden="true"><i class="fas fa-message"></i></div>
+					<strong>{{ searchQuery ? 'Ничего не найдено' : 'Здесь появятся ваши разговоры' }}</strong>
+					<span v-if="!searchQuery">Личное общение в PubChat начинается из профиля или общего пространства.</span>
+				</div>
+			</div>
+		</aside>
+
+		<section class="dm-conversation">
+			<template v-if="activeDialog">
+				<header class="dm-conversation__header">
+					<button class="back-button" type="button" aria-label="Назад к разговорам" @click="closeConversation">
+						<i class="fas fa-arrow-left" aria-hidden="true"></i>
+					</button>
+
+					<RouterLink :to="`/profile/${activeDialog}`" class="active-persona">
+						<span class="active-persona__avatar">
+							<img v-if="activeDialogUser.avatar" :src="resolveAvatar(activeDialogUser.avatar)" alt="" />
+							<span v-else>{{ avatarFallback(activeDialogUser.username) }}</span>
+						</span>
+						<span class="active-persona__copy">
+							<strong>{{ activeDialogUser.display_name || activeDialogUser.username || 'Участник PubChat' }}</strong>
+							<small>{{ isOnline(activeDialog) ? 'Сейчас в PubChat' : 'Не в сети' }}</small>
+						</span>
+					</RouterLink>
+				</header>
+
+				<div ref="messagesContainer" class="dm-stream" aria-label="История личного разговора">
+					<div v-if="getConversation(activeDialog).length === 0" class="dm-stream__empty">
+						<i class="fas fa-mug-hot" aria-hidden="true"></i>
+						<strong>Можно начать с простого «привет»</strong>
+						<span>Личные сообщения подчиняются настройкам приватности каждого участника.</span>
 					</div>
+
+					<PrivateMessage
+						v-for="message in getConversation(activeDialog)"
+						:key="message.uid || message.frontId"
+						:message="message"
+						:ref="setObserverTarget"
+					/>
 				</div>
-				<!-- Если диалогов нет -->
-				<div v-else class="empty-state">
-					<div class="empty-content">
-						<!-- <i class="fas fa-comments"></i> -->
-						<p>Нет активных диалогов</p>
-					</div>
+
+				<div v-if="!isRealtimeReady" class="composer-state" role="status">
+					<span v-if="connectionState === 'offline'">Нет сети. История останется на экране, связь восстановится автоматически.</span>
+					<span v-else>Восстанавливаем личные сообщения…</span>
 				</div>
+
+				<MessageComposer
+					ref="messageComposer"
+					@send-message="handleSendMessage"
+					:isDisabled="!isRealtimeReady"
+				/>
+			</template>
+
+			<div v-else class="dm-placeholder">
+				<div class="dm-placeholder__art" aria-hidden="true"><i class="fas fa-comment-dots"></i></div>
+				<h2>Выберите разговор</h2>
+				<p>Здесь нет ленты и случайных запросов: личный разговор начинается осознанно и с учётом настроек приватности.</p>
 			</div>
-		</div>
-		<!-- Правая панель: текущий диалог -->
-		<div class="conversation-view" v-if="activeDialog">
-			<div class="conversation-header">
-				<div class="back-button" @click="closeConversation" v-if="isMobile">
-					<i class="fas fa-arrow-left"></i>
-				</div>
-				<div class="user-info">
-					<router-link :to="`/profile/${activeDialog}`" class="profile-link">
-						<img :src="apiBaseUrl + activeDialogUser.avatar || '/images/default-avatar.png'" alt="User Avatar" />
-					</router-link>
-					<div>
-						<router-link :to="`/profile/${activeDialog}`" class="username-link">
-							<span>{{ activeDialogUser.username }}</span>
-						</router-link>
-						<UserStatus :userId="activeDialog" />
-					</div>
-				</div>
-			</div>
-			<div class="messages-container" ref="messagesContainer">
-				<PrivateMessage v-for="(message, index) in getConversation(activeDialog)" :key="message.uid || index"
-					:message="message" :ref="setObserverTarget" />
-			</div>
-			<!-- Компонент подготовки сообщений -->
-			<MessageComposer ref="messageComposer" @send-message="handleSendMessage" />
-		</div>
-		<!-- Если диалог не выбран -->
-		<div class="empty-state" v-else>
-			<div class="empty-content">
-				<i class="fas fa-comments"></i>
-				<p>Выберите диалог для начала общения</p>
-			</div>
-		</div>
-	</div>
+		</section>
+	</main>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { RouterLink } from 'vue-router';
 import { useStore } from 'vuex';
-import MessengerService from '@/API/MessengerService';
-import UserStatus from '@/components/UserStatus/index.vue'
-import MessageComposer from '@/components/MessageComposer/index.vue';
 import DOMPurify from 'dompurify';
+import { v4 as uuidv4 } from 'uuid';
+
+import MessengerService from '@/API/MessengerService';
+import MessageComposer from '@/components/MessageComposer/index.vue';
 import PrivateMessage from '@/components/Message/PrivateMessage.vue';
 
 const store = useStore();
 const searchQuery = ref('');
 const messagesContainer = ref(null);
 const observerTargets = ref([]);
-const isMobile = ref(window.innerWidth < 768);
 const dialogs = ref([]);
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+const messageComposer = ref(null);
+let intersectionObserver = null;
 
-// Текущий пользователь
-const currentUser = computed(() => {
-	const user = store.getters.getUser || {
-		uid: null,
-		username: 'Неизвестный пользователь',
-		avatar: '/images/default-avatar.png',
-	};
-	return user;
-});
-
-// Активный диалог
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000';
+const currentUser = computed(() => store.getters.getUser || {});
 const activeDialog = computed(() => store.getters['messenger/getActiveDialog']);
+const connectionState = computed(() => store.getters['messenger/getConnectionState']);
+const realtimeNotice = computed(() => store.getters['messenger/getRealtimeNotice']);
+const isRealtimeReady = computed(() => connectionState.value === 'connected');
 
-// Информация о собеседнике
 const activeDialogUser = computed(() => {
-	const dialog = dialogs.value.find((d) => d.partner_id === activeDialog.value);
+	const dialog = dialogs.value.find((item) => item.partner_id === activeDialog.value);
 	return dialog?.partner || {};
 });
 
-// Фильтрация диалогов по поисковому запросу
 const filteredDialogs = computed(() => {
-	return dialogs.value.filter((dialog) =>
-		dialog.partner.username.toLowerCase().includes(searchQuery.value.toLowerCase())
-	);
+	const query = searchQuery.value.toLocaleLowerCase();
+	if (!query) return dialogs.value;
+	return dialogs.value.filter((dialog) => {
+		const name = dialog.partner?.display_name || dialog.partner?.username || '';
+		return name.toLocaleLowerCase().includes(query);
+	});
 });
 
-// Открытие диалога
-const openConversation = async (userId) => {
-	store.dispatch('messenger/setActiveDialog', userId);
+const connectionLabel = computed(() => ({
+	idle: 'Не подключено',
+	connecting: 'Подключаемся',
+	authenticating: 'Проверяем',
+	connected: 'В эфире',
+	reconnecting: 'Восстанавливаем',
+	offline: 'Офлайн',
+}[connectionState.value] || 'Подключение'));
 
-	// Загружаем историю переписки
+const resolveAvatar = (avatar) => {
+	if (!avatar) return '';
+	if (/^https?:\/\//.test(avatar)) return avatar;
+	return `${apiBaseUrl}${avatar}`;
+};
+const avatarFallback = (name = '?') => String(name || '?').slice(0, 1).toUpperCase();
+const isOnline = (userId) => store.getters['messenger/isUserOnline'](userId);
+const isActiveDialog = (userId) => activeDialog.value === userId;
+const getConversation = (userId) => store.getters['messenger/getConversation'](userId);
+
+const openConversation = async (userId) => {
+	await store.dispatch('messenger/setActiveDialog', userId);
 	await store.dispatch('messenger/requestConversation', {
 		otherUserId: userId,
-		requestId: Date.now().toString(),
+		requestId: uuidv4(),
 	});
-
-	// Инициализируем IntersectionObserver после загрузки сообщений
-	nextTick(() => {
-		setupIntersectionObserver();
-	});
+	await nextTick();
+	setupIntersectionObserver();
 };
 
-// Закрытие диалога
-const closeConversation = () => {
-	store.dispatch('messenger/setActiveDialog', null);
+const closeConversation = () => store.dispatch('messenger/setActiveDialog', null);
+
+const markMessageAsRead = (messageId) => store.dispatch('messenger/markMessageAsRead', messageId);
+
+const setObserverTarget = (component) => {
+	const element = component?.$el;
+	if (element && !observerTargets.value.includes(element)) observerTargets.value.push(element);
 };
 
-// Проверка активного диалога
-const isActiveDialog = (userId) => {
-	return activeDialog.value === userId;
-};
-
-// Получение истории сообщений для активного диалога
-const getConversation = (userId) => {
-	return store.getters['messenger/getConversation'](userId);
-};
-
-// Отметка сообщения как прочитанного
-const markMessageAsRead = async (messageId) => {
-	try {
-		await store.dispatch('messenger/markMessageAsRead', messageId);
-	} catch (error) {
-		console.error('Ошибка при отметке сообщения как прочитанного:', error);
-	}
-};
-
-// Установка целей для IntersectionObserver
-const setObserverTarget = (el) => {
-	if (el) {
-		observerTargets.value.push(el.$el); // Сохраняем корневой элемент компонента
-	}
-};
-
-// Метод для инициализации IntersectionObserver
 const setupIntersectionObserver = () => {
+	intersectionObserver?.disconnect();
 	if (!messagesContainer.value) return;
 
-	const options = {
-		root: null, // Относительно viewport
-		threshold: 0, // Триггер при появлении любого фрагмента элемента
-	};
-
-	const observer = new IntersectionObserver((entries) => {
-		entries.forEach(entry => {
-			if (entry.isIntersecting) {
-				const messageId = entry.target.dataset.messageId;
-				const isCurrentUserMessage = entry.target.dataset.isCurrentUser === "true";
-				const isAlreadyRead = entry.target.dataset.isRead === "true";
-				// Отправляем запрос только для сообщений других пользователей и только если они еще не прочитаны
-				if (!isCurrentUserMessage && !isAlreadyRead && messageId) {
-					markMessageAsRead(messageId);
-
-					// Обновляем атрибут `data-is-read`, чтобы избежать повторной отправки
-					entry.target.dataset.isRead = "true";
-				}
+	intersectionObserver = new IntersectionObserver((entries) => {
+		entries.forEach((entry) => {
+			if (!entry.isIntersecting) return;
+			const messageId = entry.target.dataset.messageId;
+			const isCurrentUserMessage = entry.target.dataset.isCurrentUser === 'true';
+			const isAlreadyRead = entry.target.dataset.isRead === 'true';
+			if (!isCurrentUserMessage && !isAlreadyRead && messageId) {
+				markMessageAsRead(messageId);
+				entry.target.dataset.isRead = 'true';
 			}
 		});
-	}, options);
+	}, { root: messagesContainer.value, threshold: 0.4 });
 
-	// Наблюдаем за всеми сообщениями
-	observerTargets.value.forEach((target) => {
-		observer.observe(target);
-	});
+	observerTargets.value.forEach((target) => intersectionObserver.observe(target));
 };
 
-// Обработка отправки сообщения
 const handleSendMessage = async (messageData) => {
-	// Проверяем, что содержимое сообщения не пустое и активный диалог выбран
-	if (!messageData.content.trim() && !messageData.media_metadata?.files?.length && !messageData.media_metadata?.voice) return;
+	if (!isRealtimeReady.value || !activeDialog.value) return;
+	const rawContent = messageData.content || '';
+	if (!rawContent.trim() && !messageData.media_metadata?.files?.length && !messageData.media_metadata?.voice) return;
 
-	// Очищаем содержимое текстового поля
-	const sanitizedContent = DOMPurify.sanitize(messageData.content);
-
-	// Формируем полезную нагрузку для отправки сообщения
-	const messagePayload = {
-		frontId: Date.now().toString(), // Временный ID
-		content: sanitizedContent || '', // Очищенный текст или пустая строка
-		content_type: messageData.content_type, // Тип контента
-		media_metadata: messageData.media_metadata, // Медиа-метаданные
+	const sanitizedContent = DOMPurify.sanitize(rawContent);
+	await store.dispatch('messenger/sendPrivateMessage', {
+		frontId: uuidv4(),
+		content: sanitizedContent,
+		content_type: messageData.content_type,
+		media_metadata: messageData.media_metadata,
 		sender: {
-			uid: currentUser.value.uid, // UID текущего пользователя
-			name: currentUser.value.username, // Имя текущего пользователя
-			avatar: currentUser.value.avatar || '/images/default-avatar.png', // Аватар
+			uid: currentUser.value.uid,
+			name: currentUser.value.display_name || currentUser.value.username,
+			avatar: currentUser.value.avatar,
 		},
-		receiver_uid: activeDialog.value, // UID получателя
-		reply_to_uid: messageData.reply_to_uid, // UID сообщения, на которое отвечаем
-		status: 'sending', // Статус отправки
-	};
-
-	// Отправляем сообщение через Vuex
-	store.dispatch('messenger/sendPrivateMessage', messagePayload);
-
-	// Прокручиваем до конца списка сообщений
+		receiver_uid: activeDialog.value,
+		reply_to_uid: messageData.reply_to_uid,
+		status: 'sending',
+	});
 	await nextTick();
 	scrollToBottom();
 };
 
-// Прокрутка до конца списка сообщений
 const scrollToBottom = () => {
-	if (messagesContainer.value) {
-		messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-	}
+	if (messagesContainer.value) messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
 };
 
-const getStatusClass = (userId) => {
-	const userStatus = store.getters['getUserStatus'](userId);
-	if (!userStatus?.last_online) return 'offline';
-
-	const lastOnline = new Date(userStatus.last_online + 'Z');
-	const now = new Date();
-	const diffInSeconds = (now - lastOnline) / 1000;
-
-	return diffInSeconds <= 30 ? 'online' : 'offline';
+const hydrateDialogs = async () => {
+	const response = await MessengerService.getDialogs();
+	if (response.data.status !== 'ok') return;
+	dialogs.value = response.data.dialogs || [];
+	const userIds = dialogs.value.map((dialog) => dialog.partner_id).filter(Boolean);
+	if (userIds.length) store.dispatch('messenger/subscribeToStatuses', userIds);
 };
 
-// Автопрокрутка при новых сообщениях
 watch(
 	() => getConversation(activeDialog.value)?.length,
-	() => {
-		nextTick(() => {
-			scrollToBottom();
-			setupIntersectionObserver(); // Обновляем IntersectionObserver при новых сообщениях
-		});
+	async () => {
+		observerTargets.value = [];
+		await nextTick();
+		scrollToBottom();
+		setupIntersectionObserver();
 	},
-	{ deep: true }
 );
 
 onMounted(async () => {
 	try {
-		// Загружаем диалоги
-		const response = await MessengerService.getDialogs();
-		if (response.data.status === 'ok') {
-			dialogs.value = response.data.dialogs;
-		}
-
-		// Получаем userIds из диалогов
-		const userIds = dialogs.value.map((dialog) => dialog.partner_id);
-
-		// Загружаем статусы пользователей
-		//store.dispatch('fetchUserStatuses', userIds);
-
-		// Устанавливаем периодическое обновление статусов
-		/* setInterval(() => {
-			store.dispatch('fetchUserStatuses', userIds);
-		}, 60000); */
-
-		// Инициализируем IntersectionObserver
+		await hydrateDialogs();
 		setupIntersectionObserver();
 	} catch (error) {
-		console.error('Ошибка при загрузке данных:', error);
+		console.error('Ошибка загрузки личных разговоров:', error);
 	}
+});
+
+onBeforeUnmount(() => {
+	intersectionObserver?.disconnect();
+	const userIds = dialogs.value.map((dialog) => dialog.partner_id).filter(Boolean);
+	if (userIds.length) store.dispatch('messenger/unsubscribeFromStatuses', userIds);
 });
 </script>
 
 <style scoped>
-.messenger-container {
-	display: flex;
-	height: calc(100vh - 60px);
-	background-color: var(--bg-light);
-	color: var(--text-light);
-}
-
-.conversations-list {
-	width: 350px;
-	border-right: 1px solid #ddd;
-	display: flex;
-	flex-direction: column;
-	background-color: var(--sidebar-bg-light);
-}
-
-.search-bar {
-	padding: 15px;
-	border-bottom: 1px solid #ddd;
-}
-
-.search-bar input {
-	width: 100%;
-	padding: 8px 15px;
-	border-radius: 20px;
-	border: 1px solid #ddd;
-	outline: none;
-}
-
-.conversations {
-	flex: 1;
-	overflow-y: auto;
-}
-
-.conversation-item {
-	display: flex;
-	padding: 15px;
-	cursor: pointer;
-	border-bottom: 1px solid #eee;
-	align-items: center;
-	transition: background-color 0.2s;
-}
-
-.conversation-item:hover {
-	background-color: rgba(0, 0, 0, 0.05);
-}
-
-.conversation-item.active {
-	background-color: var(--primary-color);
-	color: white;
-}
-
-.conversation-item.active:hover {
-	background-color: var(--primary-color); /* Сохраняем фон активного элемента */
-	color: white; /* Сохраняем белый текст */
-}
-
-.user-avatar-container {
-	position: relative;
-	width: 50px;
-	height: 50px;
-}
-
-.user-avatar {
-	width: 100%;
-	height: 100%;
-	border-radius: 50%;
+.dm-shell {
+	height: calc(100dvh - 4.35rem);
+	min-height: 32rem;
+	display: grid;
+	grid-template-columns: minmax(17rem, 22rem) minmax(0, 1fr);
 	overflow: hidden;
+	border: 1px solid var(--ui-border);
+	border-radius: var(--ui-radius-xl);
+	background: var(--ui-surface);
+	box-shadow: var(--ui-shadow-sm);
 }
 
-.status-indicator {
-	position: absolute;
-	bottom: 0;
-	right: 0;
-	width: 10px;
-	height: 10px;
-	border-radius: 50%;
-	border: 2px solid white; /* Для контраста с фоном */
-	z-index: 1; /* Убедитесь, что маркер выше аватара */
+.dm-list { min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--ui-border); background: var(--ui-surface); }
+.dm-list__header { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--ui-space-3); padding: var(--ui-space-4); }
+.dm-eyebrow { display: block; margin-bottom: 0.15rem; color: var(--ui-text-subtle); font-size: var(--ui-text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.dm-list h1 { margin: 0; font-size: var(--ui-text-xl); }
+
+.connection-chip { min-height: 1.75rem; display: inline-flex; align-items: center; gap: var(--ui-space-1); padding: 0 var(--ui-space-2); border-radius: var(--ui-radius-pill); background: var(--ui-surface-muted); color: var(--ui-text-muted); font-size: var(--ui-text-xs); font-weight: 700; white-space: nowrap; }
+.connection-chip__dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: currentColor; }
+.connection-chip--connected { background: var(--ui-success-soft); color: var(--ui-success); }
+.connection-chip--connecting, .connection-chip--authenticating, .connection-chip--reconnecting { background: var(--ui-info-soft); color: var(--ui-info); }
+.connection-chip--offline { background: var(--ui-warning-soft); color: var(--ui-warning); }
+
+.dm-search { margin: 0 var(--ui-space-3) var(--ui-space-3); min-height: 2.75rem; display: flex; align-items: center; gap: var(--ui-space-2); padding: 0 var(--ui-space-3); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-pill); background: var(--ui-surface-soft); color: var(--ui-text-subtle); }
+.dm-search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--ui-text); font: inherit; }
+
+.dm-inline-notice { display: flex; gap: var(--ui-space-2); margin: 0 var(--ui-space-3) var(--ui-space-3); padding: var(--ui-space-2) var(--ui-space-3); border-radius: var(--ui-radius-md); background: var(--ui-info-soft); color: var(--ui-info); font-size: var(--ui-text-xs); }
+.dm-inline-notice--privacy, .dm-inline-notice--warning { background: var(--ui-warning-soft); color: var(--ui-warning); }
+.dm-inline-notice--error { background: var(--ui-danger-soft); color: var(--ui-danger); }
+
+.conversation-list { min-height: 0; flex: 1; overflow-y: auto; padding: 0 var(--ui-space-2) var(--ui-space-3); }
+.conversation-card { width: 100%; min-height: 4.4rem; display: grid; grid-template-columns: 2.75rem minmax(0, 1fr) auto; align-items: center; gap: var(--ui-space-3); padding: var(--ui-space-2) var(--ui-space-3); border: 0; border-radius: var(--ui-radius-lg); background: transparent; color: var(--ui-text); text-align: left; cursor: pointer; }
+.conversation-card:hover { background: var(--ui-surface-muted); }
+.conversation-card--active { background: var(--ui-primary-soft); }
+.conversation-avatar { position: relative; width: 2.75rem; height: 2.75rem; display: grid; place-items: center; overflow: visible; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-primary); font-weight: 800; }
+.conversation-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.presence-dot { position: absolute; right: -0.05rem; bottom: 0.05rem; width: 0.7rem; height: 0.7rem; border: 2px solid var(--ui-surface); border-radius: 50%; background: var(--ui-border-strong); }
+.presence-dot--online { background: var(--ui-success); }
+.conversation-copy { min-width: 0; display: grid; gap: 0.2rem; }
+.conversation-copy strong, .conversation-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-copy small { color: var(--ui-text-subtle); font-size: var(--ui-text-xs); }
+.unread-badge { min-width: 1.45rem; height: 1.45rem; display: grid; place-items: center; padding: 0 0.35rem; border-radius: var(--ui-radius-pill); background: var(--ui-primary); color: var(--ui-primary-contrast); font-size: 0.7rem; font-weight: 800; }
+
+.conversation-empty { min-height: 14rem; display: grid; place-items: center; align-content: center; gap: var(--ui-space-2); padding: var(--ui-space-5); text-align: center; color: var(--ui-text-muted); }
+.conversation-empty__icon { width: 3rem; height: 3rem; display: grid; place-items: center; border-radius: 50%; background: var(--ui-surface-muted); color: var(--ui-text-subtle); }
+.conversation-empty strong { color: var(--ui-text); }
+.conversation-empty span { max-width: 17rem; font-size: var(--ui-text-xs); }
+
+.dm-conversation { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--ui-bg); }
+.dm-conversation__header { min-height: 4.25rem; display: flex; align-items: center; gap: var(--ui-space-3); padding: var(--ui-space-2) var(--ui-space-4); border-bottom: 1px solid var(--ui-border); background: var(--ui-surface); }
+.back-button { display: none; width: 2.5rem; height: 2.5rem; place-items: center; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text-muted); }
+.active-persona { min-width: 0; display: flex; align-items: center; gap: var(--ui-space-3); color: var(--ui-text); text-decoration: none; }
+.active-persona__avatar { width: 2.55rem; height: 2.55rem; display: grid; place-items: center; overflow: hidden; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-primary); font-weight: 800; }
+.active-persona__avatar img { width: 100%; height: 100%; object-fit: cover; }
+.active-persona__copy { min-width: 0; display: grid; }
+.active-persona__copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.active-persona__copy small { color: var(--ui-text-subtle); font-size: var(--ui-text-xs); }
+
+.dm-stream { min-height: 0; flex: 1; overflow-y: auto; padding: var(--ui-space-4) clamp(var(--ui-space-3), 4vw, var(--ui-space-8)); }
+.dm-stream__empty { min-height: 100%; display: grid; place-items: center; align-content: center; gap: var(--ui-space-2); text-align: center; color: var(--ui-text-muted); }
+.dm-stream__empty i { width: 3.5rem; height: 3.5rem; display: grid; place-items: center; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: var(--ui-text-xl); }
+.dm-stream__empty strong { color: var(--ui-text); }
+.dm-stream__empty span { max-width: 28rem; font-size: var(--ui-text-sm); }
+
+.composer-state { padding: var(--ui-space-2) var(--ui-space-4); border-top: 1px solid var(--ui-border); background: var(--ui-surface-soft); color: var(--ui-text-muted); font-size: var(--ui-text-xs); text-align: center; }
+.dm-placeholder { flex: 1; display: grid; place-items: center; align-content: center; gap: var(--ui-space-3); padding: var(--ui-space-8); text-align: center; }
+.dm-placeholder__art { width: 5rem; height: 5rem; display: grid; place-items: center; border-radius: 1.75rem; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 2rem; transform: rotate(4deg); }
+.dm-placeholder h2 { margin: var(--ui-space-2) 0 0; font-size: var(--ui-text-xl); }
+.dm-placeholder p { max-width: 32rem; margin: 0; color: var(--ui-text-muted); }
+
+@media (max-width: 760px) {
+	.dm-shell { height: calc(100dvh - 8.4rem); grid-template-columns: 1fr; margin-inline: calc(var(--ui-space-3) * -1); border-right: 0; border-left: 0; border-radius: 0; }
+	.dm-conversation { display: none; }
+	.dm-shell--conversation-open .dm-list { display: none; }
+	.dm-shell--conversation-open .dm-conversation { display: flex; }
+	.back-button { display: grid; }
+	.dm-list { border-right: 0; }
 }
-
-.status-indicator.online {
-	background-color: green;
-}
-
-.status-indicator.offline {
-	background-color: gray;
-}
-
-.user-avatar img {
-	width: 100%;
-	height: 100%;
-	object-fit: cover;
-}
-
-.conversation-info {
-	flex: 1;
-	min-width: 0;
-	margin-left: 10px;
-}
-
-.user-name {
-	font-weight: bold;
-	margin-bottom: 5px;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.last-message {
-	font-size: 0.9em;
-	color: #777;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.conversation-item.active .last-message {
-	color: rgba(255, 255, 255, 0.8);
-}
-
-.unread-count {
-	background-color: var(--primary-color);
-	color: white;
-	border-radius: 50%;
-	width: 25px;
-	height: 25px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	font-size: 0.8em;
-}
-
-.conversation-item.active .unread-count {
-	background-color: white;
-	color: var(--primary-color);
-}
-
-.conversation-view {
-	flex: 1;
-	display: flex;
-	flex-direction: column;
-}
-
-.conversation-header {
-	padding: 15px;
-	border-bottom: 1px solid #ddd;
-	display: flex;
-	align-items: center;
-	background-color: var(--sidebar-bg-light);
-}
-
-.back-button {
-	margin-right: 15px;
-	cursor: pointer;
-	display: none;
-}
-
-.user-info {
-	display: flex;
-	align-items: center;
-}
-
-.profile-link {
-	display: block; /* Чтобы ссылка занимала всю область аватара */
-	width: 40px;
-	height: 40px;
-	border-radius: 50%;
-	overflow: hidden; /* Обрезаем изображение по кругу */
-	margin-right: 10px;
-	cursor: pointer;
-}
-
-.profile-link img {
-	width: 100%;
-	height: 100%;
-	object-fit: cover; /* Сохраняем пропорции изображения */
-}
-
-.username-link {
-	text-decoration: none; /* Убираем подчеркивание ссылки */
-	color: inherit; /* Наследуем цвет текста */
-	font-weight: bold;
-	cursor: pointer;
-}
-
-.username-link:hover {
-	text-decoration: underline; /* Подчеркиваем при наведении */
-}
-
-.user-info div {
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-}
-
-.messages-container {
-	flex: 1;
-	padding: 20px;
-	overflow-y: auto;
-	background-color: var(--bg-light);
-}
-
-.empty-state {
-	flex: 1;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	background-color: var(--bg-light);
-}
-
-.empty-content {
-	text-align: center;
-	color: #777;
-}
-
-.empty-content i {
-	font-size: 3em;
-	margin-bottom: 15px;
-	color: var(--primary-color);
-}
-
-@media (max-width: 768px) {
-	.conversations-list {
-		width: 100%;
-		display: block;
-	}
-
-	.conversation-view {
-		display: none;
-	}
-
-	.conversation-view.active {
-		display: flex;
-	}
-
-	.back-button {
-		display: block;
-	}
-
-	.messenger-container.show-conversation .conversations-list {
-		display: none;
-	}
-
-	.messenger-container.show-conversation .conversation-view {
-		display: flex;
-	}
-}
-
-/* Темная тема */
-@media (prefers-color-scheme: dark) {
-
-	.conversations-list,
-	.conversation-header {
-		background-color: var(--sidebar-bg-dark);
-		border-color: #444;
-	}
-
-	.search-bar input {
-		background-color: #333;
-		border-color: #444;
-		color: white;
-	}
-
-	.conversation-item {
-		border-color: #444;
-	}
-
-	.conversation-item:hover {
-		background-color: rgba(255, 255, 255, 0.05);
-	}
-
-	.last-message {
-		color: #aaa;
-	}
-
-	.message-time {
-		color: #aaa;
-	}
-}
-
 </style>

@@ -1,4 +1,5 @@
-from fastapi import Request, HTTPException, WebSocketException, status
+from fastapi import HTTPException, Request, status
+
 from utils.jwt import validate_access_token
 from utils.logger import setup_logger
 
@@ -23,22 +24,8 @@ async def auth_middle(request: Request):
         )
 
     request.state.user = user_data
-    # Compatibility with legacy handlers. Remove after Account/Profile migration.
     request.state.user_uid = user_data["user_uid"]
     logger.info("HTTP-аутентификация успешна для пользователя %s", user_data["user_uid"])
-    return user_data
-
-
-async def auth_middle_ws(token: str):
-    user_data = validate_access_token(token)
-    if not user_data:
-        logger.warning("Недопустимый токен в запросе WebSocket")
-        raise WebSocketException(
-            code=status.WS_1008_POLICY_VIOLATION,
-            reason="Invalid token",
-        )
-
-    logger.info("WebSocket-аутентификация успешна для пользователя %s", user_data["user_uid"])
     return user_data
 
 

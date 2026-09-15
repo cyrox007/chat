@@ -1,26 +1,37 @@
-from fastapi import FastAPI, APIRouter, Query, WebSocket, Depends
-from views.rooms.ws_handlers import handle_websocket_connection
-from components.auth.middleware import auth_middle_ws
+from uuid import UUID
+
+from fastapi import APIRouter, FastAPI, WebSocket, status
+
 from utils.logger import setup_logger
+from views.realtime.ws_auth import authenticate_websocket
+from views.rooms.ws_handlers import handle_websocket_connection
 
 logger = setup_logger(__name__)
 
+
 def install(app: FastAPI):
-    router = APIRouter(prefix='/ws')
-    @router.websocket("/{token}/rooms/{room_uid}")
-    async def websocket_endpoint(
-        websocket: WebSocket,
-        room_uid: str,
-        token: str,
-        user=Depends(auth_middle_ws)
-    ):
-        logger.info(f"Получен запрос на подключение WebSocket к комнате {room_uid} с токеном {token[:10]}...")
+    router = APIRouter(prefix="/ws/v2")
+
+    @router.websocket("/rooms/{room_uid}")
+    async def websocket_endpoint(websocket: WebSocket, room_uid: UUID):
+        user = await authenticate_websocket(
+            websocket=websocket,
+            target="room",
+            resource_uid=room_uid,
+        )
+        if not user:
+            return
+
         try:
-            await websocket.accept()
-            logger.info(f"Установлено подключение к WebSocket для комнаты {room_uid}")
             await handle_websocket_connection(websocket, room_uid, user)
-        except Exception as e:
-            logger.error(f"WebSocket error: {e}")
-            #await websocket.close(code=1008, reason="Connection error")
+        except Exception as exc:
+            logger.exception("Room WebSocket error for %s: %s", room_uid, exc)
+            try:
+                await websocket.close(
+                    code=status.WS_1011_INTERNAL_ERROR,
+                    reason="Realtime room error",
+                )
+            except Exception:
+                pass
 
     app.include_router(router)

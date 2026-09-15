@@ -1,254 +1,319 @@
 import asyncio
 from collections import defaultdict
 from datetime import datetime
-from uuid import UUID
-from typing import Dict, List, Set, Tuple, Optional
+from typing import Dict, List, Optional, Set, Tuple
+from uuid import UUID, uuid4
+
 from fastapi import WebSocket
 
+from components.realtime import realtime_service
 from components.user.model import User
+from settings import config
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
 
 class ConnectionManager:
+    """
+    Keeps only process-local WebSocket objects in memory.
+
+    Delivery, tickets and presence are delegated to realtime_service so multiple
+    Uvicorn workers can participate in one logical PubChat realtime network.
+    """
+
     def __init__(self):
-        # Для комнатных чатов: {room_uid: [(websocket, user_uid), ...]}
         self.room_connections: Dict[UUID, List[Tuple[WebSocket, UUID]]] = {}
-
-        # Для приватных сообщений: {user_uid: [websocket, ...]}
         self.user_connections: Dict[UUID, List[WebSocket]] = {}
-
-        # Для хранения активных диалогов: {websocket: dialog_with_uid}
         self.active_dialogs: Dict[WebSocket, UUID] = {}
-
-        # Время последней активности
         self.user_last_seen: Dict[UUID, datetime] = {}
-
-        # Добавляем систему подписок
         self.status_subscriptions: Dict[UUID, Set[UUID]] = defaultdict(set)
+        self.connection_ids: Dict[WebSocket, str] = {}
+        realtime_service.register_callback(self._handle_bus_event)
 
     @property
     def active_connections(self) -> Dict[UUID, List[WebSocket]]:
-        """Возвращает словарь активных соединений пользователей"""
         return self.user_connections
 
     @property
     def online_users_count(self) -> int:
-        """Возвращает количество уникальных онлайн пользователей"""
         return len(self.user_connections)
 
-    async def connect_to_room(self, websocket: WebSocket, room_uid: UUID, user_uid: UUID):
-        """Подключение к комнатному чату"""
-        if room_uid not in self.room_connections:
-            self.room_connections[room_uid] = []
+    def _connection_id(self, websocket: WebSocket) -> str:
+        connection_id = self.connection_ids.get(websocket)
+        if not connection_id:
+            connection_id = str(uuid4())
+            self.connection_ids[websocket] = connection_id
+        return connection_id
 
-        self.room_connections[room_uid].append((websocket, user_uid))
-        logger.info(
-            f"Пользователь {user_uid} подключился к комнате {room_uid}")
+    async def _send_json(self, websocket: WebSocket, message: dict) -> None:
+        """Bound per-socket send latency so a slow consumer cannot block fan-out."""
+        await asyncio.wait_for(
+            websocket.send_json(message),
+            timeout=config.REALTIME_SEND_TIMEOUT_SECONDS,
+        )
+
+    async def connect_to_room(self, websocket: WebSocket, room_uid: UUID, user_uid: UUID):
+        self.room_connections.setdefault(room_uid, []).append((websocket, user_uid))
+        connection_id = self._connection_id(websocket)
+        was_online = await realtime_service.is_online(user_uid)
+        await realtime_service.register_connection(
+            connection_id=connection_id,
+            user_uid=user_uid,
+            target="room",
+            room_uid=room_uid,
+        )
+        logger.info("Пользователь %s подключился к пространству %s", user_uid, room_uid)
+        if not was_online:
+            await realtime_service.publish_status(user_uid, True)
         await self.broadcast_user_list(room_uid)
 
     async def connect_to_messenger(self, websocket: WebSocket, user_uid: UUID):
-        """Подключение к мессенджеру (для приватных сообщений)"""
-        if user_uid not in self.user_connections:
-            self.user_connections[user_uid] = []
+        self.user_connections.setdefault(user_uid, []).append(websocket)
+        connection_id = self._connection_id(websocket)
+        was_online = await realtime_service.is_online(user_uid)
+        await realtime_service.register_connection(
+            connection_id=connection_id,
+            user_uid=user_uid,
+            target="messenger",
+        )
+        logger.info("Пользователь %s подключился к messenger", user_uid)
+        if not was_online:
+            await realtime_service.publish_status(user_uid, True)
 
-        self.user_connections[user_uid].append(websocket)
-        logger.info(f"Пользователь {user_uid} подключился к мессенджеру")
+    async def disconnect(self, websocket: WebSocket, room_uid: Optional[UUID] = None):
+        affected_user_uid: Optional[UUID] = None
 
-    def disconnect(self, websocket: WebSocket, room_uid: Optional[UUID] = None):
-        """Отключение от комнаты или мессенджера"""
         if room_uid is not None:
-            # Отключение от комнаты
-            if room_uid in self.room_connections:
-                self.room_connections[room_uid] = [
-                    conn for conn in self.room_connections[room_uid]
-                    if conn[0] != websocket
-                ]
-                if not self.room_connections[room_uid]:
-                    del self.room_connections[room_uid]
-                logger.info(f"Пользователь отключился от комнаты {room_uid}")
-                asyncio.create_task(self.broadcast_user_list(room_uid))
-        else:
-            # Отключение от мессенджера
-            for uid, connections in list(self.user_connections.items()):
-                if websocket in connections:
-                    connections.remove(websocket)
-                    if not connections:  # Если больше нет соединений для пользователя
-                        del self.user_connections[uid]
-                    logger.info(
-                        f"Пользователь {uid} отключился от мессенджера")
+            connections = self.room_connections.get(room_uid, [])
+            for connection, user_uid in connections:
+                if connection is websocket:
+                    affected_user_uid = user_uid
                     break
+            remaining = [conn for conn in connections if conn[0] is not websocket]
+            if remaining:
+                self.room_connections[room_uid] = remaining
+            else:
+                self.room_connections.pop(room_uid, None)
+        else:
+            for user_uid, connections in list(self.user_connections.items()):
+                if websocket in connections:
+                    affected_user_uid = user_uid
+                    remaining = [connection for connection in connections if connection is not websocket]
+                    if remaining:
+                        self.user_connections[user_uid] = remaining
+                    else:
+                        self.user_connections.pop(user_uid, None)
+                    break
+            self.active_dialogs.pop(websocket, None)
+
+        connection_id = self.connection_ids.pop(websocket, None)
+        if connection_id:
+            record = await realtime_service.unregister_connection(connection_id)
+            if affected_user_uid is None and record and record.get("user_uid"):
+                try:
+                    affected_user_uid = UUID(record["user_uid"])
+                except ValueError:
+                    pass
+
+        if room_uid is not None:
+            await self.broadcast_user_list(room_uid)
+
+        if affected_user_uid and not await realtime_service.is_online(affected_user_uid):
+            await realtime_service.publish_status(affected_user_uid, False)
+
+    async def touch_connection(self, websocket: WebSocket) -> None:
+        connection_id = self.connection_ids.get(websocket)
+        if connection_id:
+            await realtime_service.touch_connection(connection_id)
 
     async def broadcast_user_list(self, room_uid: UUID):
-        """Отправляет обновленный список пользователей в комнате"""
-        if room_uid in self.room_connections:
-            user_list = [str(user_uid)
-                         for _, user_uid in self.room_connections[room_uid]]
-            message = {"type": "user_list", "users": user_list}
-            await self.broadcast_to_room(room_uid, message)
+        users = await realtime_service.room_users(room_uid)
+        await realtime_service.publish_room(
+            room_uid,
+            {"type": "user_list", "users": users, "protocol": 2},
+        )
 
     async def broadcast_to_room(self, room_uid: UUID, message: dict):
-        """Отправляет сообщение всем в комнате"""
-        if room_uid in self.room_connections:
-            for connection, _ in self.room_connections[room_uid]:
-                try:
-                    await connection.send_json(message)
-                except Exception as e:
-                    logger.error(
-                        f"Ошибка при отправке сообщения в комнату {room_uid}: {e}")
+        await realtime_service.publish_room(room_uid, message)
 
-    async def send_to_user(self, user_uid: UUID, message: dict):
-        # Преобразуем user_uid в UUID, если это строка
-        if isinstance(user_uid, str):
+    async def send_to_user(self, user_uid: UUID | str, message: dict):
+        try:
+            normalized_uid = UUID(str(user_uid))
+        except ValueError:
+            logger.error("Некорректный UUID пользователя для realtime delivery: %s", user_uid)
+            return
+        await realtime_service.publish_user(normalized_uid, message)
+
+    async def _send_local_room(
+        self,
+        room_uid: UUID,
+        message: dict,
+        exclude_user: Optional[UUID] = None,
+    ) -> None:
+        stale: list[WebSocket] = []
+        coroutines = []
+        sockets = []
+        for websocket, user_uid in list(self.room_connections.get(room_uid, [])):
+            if exclude_user and user_uid == exclude_user:
+                continue
+            sockets.append(websocket)
+            coroutines.append(self._send_json(websocket, message))
+
+        if coroutines:
+            results = await asyncio.gather(*coroutines, return_exceptions=True)
+            for websocket, result in zip(sockets, results):
+                if isinstance(result, Exception):
+                    stale.append(websocket)
+                    if isinstance(result, asyncio.TimeoutError):
+                        logger.warning("Realtime room consumer exceeded send timeout: room=%s", room_uid)
+
+        for websocket in stale:
+            await self.disconnect(websocket, room_uid)
+
+    async def _send_local_user(self, user_uid: UUID, message: dict) -> None:
+        sockets = list(self.user_connections.get(user_uid, []))
+        if not sockets:
+            return
+        results = await asyncio.gather(
+            *(self._send_json(websocket, message) for websocket in sockets),
+            return_exceptions=True,
+        )
+        for websocket, result in zip(sockets, results):
+            if isinstance(result, Exception):
+                if isinstance(result, asyncio.TimeoutError):
+                    logger.warning("Realtime DM consumer exceeded send timeout: user=%s", user_uid)
+                await self.disconnect(websocket)
+
+    async def _handle_bus_event(self, event: dict) -> None:
+        kind = event.get("kind")
+        if kind == "room":
             try:
-                user_uid = UUID(user_uid)
-            except ValueError:
-                logger.error(
-                    f"Некорректный формат UUID для user_uid: {user_uid}")
+                room_uid = UUID(event["room_uid"])
+            except (KeyError, ValueError):
                 return
-
-        # logger.debug(f"Ищем пользователя {user_uid} среди подключенных")
-        if user_uid in self.user_connections:
-            # logger.debug(f"Нашли подключения {user_uid}: {self.user_connections[user_uid]}")
-            for websocket in self.user_connections[user_uid]:
-                # logger.debug(f"Отправляем на клиент {websocket}")
+            exclude_user = None
+            if event.get("exclude_user"):
                 try:
-                    await websocket.send_json(message)
-                    logger.info(
-                        f"Сообщение успешно отправлено пользователю {user_uid}")
-                except Exception as e:
-                    logger.error(
-                        f"Ошибка при отправке сообщения пользователю {user_uid}: {e}")
-                    # Удаляем недоступное соединение
-                    self.user_connections[user_uid].remove(websocket)
-                    # Если больше нет соединений
-                    if not self.user_connections[user_uid]:
-                        del self.user_connections[user_uid]
-                    logger.warning(
-                        f"Соединение с пользователем {user_uid} удалено из-за ошибки")
-        else:
-            logger.error(
-                f"Пользователь {user_uid} не найден среди активных соединений")
+                    exclude_user = UUID(event["exclude_user"])
+                except ValueError:
+                    pass
+            await self._send_local_room(room_uid, event.get("payload", {}), exclude_user)
+            return
+
+        if kind == "user":
+            try:
+                user_uid = UUID(event["user_uid"])
+            except (KeyError, ValueError):
+                return
+            await self._send_local_user(user_uid, event.get("payload", {}))
+            return
+
+        if kind == "status":
+            try:
+                target_uid = UUID(event["user_uid"])
+            except (KeyError, ValueError):
+                return
+            message = {
+                "type": "status_update",
+                "statuses": {str(target_uid): bool(event.get("is_online"))},
+            }
+            for subscriber_uid in tuple(self.status_subscriptions.get(target_uid, set())):
+                await self._send_local_user(subscriber_uid, message)
+            return
+
+        if kind == "room_control" and event.get("action") == "disconnect_user":
+            try:
+                room_uid = UUID(event["room_uid"])
+                user_uid = UUID(event["user_uid"])
+            except (KeyError, ValueError):
+                return
+            reason = str(event.get("reason") or "Access to this space was restricted")[:120]
+            for websocket, connection_user_uid in list(self.room_connections.get(room_uid, [])):
+                if connection_user_uid != user_uid:
+                    continue
+                try:
+                    await asyncio.wait_for(
+                        websocket.close(code=4001, reason=reason),
+                        timeout=config.REALTIME_SEND_TIMEOUT_SECONDS,
+                    )
+                except Exception:
+                    pass
+                finally:
+                    await self.disconnect(websocket, room_uid)
 
     def set_active_dialog(self, websocket: WebSocket, dialog_with_uid: UUID):
-        """Устанавливает активный диалог для пользователя"""
         self.active_dialogs[websocket] = dialog_with_uid
-        logger.info(
-            f"Для WebSocket установлен активный диалог с пользователем {dialog_with_uid}")
 
     def get_active_dialog(self, websocket: WebSocket) -> Optional[UUID]:
-        """Возвращает UID пользователя, с которым ведется активный диалог"""
         return self.active_dialogs.get(websocket)
 
     async def send_to_specific_user(self, websocket: WebSocket, message: dict):
-        """
-        Отправляет сообщение только на конкретное устройство (websocket).
-        """
         try:
-            await websocket.send_json(message)
-            logger.info(f"Сообщение отправлено на конкретное устройство")
-        except Exception as e:
-            logger.error(
-                f"Ошибка при отправке сообщения на конкретное устройство: {e}")
-            # Удаляем недоступное соединение
-            for user_uid, connections in list(self.user_connections.items()):
-                if websocket in connections:
-                    connections.remove(websocket)
-                    if not connections:  # Если больше нет соединений для пользователя
-                        del self.user_connections[user_uid]
-                    logger.warning(
-                        f"Удалено недоступное соединение для пользователя {user_uid}")
-                    break
+            await self._send_json(websocket, message)
+        except Exception:
+            logger.exception("Ошибка отправки realtime сообщения на конкретное устройство")
+            await self.disconnect(websocket)
 
     async def update_user_activity(self, db_session, user_uid: UUID):
-        """Обновляет время последней активности пользователя"""
         self.user_last_seen[user_uid] = datetime.now()
-
-        # Обновляем last_online в базе данных
         await User.update_last_online(db_session, user_uid)
 
     async def subscribe_to_status(self, subscriber_uid: UUID, target_uids: List[UUID]):
-        """Подписаться на статусы пользователей"""
+        statuses = {}
         for target_uid in target_uids:
             self.status_subscriptions[target_uid].add(subscriber_uid)
-        
-        # Отправляем текущие статусы
-        current_statuses = {}
-        for target_uid in target_uids:
-            current_statuses[str(target_uid)] = target_uid in self.user_connections
-        
-        await self.send_to_user(subscriber_uid, {
-            "type": "status_update",
-            "statuses": current_statuses
-        })
+            statuses[str(target_uid)] = await realtime_service.is_online(target_uid)
+        await self._send_local_user(
+            subscriber_uid,
+            {"type": "status_update", "statuses": statuses},
+        )
 
     async def unsubscribe_from_status(self, subscriber_uid: UUID, target_uids: List[UUID]):
-        """Отписаться от статусов пользователей"""
         for target_uid in target_uids:
-            if subscriber_uid in self.status_subscriptions[target_uid]:
-                self.status_subscriptions[target_uid].remove(subscriber_uid)
+            subscribers = self.status_subscriptions.get(target_uid)
+            if not subscribers:
+                continue
+            subscribers.discard(subscriber_uid)
+            if not subscribers:
+                self.status_subscriptions.pop(target_uid, None)
 
     async def broadcast_status_update(self, user_uid: UUID, is_online: bool):
-        """Разослать обновление статуса всем подписчикам"""
-        for subscriber_uid in self.status_subscriptions.get(user_uid, set()):
-            await self.send_to_user(subscriber_uid, {
-                "type": "status_update",
-                "statuses": {str(user_uid): is_online}
-            })
+        await realtime_service.publish_status(user_uid, is_online)
 
     def get_user_connection(self, room_uid: UUID, user_uid: UUID) -> Optional[WebSocket]:
-        """Получить соединение пользователя в конкретной комнате"""
-        if room_uid not in self.room_connections:
-            return None
-        
-        for connection, uid in self.room_connections[room_uid]:
-            print(f"conn: {connection} - user: {type(uid)}")
-            print(f"user targ: {user_uid} - type: {type(user_uid)}")
+        for connection, uid in self.room_connections.get(room_uid, []):
             if uid == user_uid:
                 return connection
         return None
 
-    async def disconnect_user_from_room(self, room_uid: UUID, user_uid: UUID):
-        """Принудительно отключить пользователя от комнаты"""
-        if room_uid not in self.room_connections:
-            return
+    async def disconnect_user_from_room(
+        self,
+        room_uid: UUID,
+        user_uid: UUID,
+        reason: str = "Access to this space was restricted",
+    ):
+        await realtime_service.publish(
+            {
+                "kind": "room_control",
+                "action": "disconnect_user",
+                "room_uid": str(room_uid),
+                "user_uid": str(user_uid),
+                "reason": reason[:120],
+            }
+        )
 
-        # Находим все соединения пользователя в этой комнате
-        user_connections = [
-            (ws, uid) for ws, uid in self.room_connections[room_uid]
-            if uid == user_uid
-        ]
-
-        # Закрываем соединения
-        for connection, _ in user_connections:
-            try:
-                await connection.close(code=4001, reason="Banned from room")
-            except Exception as e:
-                logger.error(f"Ошибка при отключении пользователя {user_uid}: {e}")
-
-        # Удаляем из списка подключений
-        self.room_connections[room_uid] = [
-            conn for conn in self.room_connections[room_uid]
-            if conn[1] != user_uid
-        ]
-
-        if not self.room_connections[room_uid]:
-            del self.room_connections[room_uid]
-
-        logger.info(f"Пользователь {user_uid} отключен от комнаты {room_uid}")
-        await self.broadcast_user_list(room_uid)
-
-    async def broadcast_to_room_except(self, room_uid: UUID, message: dict, exclude_user: UUID = None):
-        """Отправить сообщение всем в комнате, кроме указанного пользователя"""
-        if room_uid not in self.room_connections:
-            return
-
-        for connection, user_uid in self.room_connections[room_uid]:
-            if exclude_user and user_uid == exclude_user:
-                continue
-                
-            try:
-                await connection.send_json(message)
-            except Exception as e:
-                logger.error(f"Ошибка при отправке сообщения в комнату {room_uid}: {e}")
+    async def broadcast_to_room_except(
+        self,
+        room_uid: UUID,
+        message: dict,
+        exclude_user: UUID | None = None,
+    ):
+        await realtime_service.publish(
+            {
+                "kind": "room",
+                "room_uid": str(room_uid),
+                "exclude_user": str(exclude_user) if exclude_user else None,
+                "payload": message,
+            }
+        )

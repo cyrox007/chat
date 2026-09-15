@@ -4,7 +4,7 @@
 
 PubChat is a client-server application. The current primary client is a Vue 3 SPA built with Vite. It must behave like an application, not like a collection of independently reloaded web pages.
 
-The SPA is the first client, not the definition of the backend contract. Native Android and iOS clients may be added later and should reuse the same domain model and public API semantics.
+The SPA is the first client, not the definition of the backend contract. Native Android and iOS clients may be added later and should reuse the same domain model, HTTP API and Realtime v2 semantics.
 
 ## Boundaries
 
@@ -17,7 +17,8 @@ The SPA is the first client, not the definition of the backend contract. Native 
 - Space membership and scoped roles;
 - messaging rules and persistence;
 - trust, anti-abuse and rate limits;
-- authoritative realtime events.
+- authoritative realtime events;
+- distributed presence and idempotency.
 
 A client must not be trusted to enforce authorization or privacy by itself.
 
@@ -39,11 +40,13 @@ A client must not be trusted to enforce authorization or privacy by itself.
 - mobile is a first-class layout, with persistent bottom navigation where useful;
 - server errors should degrade the affected feature instead of resetting the whole application;
 - a 403 means “not allowed”, not “log the user out”;
-- API responses must use stable projections instead of serializing ORM objects.
+- API responses must use stable projections instead of serializing ORM objects;
+- offline/reconnect keeps already loaded conversation context visible;
+- a composer is disabled when transport/permission state cannot accept the action.
 
 ## API-first rule
 
-New client-facing work targets versioned domain endpoints such as `/identity/v2`. Legacy `/users/*` routes are compatibility surfaces and must not receive new product features.
+New client-facing work targets versioned domain endpoints such as `/identity/v2` and `/realtime/v2`. Legacy `/users/*` and token-in-path WebSocket patterns are compatibility history and must not receive new product features.
 
 Public API projections are intentionally different by context:
 
@@ -54,25 +57,45 @@ Public API projections are intentionally different by context:
 
 This separation must remain valid for web, Android and iOS clients.
 
-## Authentication direction
+## Authentication model
 
-Today the SPA uses:
+The SPA uses:
 
-- short-lived JWT access token;
+- short-lived JWT access token kept **only in JS memory**;
 - rotating refresh token in an HttpOnly cookie;
 - server-side `IdentitySession` with only a hash of the refresh token;
 - automatic refresh without page reload;
-- lazy migration of legacy refresh sessions.
+- lazy migration of legacy refresh sessions;
+- one-time scoped Realtime v2 tickets for WebSocket authentication.
 
-Access-token storage in `localStorage` remains transitional technical debt. Realtime v2 and later client-hardening work may move browser access-token state to memory and introduce platform-specific secure storage for native clients.
+The browser never needs to persist a reusable bearer token in `localStorage`.
+
+On document reload cached Persona/identity data may be used to render the shell quickly, but it is presentation state only. The client silently restores an access token through the HttpOnly refresh session and re-syncs `/identity/v2/me`. Backend state remains authoritative.
+
+## Realtime boundary
+
+The SPA does not construct WebSocket URLs containing access tokens.
+
+It:
+
+1. obtains a scoped ticket through authenticated HTTP;
+2. opens `/ws/v2/...`;
+3. sends the one-time ticket in the first auth frame;
+4. waits for `realtime_ready`;
+5. starts heartbeat and the connected UI state.
+
+Redis-backed pub/sub, presence, rate limiting and idempotency are backend concerns. Vue stores hold the client-side connection state machine and presentation data only.
+
+The protocol is documented in `docs/realtime-v2.md`.
 
 ## Future native clients
 
-Native Android/iOS are explicitly possible, but not a Stage 2 requirement. When added:
+Native Android/iOS are explicitly possible, but are not required while the web client/domain are still evolving. When added:
 
 - business rules stay on the backend;
 - API DTOs remain reusable;
-- native secure storage replaces browser storage details;
+- native secure storage replaces browser refresh/session storage details;
+- Realtime v2 ticket/handshake is reusable without browser cookies in the WebSocket URL;
 - push notification tokens become device/session capabilities;
 - camera, media picker, deep links and share sheets are adapters around the same domain actions;
 - native navigation may differ visually without changing Account/Persona/Space semantics.
