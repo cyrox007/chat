@@ -1,4 +1,5 @@
 from typing import Literal, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -30,6 +31,10 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     identifier: str = Field(min_length=1, max_length=255)
     password: str = Field(min_length=1, max_length=128)
+
+
+class ProfilesBatchRequest(BaseModel):
+    account_uids: list[UUID] = Field(min_length=1, max_length=100)
 
 
 class PersonaUpdateRequest(BaseModel):
