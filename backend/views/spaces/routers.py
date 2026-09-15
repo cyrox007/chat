@@ -5,6 +5,23 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
+from components.space.content_schemas import (
+    SpaceEventCreateRequest,
+    SpaceEventUpdateRequest,
+    SpaceRuleCreateRequest,
+    SpaceRuleUpdateRequest,
+)
+from components.space.content_service import (
+    create_event,
+    create_rule,
+    delete_event,
+    delete_rule,
+    list_events,
+    list_history,
+    list_rules,
+    update_event,
+    update_rule,
+)
 from components.space.invitation_schemas import SpaceInvitationActionRequest
 from components.space.invitation_service import (
     create_invitation,
@@ -232,6 +249,94 @@ def install(app: FastAPI) -> None:
             action=payload.action,
         )
         return {"status": "ok", "membership": membership}
+
+    @router.get("/{space_uid}/rules")
+    async def rules(
+        space_uid: UUID,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        return {"status": "ok", "rules": await list_rules(db, space_uid, current_user["user_uid"])}
+
+    @router.post("/{space_uid}/rules", status_code=status.HTTP_201_CREATED)
+    async def add_rule(
+        space_uid: UUID,
+        payload: SpaceRuleCreateRequest,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        return {"status": "ok", "rule": await create_rule(db, space_uid, current_user["user_uid"], payload)}
+
+    @router.patch("/{space_uid}/rules/{rule_uid}")
+    async def patch_rule(
+        space_uid: UUID,
+        rule_uid: UUID,
+        payload: SpaceRuleUpdateRequest,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        return {"status": "ok", "rule": await update_rule(db, space_uid, rule_uid, current_user["user_uid"], payload)}
+
+    @router.delete("/{space_uid}/rules/{rule_uid}")
+    async def remove_rule(
+        space_uid: UUID,
+        rule_uid: UUID,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        await delete_rule(db, space_uid, rule_uid, current_user["user_uid"])
+        return {"status": "ok"}
+
+    @router.get("/{space_uid}/events")
+    async def events(
+        space_uid: UUID,
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        items, total = await list_events(db, space_uid, current_user["user_uid"], limit, offset)
+        return {"status": "ok", "events": items, "pagination": {"limit": limit, "offset": offset, "count": len(items), "total": total}}
+
+    @router.post("/{space_uid}/events", status_code=status.HTTP_201_CREATED)
+    async def add_event(
+        space_uid: UUID,
+        payload: SpaceEventCreateRequest,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        return {"status": "ok", "event": await create_event(db, space_uid, current_user["user_uid"], payload)}
+
+    @router.patch("/{space_uid}/events/{event_uid}")
+    async def patch_event(
+        space_uid: UUID,
+        event_uid: UUID,
+        payload: SpaceEventUpdateRequest,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        return {"status": "ok", "event": await update_event(db, space_uid, event_uid, current_user["user_uid"], payload)}
+
+    @router.delete("/{space_uid}/events/{event_uid}")
+    async def remove_event(
+        space_uid: UUID,
+        event_uid: UUID,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        await delete_event(db, space_uid, event_uid, current_user["user_uid"])
+        return {"status": "ok"}
+
+    @router.get("/{space_uid}/history")
+    async def history(
+        space_uid: UUID,
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        items, total = await list_history(db, space_uid, current_user["user_uid"], limit, offset)
+        return {"status": "ok", "history": items, "pagination": {"limit": limit, "offset": offset, "count": len(items), "total": total}}
 
     @router.post("/{space_uid}/invitations/{account_uid}", status_code=status.HTTP_201_CREATED)
     async def invite(
