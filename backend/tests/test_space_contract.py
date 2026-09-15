@@ -3,6 +3,7 @@ import unittest
 from pydantic import ValidationError
 
 from app import app
+from components.space.membership_schemas import SpaceMembershipActionRequest
 from components.space.model import SpaceMembership
 from components.space.schemas import SpaceCreateRequest, SpaceUpdateRequest
 from components.space.service import _slugify_tag
@@ -17,14 +18,23 @@ class SpaceContractTests(unittest.TestCase):
         self.assertIn("/spaces/v1/{space_uid}/membership", paths)
         self.assertIn("/spaces/v1/{space_uid}/members", paths)
         self.assertIn("/spaces/v1/{space_uid}/members/{account_uid}", paths)
+        self.assertIn("/spaces/v1/{space_uid}/members/{account_uid}/membership", paths)
 
-    def test_private_space_cannot_be_open_join(self):
-        with self.assertRaises(ValidationError):
-            SpaceCreateRequest(
-                name="Закрытый клуб",
-                visibility="private",
-                join_policy="open",
-            )
+    def test_private_space_is_invite_only(self):
+        for invalid_policy in ("open", "request"):
+            with self.assertRaises(ValidationError):
+                SpaceCreateRequest(
+                    name="Закрытый клуб",
+                    visibility="private",
+                    join_policy=invalid_policy,
+                )
+
+        payload = SpaceCreateRequest(
+            name="Закрытый клуб",
+            visibility="private",
+            join_policy="invite",
+        )
+        self.assertEqual(payload.join_policy, "invite")
 
     def test_visible_name_cannot_be_only_whitespace(self):
         with self.assertRaises(ValidationError):
@@ -49,6 +59,12 @@ class SpaceContractTests(unittest.TestCase):
             if constraint.name
         }
         self.assertIn("uq_space_membership", unique_constraints)
+
+    def test_membership_actions_are_allowlisted(self):
+        for action in ("approve", "reject", "remove"):
+            self.assertEqual(SpaceMembershipActionRequest(action=action).action, action)
+        with self.assertRaises(ValidationError):
+            SpaceMembershipActionRequest(action="ban")
 
     def test_tag_slug_is_stable_for_unicode_and_spaces(self):
         self.assertEqual(_slugify_tag("  Авторское   кино  "), "авторское-кино")
