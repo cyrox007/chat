@@ -8,6 +8,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -114,4 +115,57 @@ class SpaceInvitation(Database.Base):
         UniqueConstraint("room_uid", "invitee_account_uid", name="uq_space_invitation_invitee"),
         Index("ix_space_invitations_invitee_status", "invitee_account_uid", "status"),
         Index("ix_space_invitations_room_status", "room_uid", "status"),
+    )
+
+
+class SpaceRule(Database.Base):
+    __tablename__ = "space_rules"
+
+    uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    room_uid = Column(UUID(as_uuid=True), ForeignKey("rooms.uid", ondelete="CASCADE"), nullable=False)
+    created_by_account_uid = Column(UUID(as_uuid=True), ForeignKey("accounts.uid", ondelete="CASCADE"), nullable=False)
+    title = Column(String(120), nullable=False)
+    body = Column(Text, nullable=False)
+    position = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_space_rules_room_position", "room_uid", "position", "created_at"),
+    )
+
+
+class SpaceEvent(Database.Base):
+    __tablename__ = "space_events"
+
+    uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    room_uid = Column(UUID(as_uuid=True), ForeignKey("rooms.uid", ondelete="CASCADE"), nullable=False)
+    created_by_account_uid = Column(UUID(as_uuid=True), ForeignKey("accounts.uid", ondelete="CASCADE"), nullable=False)
+    title = Column(String(120), nullable=False)
+    description = Column(Text, nullable=True)
+    starts_at = Column(DateTime, nullable=False)
+    ends_at = Column(DateTime, nullable=True)
+    status = Column(String(24), nullable=False, default="scheduled")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_space_events_room_start", "room_uid", "starts_at"),
+        Index("ix_space_events_room_status", "room_uid", "status"),
+    )
+
+
+class SpaceHistoryEntry(Database.Base):
+    __tablename__ = "space_history"
+
+    uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    room_uid = Column(UUID(as_uuid=True), ForeignKey("rooms.uid", ondelete="CASCADE"), nullable=False)
+    actor_account_uid = Column(UUID(as_uuid=True), ForeignKey("accounts.uid", ondelete="SET NULL"), nullable=True)
+    event_type = Column(String(64), nullable=False)
+    summary = Column(String(255), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_space_history_room_created", "room_uid", "created_at"),
+        Index("ix_space_history_room_type", "room_uid", "event_type"),
     )
