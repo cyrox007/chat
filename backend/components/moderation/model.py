@@ -48,6 +48,7 @@ class ModerationAction(Database.Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
+        UniqueConstraint("report_uid", name="uq_moderation_action_report"),
         Index("ix_moderation_actions_room_target", "room_uid", "target_account_uid", "created_at"),
         Index("ix_moderation_actions_target_status", "target_account_uid", "status", "created_at"),
         Index("ix_moderation_actions_report", "report_uid"),
