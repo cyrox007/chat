@@ -24,6 +24,7 @@ class NotificationContractTests(unittest.TestCase):
         }
         expected = {
             ("/activity-occurrences/v1/activities/{activity_uid}", "GET"),
+            ("/activity-occurrences/v1/activities/{activity_uid}/sync", "POST"),
             ("/notifications/v1/sync", "POST"),
             ("/notifications/v1/unread-count", "GET"),
             ("/notifications/v1", "GET"),
