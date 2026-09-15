@@ -19,6 +19,7 @@
 - [`versioning-quick-reference.md`](versioning-quick-reference.md) — краткий статус версии.
 - [`ui-ux-kit.md`](ui-ux-kit.md) — основная дизайн-система и UX-правила.
 - [`ui-ux-notifications.md`](ui-ux-notifications.md) — notification/reminder UX extension.
+- [`ui-ux-discovery.md`](ui-ux-discovery.md) — explainable organic discovery UX rules.
 
 ## Для разработчика
 
@@ -38,6 +39,7 @@
 - [`social-engagement-v2.md`](social-engagement-v2.md) — earned achievements и Conversation Rounds.
 - [`activity-occurrences-v1.md`](activity-occurrences-v1.md) — Activity Occurrences, reminders и notification inbox, выпущенные в `0.5.2-alpha.1`.
 - [`creator-support-v1.md`](creator-support-v1.md) — opt-in gifts, append-only ledger и cosmetic entitlements, выпущенные в `0.5.3-alpha.1` без real-money flows.
+- [`discovery-v1.md`](discovery-v1.md) — eligibility-first, explainable organic Space discovery для линии `0.5.4-alpha.x`.
 
 ## Статус документов
 
