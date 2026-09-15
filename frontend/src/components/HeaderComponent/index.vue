@@ -46,6 +46,9 @@
 						<RouterLink role="menuitem" :to="{ name: 'invitations' }" @click="closeDropdown">
 							<i class="fas fa-envelope-open-text" aria-hidden="true"></i><span>Приглашения</span>
 						</RouterLink>
+						<RouterLink role="menuitem" :to="{ name: 'safety' }" @click="closeDropdown">
+							<i class="fas fa-shield-halved" aria-hidden="true"></i><span>Безопасность</span>
+						</RouterLink>
 						<RouterLink v-if="isAdmin" role="menuitem" :to="{ name: 'AdminDashboard' }" @click="closeDropdown">
 							<i class="fas fa-user-shield" aria-hidden="true"></i><span>Управление</span>
 						</RouterLink>
@@ -92,7 +95,7 @@ const isAdmin = computed(() => ['admin', 'superadmin'].includes(currentUser.valu
 const profileRoute = computed(() => ({ name: 'UserProfile', params: { uid: currentUser.value.uid } }));
 const spaceContextRoute = computed(() => {
 	const uid = route.params?.uid;
-	if (!uid || !['space', 'space-community'].includes(String(route.name || ''))) return null;
+	if (!uid || !['space', 'space-community', 'space-moderation'].includes(String(route.name || ''))) return null;
 	return { name: 'space-community', params: { uid } };
 });
 const avatarFallback = computed(() => (currentUser.value.display_name || currentUser.value.username || '?').slice(0, 1).toUpperCase());
