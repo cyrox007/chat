@@ -1,12 +1,12 @@
 # PubChat Stage 5.5 — Explainable Organic Discovery
 
-Development line: `0.5.4-alpha.x`.
+Released in: `0.5.4-alpha.1`.
 
 ## Цель
 
 Сделать поиск Living Spaces полезнее без превращения discovery в непрозрачный рейтинг и без возможности купить органическую видимость.
 
-Новый endpoint `/discovery/v1/spaces` существует отдельно от стабильного каталога `/spaces/v1`: каталог остаётся предсказуемым filter/list API, а персонализированная выдача развивается независимо.
+Endpoint `/discovery/v1/spaces` существует отдельно от стабильного каталога `/spaces/v1`: каталог остаётся предсказуемым filter/list API, а персонализированная выдача развивается независимо.
 
 ## Главный принцип
 
@@ -75,6 +75,12 @@ Score остаётся server-only implementation detail и не являетс�
 
 После score применяется небольшой diversity pass: когда подряд идут слишком похожие purpose, близкий по score кандидат другого формата может подняться выше. Diversity не обходит eligibility.
 
+### Известное alpha-ограничение
+
+Candidate pool organic-v1 начинается с canonical catalog, отсортированного по новизне. Поэтому очень старый Space за пределами первых 200 кандидатов может не попасть в персонализированный ranking даже после новой активности.
+
+До beta candidate generation должен собираться из нескольких bounded источников — recent activity, upcoming events/activities, shared context и freshness — без unbounded scan.
+
 ## SPA
 
 Основной Space Discovery screen использует `/discovery/v1/spaces`.
@@ -89,9 +95,9 @@ Score остаётся server-only implementation detail и не являетс�
 
 Не показываются «очки релевантности», leaderboard или paid badge.
 
-## Release gate
+## Quality gate `0.5.4-alpha.1`
 
-Перед `0.5.4-alpha.1`:
+Перед release пройдены:
 
 - backend import/contracts;
 - frontend production build;
@@ -100,5 +106,4 @@ Score остаётся server-only implementation detail и не являетс�
 - docs/UI contract sync;
 - functional exact-head CI;
 - version bump;
-- второй exact-head CI;
-- merge только после второго gate.
+- обязательный второй exact-head CI перед merge.
