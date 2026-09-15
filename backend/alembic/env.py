@@ -32,6 +32,16 @@ from components.identity.model import (
     PrivacySettings,
     RolePermission,
 )
+from components.moderation.model import ModerationAction, ModerationAppeal, ModerationReport
+from components.space.model import (
+    SpaceEvent,
+    SpaceHistoryEntry,
+    SpaceInvitation,
+    SpaceMembership,
+    SpaceRule,
+    SpaceSettings,
+    SpaceTag,
+)
 
 target_metadata = User.__table__.metadata
 

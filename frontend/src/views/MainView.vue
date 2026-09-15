@@ -1,19 +1,12 @@
 <template>
-	<CreateRoomModal
-		:isShow="isCreateRoomModalOpen"
-		@close="toggleCreateSpaceModal"
-		@create-room-complete="loadRooms"
-	/>
-
 	<main class="space-shell">
 		<LeftSidebar
 			:class="{ active: isLeftSidebarActive }"
-			:rooms="rooms"
-			:userRole="currentUser.global_role"
-			:userRating="currentUser.rating"
+			:spaces="memberSpaces"
+			:activeSpaceUid="currentRoom?.uid || null"
 			@close="closeLeftSidebar"
-			@switch-room="switchRoom"
-			@open-create-chat-modal="toggleCreateSpaceModal"
+			@switch-space="navigateToSpace"
+			@discover="goToDiscovery"
 		/>
 
 		<section class="space-main">
@@ -30,9 +23,9 @@
 				<div class="space-header__title">
 					<span class="space-header__eyebrow">Пространство</span>
 					<div class="space-header__title-row">
-						<h1>{{ currentRoom?.name || 'Выберите пространство' }}</h1>
+						<h1>{{ currentRoom?.name || loadingTitle }}</h1>
 						<span
-							v-if="currentRoom?.uid"
+							v-if="currentRoom?.uid && !accessGate"
 							class="connection-chip"
 							:class="`connection-chip--${connectionState}`"
 							role="status"
@@ -47,7 +40,7 @@
 					class="space-header__icon"
 					type="button"
 					aria-label="Открыть информацию о пространстве"
-					:disabled="!currentRoom?.uid"
+					:disabled="!currentRoom?.uid || Boolean(accessGate)"
 					@click="toggleRightSidebar"
 				>
 					<i class="fas fa-circle-info" aria-hidden="true"></i>
@@ -55,7 +48,7 @@
 			</header>
 
 			<div
-				v-if="realtimeNotice && currentRoom?.uid"
+				v-if="realtimeNotice && currentRoom?.uid && !accessGate"
 				class="space-notice"
 				:class="`space-notice--${realtimeNotice.type}`"
 				role="status"
@@ -64,8 +57,27 @@
 				<span>{{ realtimeNotice.message }}</span>
 			</div>
 
-			<div v-if="currentRoom?.uid && !isLoading" class="conversation-area">
-				<section id="chat-messages" ref="chatMessages" class="message-stream" aria-label="Сообщения пространства">
+			<section v-if="accessGate && !isLoading" class="access-gate">
+				<div class="access-gate__icon" aria-hidden="true"><i :class="accessGate.icon"></i></div>
+				<span class="space-header__eyebrow">{{ accessGate.eyebrow }}</span>
+				<h2>{{ accessGate.title }}</h2>
+				<p>{{ accessGate.message }}</p>
+				<div class="access-gate__actions">
+					<button
+						v-if="accessGate.action === 'request'"
+						type="button"
+						class="ui-button"
+						:disabled="joining"
+						@click="requestMembership"
+					>
+						{{ joining ? 'Отправляем…' : 'Подать заявку' }}
+					</button>
+					<button type="button" class="ui-button ui-button--ghost" @click="goToDiscovery">К пространствам</button>
+				</div>
+			</section>
+
+			<div v-else-if="currentRoom?.uid && !isLoading" class="conversation-area">
+				<section id="chat-messages" class="message-stream" aria-label="Сообщения пространства">
 					<div v-if="messages.length === 0" class="stream-empty">
 						<div class="stream-empty__icon" aria-hidden="true"><i class="fas fa-mug-hot"></i></div>
 						<strong>Здесь пока тихо</strong>
@@ -73,10 +85,9 @@
 					</div>
 
 					<Message
-						v-for="(msg, index) in messages"
+						v-for="msg in messages"
 						:key="msg.uid || msg.frontId || msg.tempId"
 						:message="msg"
-						:ref="index === messages.length - 1 ? 'lastMessage' : null"
 						@reply="handleMessageReply"
 					/>
 				</section>
@@ -95,19 +106,17 @@
 			</div>
 
 			<section v-else-if="!isLoading" class="space-placeholder">
-				<div class="space-placeholder__art" aria-hidden="true">
-					<i class="fas fa-comments"></i>
-				</div>
-				<h2>Выберите место для разговора</h2>
-				<p>Пространства — это небольшие сообщества со своей темой, людьми и атмосферой.</p>
-				<button class="ui-button" type="button" @click="toggleLeftSidebar">Посмотреть пространства</button>
+				<div class="space-placeholder__art" aria-hidden="true"><i class="fas fa-compass"></i></div>
+				<h2>Пространство недоступно</h2>
+				<p>Оно могло быть архивировано или ссылка больше не ведёт в активное место.</p>
+				<button class="ui-button" type="button" @click="goToDiscovery">Открыть discovery</button>
 			</section>
 		</section>
 
 		<Loader :isLoading="isLoading" />
 
 		<RightSidebar
-			v-if="currentRoom?.uid && !isLoading"
+			v-if="currentRoom?.uid && !isLoading && !accessGate"
 			:class="{ active: isRightSidebarActive }"
 			:roomInfo="currentRoom"
 			:users="connectedUsers"
@@ -119,27 +128,31 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { v4 as uuidv4 } from 'uuid';
 import DOMPurify from 'dompurify';
 
+import SpacesService from '@/API/SpacesService';
 import Loader from '@/components/Loader/index.vue';
 import LeftSidebar from '@/components/LeftSidebar/index.vue';
 import RightSidebar from '@/components/RightSidebar/index.vue';
 import Message from '@/components/Message/ChatMessage.vue';
 import MessageComposer from '@/components/MessageComposer/index.vue';
-import CreateRoomModal from '@/components/MainPageModals/CreateRoomModal.vue';
-import RoomsService from '@/API/RoomsService';
 
 const store = useStore();
+const route = useRoute();
+const router = useRouter();
 
-const isCreateRoomModalOpen = ref(false);
 const isLoading = ref(false);
 const isLeftSidebarActive = ref(false);
 const isRightSidebarActive = ref(false);
-const rooms = ref([]);
+const memberSpaces = ref([]);
+const accessGate = ref(null);
+const joining = ref(false);
 const messageComposer = ref(null);
+let loadGeneration = 0;
 
 const currentRoom = computed(() => store.getters['chat/getCurrentRoom']);
 const messages = computed(() => store.getters['chat/getMessages']);
@@ -149,12 +162,8 @@ const realtimeNotice = computed(() => store.getters['chat/getRealtimeNotice']);
 const isUserMuted = computed(() => store.getters['chat/isUserMuted']);
 const isRealtimeReady = computed(() => connectionState.value === 'connected');
 const isComposerDisabled = computed(() => isUserMuted.value || !isRealtimeReady.value);
-
-const currentUser = computed(() => store.getters.getUser || {
-	uid: null,
-	username: 'Неизвестный пользователь',
-	avatar: '/images/default-avatar.png',
-});
+const currentUser = computed(() => store.getters.getUser || {});
+const loadingTitle = computed(() => isLoading.value ? 'Открываем пространство…' : 'Пространство');
 
 const connectionLabel = computed(() => ({
 	idle: 'Не подключено',
@@ -166,12 +175,125 @@ const connectionLabel = computed(() => ({
 	restricted: 'Доступ ограничен',
 }[connectionState.value] || 'Подключение'));
 
-const loadRooms = async () => {
+const isActiveMember = (space) => (
+	space?.viewer_membership?.status === 'active'
+	|| space?.viewer_membership?.role === 'owner'
+	|| space?.owner_uid === currentUser.value.uid
+);
+
+const buildGate = (space, errorType = null) => {
+	if (errorType === 'space_private' || errorType === 'space_access_denied') {
+		return {
+			icon: 'fas fa-lock',
+			eyebrow: 'Закрытое пространство',
+			title: 'Доступ ограничен',
+			message: 'Это место доступно только участникам. Вернитесь в discovery и выберите пространство, открытое для вас.',
+			action: null,
+		};
+	}
+	if (space?.viewer_membership?.status === 'pending') {
+		return {
+			icon: 'fas fa-hourglass-half',
+			eyebrow: 'Заявка отправлена',
+			title: 'Создатели пространства увидят ваш запрос',
+			message: 'Разговор откроется после одобрения участия. Пока можно найти другие живые места в PubChat.',
+			action: null,
+		};
+	}
+	if (space?.join_policy === 'request') {
+		return {
+			icon: 'fas fa-hand',
+			eyebrow: 'Вход по заявке',
+			title: 'Сначала нужно присоединиться',
+			message: 'У этого пространства есть вход по заявке. После одобрения откроются разговор и участники.',
+			action: 'request',
+		};
+	}
+	if (space?.join_policy === 'invite') {
+		return {
+			icon: 'fas fa-envelope-open-text',
+			eyebrow: 'По приглашению',
+			title: 'Нужно приглашение участника',
+			message: 'Это пространство не принимает свободные заявки. Найдите другое место или дождитесь приглашения.',
+			action: null,
+		};
+	}
+	return null;
+};
+
+const loadMemberSpaces = async () => {
 	try {
-		const response = await RoomsService.get_rooms();
-		if (response.data.status === 'ok' && response.data.rooms) rooms.value = response.data.rooms;
+		const response = await SpacesService.list({ limit: 50 });
+		memberSpaces.value = (response.data.spaces || []).filter((space) => isActiveMember(space));
 	} catch (error) {
-		console.error('Ошибка загрузки пространств:', error);
+		console.error('Не удалось загрузить навигацию пространств:', error);
+	}
+};
+
+const openRealtimeSpace = async (space) => {
+	accessGate.value = null;
+	if (currentRoom.value?.uid === space.uid && isRealtimeReady.value) {
+		store.commit('chat/setCurrentRoom', space);
+		return;
+	}
+	await store.dispatch('chat/switchRoom', { room: space, roomId: space.uid });
+	isRightSidebarActive.value = window.innerWidth >= 1100;
+};
+
+const loadRouteSpace = async (spaceUid) => {
+	const generation = ++loadGeneration;
+	isLoading.value = true;
+	accessGate.value = null;
+	isLeftSidebarActive.value = false;
+
+	try {
+		let response = await SpacesService.get(spaceUid);
+		if (generation !== loadGeneration) return;
+		let space = response.data.space;
+
+		if (!isActiveMember(space)) {
+			if (space.join_policy === 'open') {
+				response = await SpacesService.join(space.uid);
+				if (generation !== loadGeneration) return;
+				space = response.data.space;
+			} else {
+				await store.dispatch('chat/disconnectSocket');
+				store.commit('chat/setCurrentRoom', space);
+				accessGate.value = buildGate(space);
+				return;
+			}
+		}
+
+		await openRealtimeSpace(space);
+		await loadMemberSpaces();
+	} catch (error) {
+		if (generation !== loadGeneration) return;
+		await store.dispatch('chat/disconnectSocket');
+		store.commit('chat/clearCurrentRoom');
+		const errorType = error.response?.data?.detail?.error_type;
+		if (['space_private', 'space_access_denied', 'space_membership_required'].includes(errorType)) {
+			accessGate.value = buildGate(null, errorType);
+		} else {
+			console.error('Не удалось открыть пространство:', error);
+		}
+	} finally {
+		if (generation === loadGeneration) isLoading.value = false;
+	}
+};
+
+const requestMembership = async () => {
+	if (!currentRoom.value?.uid || joining.value) return;
+	joining.value = true;
+	try {
+		const response = await SpacesService.join(currentRoom.value.uid);
+		const space = response.data.space;
+		store.commit('chat/setCurrentRoom', space);
+		accessGate.value = buildGate(space);
+		if (isActiveMember(space)) await openRealtimeSpace(space);
+	} catch (error) {
+		console.error('Не удалось отправить заявку в пространство:', error);
+	} finally {
+		joining.value = false;
 	}
 };
 
@@ -198,12 +320,22 @@ const handleSendMessage = async (messageData) => {
 	});
 };
 
+const refreshCurrentSpace = async () => {
+	if (!currentRoom.value?.uid) return;
+	const response = await SpacesService.get(currentRoom.value.uid);
+	store.commit('chat/setCurrentRoom', response.data.space);
+	await loadMemberSpaces();
+};
+
 const handleModeratorChange = async ({ userId, isModerator }) => {
+	if (!currentRoom.value?.uid) return;
 	try {
-		await store.dispatch('chat/sendModeratorAction', {
-			target_user_uid: userId,
-			action: isModerator ? 'add_moderator' : 'remove_moderator',
-		});
+		await SpacesService.updateMemberRole(
+			currentRoom.value.uid,
+			userId,
+			isModerator ? 'moderator' : 'member',
+		);
+		await refreshCurrentSpace();
 	} catch (error) {
 		console.error('Не удалось изменить роль в пространстве:', error);
 	}
@@ -220,23 +352,14 @@ const handleRestrictUser = async (userId) => {
 	}
 };
 
-const switchRoom = async (room) => {
-	isLoading.value = true;
-	try {
-		const roomData = await RoomsService.get_room(room.uid);
-		await store.dispatch('chat/switchRoom', {
-			room: roomData.data.room,
-			roomId: room.uid,
-		});
-		isLeftSidebarActive.value = false;
-		isRightSidebarActive.value = window.innerWidth >= 1100;
-	} catch (error) {
-		console.error('Ошибка открытия пространства:', error);
-	} finally {
-		isLoading.value = false;
+const navigateToSpace = (space) => {
+	if (space?.uid && space.uid !== route.params.uid) {
+		router.push({ name: 'space', params: { uid: space.uid } });
 	}
+	isLeftSidebarActive.value = false;
 };
 
+const goToDiscovery = () => router.push({ name: 'chats' });
 const toggleLeftSidebar = () => {
 	isLeftSidebarActive.value = !isLeftSidebarActive.value;
 	if (isLeftSidebarActive.value) isRightSidebarActive.value = false;
@@ -248,7 +371,6 @@ const toggleRightSidebar = () => {
 	if (isRightSidebarActive.value && window.innerWidth < 1100) isLeftSidebarActive.value = false;
 };
 const closeRightSidebar = () => { isRightSidebarActive.value = false; };
-const toggleCreateSpaceModal = () => { isCreateRoomModalOpen.value = !isCreateRoomModalOpen.value; };
 
 const scrollToBottom = async () => {
 	await nextTick();
@@ -256,127 +378,58 @@ const scrollToBottom = async () => {
 	if (container) container.scrollTop = container.scrollHeight;
 };
 
-onMounted(async () => {
-	await loadRooms();
-	if (currentRoom.value?.uid && connectionState.value === 'idle') {
-		const savedRoom = rooms.value.find((room) => room.uid === currentRoom.value.uid);
-		if (savedRoom) await switchRoom(savedRoom);
-	}
-});
+watch(
+	() => route.params.uid,
+	(spaceUid) => {
+		if (spaceUid) loadRouteSpace(String(spaceUid));
+	},
+	{ immediate: true },
+);
 
 watch(
 	() => messages.value.length,
-	async () => scrollToBottom(),
+	() => scrollToBottom(),
 );
+
+onBeforeUnmount(() => {
+	loadGeneration += 1;
+	store.dispatch('chat/disconnectSocket');
+});
 </script>
 
 <style scoped>
-.space-shell {
-	height: calc(100dvh - 4.35rem);
-	min-height: 32rem;
-	display: flex;
-	overflow: hidden;
-	border: 1px solid var(--ui-border);
-	border-radius: var(--ui-radius-xl);
-	background: var(--ui-surface);
-	box-shadow: var(--ui-shadow-sm);
-}
-
-.space-main {
-	min-width: 0;
-	flex: 1;
-	display: flex;
-	flex-direction: column;
-	background: var(--ui-bg);
-}
-
-.space-header {
-	min-height: 4.25rem;
-	display: grid;
-	grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
-	align-items: center;
-	gap: var(--ui-space-3);
-	padding: var(--ui-space-2) var(--ui-space-4);
-	border-bottom: 1px solid var(--ui-border);
-	background: color-mix(in srgb, var(--ui-surface) 96%, transparent);
-}
-
-.space-header__icon {
-	width: 2.65rem;
-	height: 2.65rem;
-	display: grid;
-	place-items: center;
-	border: 1px solid var(--ui-border);
-	border-radius: var(--ui-radius-md);
-	background: var(--ui-surface);
-	color: var(--ui-text-muted);
-	cursor: pointer;
-}
+.space-shell { position: relative; height: calc(100dvh - 4.35rem); min-height: 32rem; display: flex; overflow: hidden; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-xl); background: var(--ui-surface); box-shadow: var(--ui-shadow-sm); }
+.space-main { min-width: 0; flex: 1; display: flex; flex-direction: column; background: var(--ui-bg); }
+.space-header { min-height: 4.25rem; display: grid; grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem; align-items: center; gap: var(--ui-space-3); padding: var(--ui-space-2) var(--ui-space-4); border-bottom: 1px solid var(--ui-border); background: color-mix(in srgb, var(--ui-surface) 96%, transparent); }
+.space-header__icon { width: 2.65rem; height: 2.65rem; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text-muted); cursor: pointer; }
 .space-header__icon:hover:not(:disabled) { background: var(--ui-surface-muted); color: var(--ui-text); }
-.space-header__icon:disabled { opacity: 0.4; cursor: default; }
-
+.space-header__icon:disabled { opacity: .4; cursor: default; }
 .space-header__title { min-width: 0; }
-.space-header__eyebrow { display: block; color: var(--ui-text-subtle); font-size: var(--ui-text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.space-header__eyebrow { display: block; color: var(--ui-text-subtle); font-size: var(--ui-text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
 .space-header__title-row { min-width: 0; display: flex; align-items: center; gap: var(--ui-space-3); }
-.space-header h1 { min-width: 0; overflow: hidden; margin: 0.1rem 0 0; text-overflow: ellipsis; white-space: nowrap; font-size: var(--ui-text-lg); }
-
-.connection-chip {
-	min-height: 1.75rem;
-	display: inline-flex;
-	align-items: center;
-	gap: var(--ui-space-1);
-	padding: 0 var(--ui-space-2);
-	border-radius: var(--ui-radius-pill);
-	background: var(--ui-surface-muted);
-	color: var(--ui-text-muted);
-	font-size: var(--ui-text-xs);
-	font-weight: 700;
-	white-space: nowrap;
-}
-.connection-chip__dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: currentColor; }
+.space-header h1 { min-width: 0; overflow: hidden; margin: .1rem 0 0; text-overflow: ellipsis; white-space: nowrap; font-size: var(--ui-text-lg); }
+.connection-chip { min-height: 1.75rem; display: inline-flex; align-items: center; gap: var(--ui-space-1); padding: 0 var(--ui-space-2); border-radius: var(--ui-radius-pill); background: var(--ui-surface-muted); color: var(--ui-text-muted); font-size: var(--ui-text-xs); font-weight: 700; white-space: nowrap; }
+.connection-chip__dot { width: .45rem; height: .45rem; border-radius: 50%; background: currentColor; }
 .connection-chip--connected { background: var(--ui-success-soft); color: var(--ui-success); }
 .connection-chip--reconnecting, .connection-chip--connecting, .connection-chip--authenticating { background: var(--ui-info-soft); color: var(--ui-info); }
 .connection-chip--offline { background: var(--ui-warning-soft); color: var(--ui-warning); }
 .connection-chip--restricted { background: var(--ui-danger-soft); color: var(--ui-danger); }
-
-.space-notice {
-	display: flex;
-	align-items: center;
-	gap: var(--ui-space-2);
-	padding: var(--ui-space-2) var(--ui-space-4);
-	border-bottom: 1px solid var(--ui-border);
-	background: var(--ui-info-soft);
-	color: var(--ui-info);
-	font-size: var(--ui-text-sm);
-}
+.space-notice { display: flex; align-items: center; gap: var(--ui-space-2); padding: var(--ui-space-2) var(--ui-space-4); border-bottom: 1px solid var(--ui-border); background: var(--ui-info-soft); color: var(--ui-info); font-size: var(--ui-text-sm); }
 .space-notice--warning { background: var(--ui-warning-soft); color: var(--ui-warning); }
 .space-notice--error, .space-notice--restricted { background: var(--ui-danger-soft); color: var(--ui-danger); }
-
 .conversation-area { min-height: 0; flex: 1; display: flex; flex-direction: column; }
 .message-stream { min-height: 0; flex: 1; overflow-y: auto; padding: var(--ui-space-4) clamp(var(--ui-space-3), 3vw, var(--ui-space-6)); scroll-behavior: smooth; }
 .stream-empty { min-height: 100%; display: grid; place-items: center; align-content: center; gap: var(--ui-space-2); text-align: center; color: var(--ui-text-muted); }
 .stream-empty__icon { width: 3.25rem; height: 3.25rem; display: grid; place-items: center; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: var(--ui-text-xl); }
 .stream-empty strong { color: var(--ui-text); font-size: var(--ui-text-lg); }
-
 .composer-state { padding: var(--ui-space-2) var(--ui-space-4); border-top: 1px solid var(--ui-border); background: var(--ui-surface-soft); color: var(--ui-text-muted); font-size: var(--ui-text-xs); text-align: center; }
-
-.space-placeholder { flex: 1; display: grid; place-items: center; align-content: center; gap: var(--ui-space-3); padding: var(--ui-space-8); text-align: center; }
-.space-placeholder__art { width: 5rem; height: 5rem; display: grid; place-items: center; border-radius: 1.75rem; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 2rem; transform: rotate(-4deg); }
-.space-placeholder h2 { margin: var(--ui-space-2) 0 0; font-size: var(--ui-text-xl); }
-.space-placeholder p { width: min(100%, 30rem); margin: 0; color: var(--ui-text-muted); }
-.space-placeholder .ui-button { margin-top: var(--ui-space-2); }
-
-@media (max-width: 991px) {
-	.space-shell { height: calc(100dvh - 8.4rem); border-radius: var(--ui-radius-lg); }
-	.space-header { padding-inline: var(--ui-space-3); }
-}
-
-@media (max-width: 560px) {
-	.space-shell { margin-inline: calc(var(--ui-space-3) * -1); border-right: 0; border-left: 0; border-radius: 0; }
-	.space-header__eyebrow { display: none; }
-	.space-header__title-row { gap: var(--ui-space-2); }
-	.space-header h1 { font-size: var(--ui-text-md); }
-	.connection-chip { max-width: 7.5rem; overflow: hidden; text-overflow: ellipsis; }
-	.message-stream { padding-inline: var(--ui-space-3); }
-}
+.space-placeholder, .access-gate { flex: 1; display: grid; place-items: center; align-content: center; gap: var(--ui-space-3); padding: var(--ui-space-8); text-align: center; }
+.space-placeholder__art, .access-gate__icon { width: 5rem; height: 5rem; display: grid; place-items: center; border-radius: 1.75rem; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 2rem; transform: rotate(-4deg); }
+.space-placeholder h2, .access-gate h2 { margin: var(--ui-space-2) 0 0; font-size: var(--ui-text-xl); }
+.space-placeholder p, .access-gate p { width: min(100%, 32rem); margin: 0; color: var(--ui-text-muted); line-height: 1.55; }
+.access-gate__icon { background: var(--ui-warning-soft); color: var(--ui-warning); transform: rotate(4deg); }
+.access-gate__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--ui-space-2); margin-top: var(--ui-space-2); }
+.ui-button--ghost { border: 1px solid var(--ui-border); background: transparent; color: var(--ui-text-muted); }
+@media (max-width: 991px) { .space-shell { height: calc(100dvh - 8.4rem); border-radius: var(--ui-radius-lg); } .space-header { padding-inline: var(--ui-space-3); } }
+@media (max-width: 560px) { .space-shell { margin-inline: calc(var(--ui-space-3) * -1); border-right: 0; border-left: 0; border-radius: 0; } .space-header__eyebrow { display: none; } .space-header__title-row { gap: var(--ui-space-2); } .space-header h1 { font-size: var(--ui-text-md); } .connection-chip { max-width: 7.5rem; overflow: hidden; text-overflow: ellipsis; } .message-stream { padding-inline: var(--ui-space-3); } .access-gate, .space-placeholder { padding-inline: var(--ui-space-4); } }
 </style>

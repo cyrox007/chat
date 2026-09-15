@@ -12,46 +12,36 @@ UI/UX развивается **параллельно** с архитектур�
 
 Цель: сделать старое ядро безопасной отправной точкой, не меняя продукт целиком.
 
-- зафиксировать новую концепцию PubChat;
-- закрыть критический доступ к `/admin/*` без admin-role;
-- закрыть IDOR и mass assignment в обновлении профиля;
-- перестать писать access/refresh token material в логи;
-- убрать production-capable default JWT secrets;
-- исправить базовый DB health-check lifecycle;
-- добавить минимальный CI для Python syntax и frontend build.
+- зафиксирована новая концепция PubChat;
+- закрыт критический доступ к `/admin/*` без admin-role;
+- закрыты IDOR и mass assignment в обновлении профиля;
+- access/refresh token material удалён из логов;
+- убраны production-capable default JWT secrets;
+- исправлен базовый DB health-check lifecycle;
+- добавлен CI для backend/frontend quality gate.
 
 ## Stage 2 — Identity v2 ✅ merged
 
 Цель: перестать использовать монолитную таблицу `users` как identity + profile + security + reputation одновременно.
 
-Целевые сущности:
+Реализовано:
 
 - `Account`;
-- `Persona` / `Profile`;
+- `Persona` / public profile projection;
 - `Credential`;
-- `Session`;
-- `Role` / `Permission`;
+- `IdentitySession`;
+- `Role` / `Permission` foundation;
 - `PrivacySettings`;
-- `Relationship`;
-- отдельные public/private projections.
+- `AccountRelationship`;
+- отдельные public/private projections;
+- Persona-first onboarding;
+- SPA application shell и mobile navigation.
 
-В этом этапе переносим удачные инфраструктурные идеи из `BaseProjectPython`, но не копируем его корпоративную модель пользователя.
-
-Параллельный UI/UX scope:
-
-- design tokens и базовые primitives;
-- auth/registration flow;
-- Persona identity surfaces;
-- Persona switcher foundation;
-- social intent и privacy states;
-- public/private profile projections в интерфейсе;
-- системные feedback/error/loading patterns.
-
-## Stage 3 — Realtime v2 🚧 merge gate
+## Stage 3 — Realtime v2 ✅ merged
 
 Цель: сделать realtime устойчивым и масштабируемым.
 
-Реализовано в `revival/realtime-v2`:
+Реализовано:
 
 - WebSocket auth без JWT в URL;
 - one-time scoped socket tickets и auth handshake;
@@ -66,68 +56,104 @@ UI/UX развивается **параллельно** с архитектур�
 - privacy-aware DM policy на сервере;
 - исправление ownership read receipts;
 - cross-worker Space restrictions;
-- CI security regression guards.
+- CI security regression guards;
+- reconnect/offline UX и mobile-first realtime surfaces.
 
-Параллельный UI/UX scope:
+Stage 3 включён в релизную базу `0.3.0-alpha.1`.
 
-- reconnect/offline states без пугающих full-screen ошибок;
-- connection state в Spaces и DM;
-- composer блокируется, когда transport не принимает действия;
-- сохранение контекста при reconnect;
-- mobile-first Space и messenger surfaces;
-- терминология «пространство / ограничить доступ» вместо legacy punitive language.
-
-До merge этап проходит полный diff-review, backend contracts, security guards и production frontend build.
-
-## Stage 4 — Spaces & social graph ⏭ next
+## Stage 4 — Living Spaces & social core 🚧 release gate
 
 Цель: реализовать продуктовую основу PubChat и заменить legacy `Room` продуктовой моделью Living Spaces без destructive rewrite.
 
-Первый scope:
+### Реализовано
 
-- `Space` domain contract поверх/вместо legacy Room projection;
-- membership и scoped roles;
-- friends/follow/block как account relationships;
-- social intent в discovery и коммуникации;
-- privacy-aware discovery;
-- правила пространства и membership policy;
-- transparent moderation actions;
-- reports/appeals foundation;
-- reputation отдельно от permissions;
-- события как часть Living Space history.
+- versioned `/spaces/v1` contract поверх legacy `rooms/messages`;
+- additive `space_settings`, `space_memberships`, `space_tags` и backfill;
+- public / unlisted / private visibility;
+- private Space = invite-only;
+- open / request / invite membership policy;
+- canonical membership lifecycle и пагинация;
+- scoped owner / moderator / member roles;
+- realtime access зависит от canonical active membership;
+- Space Discovery и route-driven conversation `/spaces/:uid`;
+- новый create Space flow и canonical People panel;
+- `/social/v1`: follow, friendship requests, friendship, block/unblock;
+- privacy-aware people discovery и direct profile access;
+- account-bound Space invitations с TTL;
+- экраны «Люди» и «Приглашения»;
+- Space Rules;
+- scheduled Events;
+- append-only Space History;
+- Центр пространства `/spaces/:uid/community`;
+- transparent moderation `/moderation/v1`;
+- private reports;
+- scoped warning/restrict actions;
+- exact bridge к legacy `RoomBan` для enforcement;
+- Safety Center пользователя;
+- manager moderation queue;
+- one appeal per action и one action per report — DB invariants;
+- independent appeal reviewer;
+- overturn снимает именно связанное ограничение;
+- повторный restrict отзывает предыдущее активное решение и закрывает его pending appeal;
+- закрыт side-channel приватных report metadata: consistency checks идут после scoped manager authorization;
+- legacy tag backfill не зависит от locale PostgreSQL и безопасен для Unicode;
+- UI/UX обновляется одновременно с доменом, включая mobile states.
 
-Параллельный UI/UX scope:
+### Gate для `0.4.0-alpha.1`
 
-- Space discovery вместо простого списка комнат;
-- Space header/presence/activity/history;
-- member and scoped-role surfaces;
-- community rules;
-- события;
-- consent-first DM entry points;
-- transparent moderation and appeal flows;
-- empty/loading/offline/mobile states как обязательная часть каждого flow.
+- exact-head backend compile/import/tests;
+- ровно одна Alembic migration head;
+- production SPA build;
+- final privacy/permission self-review;
+- обновление `CHANGELOG.md`;
+- bump canonical `VERSION`;
+- повторный exact-head CI уже на версии `0.4.0-alpha.1`;
+- только затем PR переводится из draft и сливается в `main`.
 
-## Stage 5 — Product identity
+### Осознанный технический долг после alpha checkpoint
 
-Цель: дать PubChat собственный характер.
+- устранить race вокруг member capacity при конкурентных join/approve;
+- добавить platform-level fallback для апелляций, если в Space нет второго независимого manager;
+- продолжить уменьшение зависимости от legacy `users/rooms/room_members/room_bans`;
+- расширить integration tests реальной PostgreSQL/Redis средой;
+- observability, metrics и нагрузочные сценарии до beta.
+
+## Stage 5 — Product identity & engagement
+
+Цель: дать PubChat собственный характер поверх уже устойчивого social core.
+
+Планируемый scope:
 
 - Persona customization;
-- оформление пространств;
-- achievements;
-- совместные события;
-- social-first mini-games;
+- оформление Living Spaces;
+- achievements без pay-to-status;
+- совместные события и recurring activities;
+- social-first mini-games, которые создают повод разговаривать;
 - creator support;
 - косметическая экономика без pay-to-win;
+- более качественный discovery/ranking Spaces без покупки социального влияния;
 - PWA/mobile shell после стабилизации web/realtime.
 
 Параллельный UI/UX scope:
 
-- визуальная индивидуальность Persona без pay-to-status;
+- визуальная индивидуальность Persona;
 - customization Spaces;
 - social-first game surfaces;
 - creator support flows;
 - polished onboarding;
-- финальная унификация и удаление legacy styles/components.
+- унификация и постепенное удаление legacy styles/components.
+
+## Pre-beta hardening
+
+До первой beta обязательно:
+
+- production-like PostgreSQL + Redis integration tests;
+- migrations upgrade/downgrade rehearsal на копии legacy schema;
+- load tests realtime и Space discovery;
+- observability/status/incident surfaces;
+- accessibility pass;
+- security review session/token/media/upload/moderation paths;
+- отсутствие известных P0/P1 launch blockers.
 
 ## Non-negotiable invariants
 

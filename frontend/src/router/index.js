@@ -19,8 +19,44 @@ const router = createRouter({
 		{
 			path: '/',
 			name: 'chats',
-			component: () => import('../views/MainView.vue'),
+			component: () => import('../views/SpaceDiscoveryView.vue'),
 			meta: { title: 'Пространства — PubChat', requestAuth: true },
+		},
+		{
+			path: '/people',
+			name: 'people',
+			component: () => import('../views/PeopleDiscoveryView.vue'),
+			meta: { title: 'Люди — PubChat', requestAuth: true },
+		},
+		{
+			path: '/invitations',
+			name: 'invitations',
+			component: () => import('../views/InvitationsView.vue'),
+			meta: { title: 'Приглашения — PubChat', requestAuth: true },
+		},
+		{
+			path: '/safety',
+			name: 'safety',
+			component: () => import('../views/SafetyCenterView.vue'),
+			meta: { title: 'Безопасность — PubChat', requestAuth: true },
+		},
+		{
+			path: '/spaces/:uid',
+			name: 'space',
+			component: () => import('../views/MainView.vue'),
+			meta: { title: 'Разговор — PubChat', requestAuth: true },
+		},
+		{
+			path: '/spaces/:uid/community',
+			name: 'space-community',
+			component: () => import('../views/SpaceCommunityView.vue'),
+			meta: { title: 'Центр пространства — PubChat', requestAuth: true },
+		},
+		{
+			path: '/spaces/:uid/moderation',
+			name: 'space-moderation',
+			component: () => import('../views/SpaceModerationView.vue'),
+			meta: { title: 'Модерация пространства — PubChat', requestAuth: true },
 		},
 		{
 			path: '/profile',

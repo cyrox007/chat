@@ -1,0 +1,302 @@
+<template>
+	<CreateSpaceModal :open="createOpen" @close="createOpen = false" @created="handleCreated" />
+
+	<main class="discovery-shell">
+		<section class="discovery-hero">
+			<div class="discovery-hero__copy">
+				<span class="eyebrow">Living Spaces</span>
+				<h1>Найдите место, куда хочется вернуться</h1>
+				<p>Небольшие живые сообщества для разговоров, знакомств, игр и локальных встреч — без бесконечной ленты.</p>
+			</div>
+			<button class="ui-button discovery-hero__create" type="button" @click="createOpen = true">
+				<i class="fas fa-plus" aria-hidden="true"></i>
+				Создать пространство
+			</button>
+		</section>
+
+		<section class="discovery-toolbar" aria-label="Поиск пространств">
+			<form class="search-box" @submit.prevent="loadSpaces">
+				<i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+				<input v-model.trim="searchQuery" type="search" maxlength="80" placeholder="Тема, название или атмосфера" />
+				<button v-if="searchQuery" type="button" aria-label="Очистить поиск" @click="clearSearch">
+					<i class="fas fa-xmark" aria-hidden="true"></i>
+				</button>
+			</form>
+
+			<div class="purpose-filter" role="list" aria-label="Формат пространства">
+				<button
+					v-for="item in purposeOptions"
+					:key="item.value || 'all'"
+					type="button"
+					class="filter-chip"
+					:class="{ active: purpose === item.value }"
+					@click="setPurpose(item.value)"
+				>
+					{{ item.label }}
+				</button>
+			</div>
+		</section>
+
+		<section v-if="loading" class="discovery-state" role="status">
+			<div class="state-orbit"><i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i></div>
+			<strong>Ищем живые пространства…</strong>
+		</section>
+
+		<section v-else-if="errorMessage" class="discovery-state discovery-state--error">
+			<div class="state-orbit"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i></div>
+			<strong>Не удалось загрузить пространства</strong>
+			<span>{{ errorMessage }}</span>
+			<button class="ui-button" type="button" @click="loadSpaces">Повторить</button>
+		</section>
+
+		<section v-else-if="spaces.length" class="space-grid" aria-label="Пространства PubChat">
+			<article v-for="space in spaces" :key="space.uid" class="space-card">
+				<div class="space-card__topline">
+					<span class="purpose-badge"><i :class="purposeIcon(space.purpose)" aria-hidden="true"></i>{{ purposeLabel(space.purpose) }}</span>
+					<span v-if="space.visibility !== 'public'" class="visibility-badge">
+						<i :class="space.visibility === 'private' ? 'fas fa-lock' : 'fas fa-link'" aria-hidden="true"></i>
+						{{ space.visibility === 'private' ? 'Закрытое' : 'По ссылке' }}
+					</span>
+				</div>
+
+				<div class="space-card__body">
+					<h2>{{ space.name }}</h2>
+					<p>{{ space.description || 'Создатель пока не добавил описание — атмосфера формируется людьми.' }}</p>
+					<div v-if="space.tags?.length" class="tag-row">
+						<button v-for="tag in space.tags.slice(0, 4)" :key="tag" type="button" class="ui-chip" @click="filterByTag(tag)">#{{ tag }}</button>
+					</div>
+				</div>
+
+				<div class="space-card__meta">
+					<span><i class="fas fa-user-group" aria-hidden="true"></i>{{ space.member_count }} участников</span>
+					<span v-if="space.region || space.country"><i class="fas fa-location-dot" aria-hidden="true"></i>{{ locationLabel(space) }}</span>
+					<span><i class="fas fa-door-open" aria-hidden="true"></i>{{ joinPolicyLabel(space.join_policy) }}</span>
+				</div>
+
+				<footer class="space-card__footer">
+					<div class="owner-mini">
+						<span class="owner-mini__avatar">
+							<img v-if="space.owner?.avatar" :src="resolveAvatar(space.owner.avatar)" alt="" />
+							<span v-else>{{ avatarFallback(space.owner?.display_name || space.owner?.handle) }}</span>
+						</span>
+						<span>
+							<small>Создатель</small>
+							<strong>{{ space.owner?.display_name || space.owner?.handle || 'Участник PubChat' }}</strong>
+						</span>
+					</div>
+
+					<button
+						class="ui-button space-card__action"
+						:class="{ 'ui-button--ghost': space.viewer_membership?.status === 'pending' || space.join_policy === 'invite' }"
+						type="button"
+						:disabled="joiningUid === space.uid || space.viewer_membership?.status === 'pending' || (space.join_policy === 'invite' && !isActiveMember(space))"
+						@click="enterSpace(space)"
+					>
+						{{ actionLabel(space) }}
+					</button>
+				</footer>
+			</article>
+		</section>
+
+		<section v-else class="discovery-state">
+			<div class="state-orbit"><i class="fas fa-compass" aria-hidden="true"></i></div>
+			<strong>Подходящих пространств пока нет</strong>
+			<span>Измените фильтр или создайте своё место с понятной темой и атмосферой.</span>
+			<button class="ui-button" type="button" @click="createOpen = true">Создать первым</button>
+		</section>
+	</main>
+</template>
+
+<script setup>
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+
+import SpacesService from '@/API/SpacesService';
+import CreateSpaceModal from '@/components/Spaces/CreateSpaceModal.vue';
+
+const router = useRouter();
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000';
+
+const spaces = ref([]);
+const loading = ref(true);
+const errorMessage = ref('');
+const searchQuery = ref('');
+const purpose = ref(null);
+const tagFilter = ref(null);
+const createOpen = ref(false);
+const joiningUid = ref(null);
+
+const purposeOptions = [
+	{ value: null, label: 'Все' },
+	{ value: 'conversation', label: 'Разговоры' },
+	{ value: 'meet_people', label: 'Знакомства' },
+	{ value: 'games', label: 'Игры' },
+	{ value: 'local', label: 'Рядом' },
+	{ value: 'community', label: 'Сообщества' },
+];
+
+const loadSpaces = async () => {
+	loading.value = true;
+	errorMessage.value = '';
+	try {
+		const response = await SpacesService.list({
+			q: searchQuery.value || undefined,
+			purpose: purpose.value || undefined,
+			tag: tagFilter.value || undefined,
+			limit: 50,
+		});
+		spaces.value = response.data.spaces || [];
+	} catch (error) {
+		console.error('Не удалось загрузить Living Spaces:', error);
+		errorMessage.value = 'Проверьте соединение и попробуйте ещё раз.';
+	} finally {
+		loading.value = false;
+	}
+};
+
+const setPurpose = async (value) => {
+	purpose.value = value;
+	tagFilter.value = null;
+	await loadSpaces();
+};
+
+const clearSearch = async () => {
+	searchQuery.value = '';
+	tagFilter.value = null;
+	await loadSpaces();
+};
+
+const filterByTag = async (tag) => {
+	tagFilter.value = tag;
+	searchQuery.value = '';
+	await loadSpaces();
+};
+
+const isActiveMember = (space) => space.viewer_membership?.status === 'active' || space.viewer_membership?.role === 'owner';
+
+const actionLabel = (space) => {
+	if (joiningUid.value === space.uid) return 'Подключаем…';
+	if (isActiveMember(space)) return 'Открыть';
+	if (space.viewer_membership?.status === 'pending') return 'Заявка отправлена';
+	if (space.join_policy === 'request') return 'Подать заявку';
+	if (space.join_policy === 'invite') return 'По приглашению';
+	return 'Войти';
+};
+
+const enterSpace = async (space) => {
+	if (isActiveMember(space)) {
+		await router.push({ name: 'space', params: { uid: space.uid } });
+		return;
+	}
+	if (space.join_policy === 'invite') return;
+
+	joiningUid.value = space.uid;
+	try {
+		const response = await SpacesService.join(space.uid);
+		const updated = response.data.space;
+		const index = spaces.value.findIndex((item) => item.uid === updated.uid);
+		if (index >= 0) spaces.value[index] = updated;
+		if (updated.viewer_membership?.status === 'active') {
+			await router.push({ name: 'space', params: { uid: updated.uid } });
+		}
+	} catch (error) {
+		console.error('Не удалось присоединиться к пространству:', error);
+		errorMessage.value = error.response?.data?.detail?.error_type === 'space_full'
+			? 'В этом пространстве сейчас нет свободных мест.'
+			: 'Не удалось присоединиться к пространству.';
+	} finally {
+		joiningUid.value = null;
+	}
+};
+
+const handleCreated = async (space) => {
+	createOpen.value = false;
+	await router.push({ name: 'space', params: { uid: space.uid } });
+};
+
+const purposeLabel = (value) => ({
+	community: 'Сообщество',
+	conversation: 'Разговоры',
+	meet_people: 'Знакомства',
+	games: 'Игры',
+	local: 'Локальное',
+}[value] || 'Сообщество');
+
+const purposeIcon = (value) => ({
+	community: 'fas fa-people-group',
+	conversation: 'fas fa-comments',
+	meet_people: 'fas fa-handshake',
+	games: 'fas fa-gamepad',
+	local: 'fas fa-location-dot',
+}[value] || 'fas fa-people-group');
+
+const joinPolicyLabel = (value) => ({
+	open: 'Открытый вход',
+	request: 'Вход по заявке',
+	invite: 'Только по приглашению',
+}[value] || 'Открытый вход');
+
+const locationLabel = (space) => [space.region, space.country].filter(Boolean).join(', ');
+const resolveAvatar = (avatar) => /^https?:\/\//.test(avatar) ? avatar : `${apiBaseUrl}${avatar}`;
+const avatarFallback = (value = '?') => String(value || '?').slice(0, 1).toUpperCase();
+
+onMounted(loadSpaces);
+</script>
+
+<style scoped>
+.discovery-shell { display: grid; gap: var(--ui-space-5); padding-bottom: var(--ui-space-8); }
+.discovery-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--ui-space-6); padding: clamp(1.4rem, 4vw, 2.6rem); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-xl); background: linear-gradient(135deg, var(--ui-surface) 0%, var(--ui-primary-soft) 160%); box-shadow: var(--ui-shadow-sm); }
+.discovery-hero__copy { max-width: 44rem; }
+.eyebrow { display: block; margin-bottom: .45rem; color: var(--ui-primary); font-size: var(--ui-text-xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.discovery-hero h1 { margin: 0; max-width: 42rem; font-size: clamp(1.75rem, 4vw, 3rem); line-height: 1.03; letter-spacing: -.035em; }
+.discovery-hero p { max-width: 39rem; margin: var(--ui-space-3) 0 0; color: var(--ui-text-muted); line-height: 1.6; }
+.discovery-hero__create { flex: 0 0 auto; }
+.discovery-toolbar { display: grid; gap: var(--ui-space-3); }
+.search-box { min-height: 3.2rem; display: flex; align-items: center; gap: var(--ui-space-3); padding: 0 var(--ui-space-4); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-pill); background: var(--ui-surface); box-shadow: var(--ui-shadow-sm); color: var(--ui-text-subtle); }
+.search-box input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ui-text); font: inherit; }
+.search-box button { border: 0; background: transparent; color: var(--ui-text-subtle); cursor: pointer; }
+.purpose-filter { display: flex; gap: var(--ui-space-2); overflow-x: auto; padding-bottom: .15rem; scrollbar-width: none; }
+.filter-chip { flex: 0 0 auto; min-height: 2.3rem; padding: 0 var(--ui-space-3); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-pill); background: var(--ui-surface); color: var(--ui-text-muted); font: inherit; font-size: var(--ui-text-sm); font-weight: 700; cursor: pointer; }
+.filter-chip.active { border-color: color-mix(in srgb, var(--ui-primary) 35%, var(--ui-border)); background: var(--ui-primary-soft); color: var(--ui-primary); }
+.space-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ui-space-4); }
+.space-card { min-width: 0; display: flex; flex-direction: column; gap: var(--ui-space-4); padding: var(--ui-space-5); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-xl); background: var(--ui-surface); box-shadow: var(--ui-shadow-sm); transition: transform var(--ui-motion-normal) var(--ui-ease), box-shadow var(--ui-motion-normal) var(--ui-ease); }
+.space-card:hover { transform: translateY(-2px); box-shadow: var(--ui-shadow-md); }
+.space-card__topline { display: flex; justify-content: space-between; gap: var(--ui-space-2); }
+.purpose-badge, .visibility-badge { display: inline-flex; align-items: center; gap: var(--ui-space-1); font-size: var(--ui-text-xs); font-weight: 800; }
+.purpose-badge { color: var(--ui-primary); }
+.visibility-badge { color: var(--ui-text-subtle); }
+.space-card__body { min-height: 7rem; }
+.space-card h2 { margin: 0; font-size: var(--ui-text-xl); letter-spacing: -.02em; }
+.space-card__body p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; margin: var(--ui-space-2) 0 0; color: var(--ui-text-muted); line-height: 1.55; }
+.tag-row { display: flex; flex-wrap: wrap; gap: var(--ui-space-1); margin-top: var(--ui-space-3); }
+.tag-row .ui-chip { border: 0; cursor: pointer; }
+.space-card__meta { display: flex; flex-wrap: wrap; gap: var(--ui-space-3); color: var(--ui-text-subtle); font-size: var(--ui-text-xs); }
+.space-card__meta span { display: inline-flex; align-items: center; gap: var(--ui-space-1); }
+.space-card__footer { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-4); padding-top: var(--ui-space-3); border-top: 1px solid var(--ui-border); }
+.owner-mini { min-width: 0; display: flex; align-items: center; gap: var(--ui-space-2); }
+.owner-mini__avatar { width: 2.2rem; height: 2.2rem; display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-primary); font-weight: 800; }
+.owner-mini__avatar img { width: 100%; height: 100%; object-fit: cover; }
+.owner-mini > span:last-child { min-width: 0; display: grid; }
+.owner-mini small { color: var(--ui-text-subtle); font-size: .66rem; }
+.owner-mini strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--ui-text-sm); }
+.space-card__action { flex: 0 0 auto; }
+.ui-button--ghost { border: 1px solid var(--ui-border); background: transparent; color: var(--ui-text-muted); }
+.discovery-state { min-height: 22rem; display: grid; place-items: center; align-content: center; gap: var(--ui-space-2); padding: var(--ui-space-7); text-align: center; color: var(--ui-text-muted); }
+.discovery-state strong { color: var(--ui-text); font-size: var(--ui-text-lg); }
+.discovery-state span { max-width: 31rem; }
+.state-orbit { width: 4rem; height: 4rem; display: grid; place-items: center; margin-bottom: var(--ui-space-2); border-radius: 1.4rem; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: var(--ui-text-xl); transform: rotate(4deg); }
+.discovery-state--error .state-orbit { background: var(--ui-danger-soft); color: var(--ui-danger); }
+@media (max-width: 860px) {
+	.space-grid { grid-template-columns: 1fr; }
+	.discovery-hero { align-items: flex-start; flex-direction: column; }
+}
+@media (max-width: 560px) {
+	.discovery-shell { margin-inline: calc(var(--ui-space-3) * -1); }
+	.discovery-hero { border-inline: 0; border-radius: 0; }
+	.discovery-toolbar { padding-inline: var(--ui-space-3); }
+	.space-grid { gap: var(--ui-space-2); }
+	.space-card { border-inline: 0; border-radius: 0; padding: var(--ui-space-4); }
+	.space-card__footer { align-items: stretch; flex-direction: column; }
+	.space-card__action { width: 100%; }
+}
+</style>

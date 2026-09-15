@@ -5,17 +5,20 @@
 				<span>О пространстве</span>
 				<strong>{{ roomInfo.name }}</strong>
 			</div>
-			<button type="button" class="icon-button" aria-label="Закрыть панель" @click="closeSidebar">
+			<button type="button" class="icon-button" aria-label="Закрыть панель" @click="emit('close')">
 				<i class="fas fa-xmark" aria-hidden="true"></i>
 			</button>
 		</header>
 
-		<div class="panel-tabs" role="tablist" aria-label="Разделы пространства">
+		<div class="panel-tabs" :class="{ 'panel-tabs--manager': canManage }" role="tablist" aria-label="Разделы пространства">
 			<button type="button" role="tab" :aria-selected="activeTab === 'info'" :class="{ active: activeTab === 'info' }" @click="activeTab = 'info'">
 				Обзор
 			</button>
 			<button type="button" role="tab" :aria-selected="activeTab === 'people'" :class="{ active: activeTab === 'people' }" @click="activeTab = 'people'">
-				Люди <span class="count-badge">{{ users.length }}</span>
+				Люди <span class="count-badge">{{ activeTotal }}</span>
+			</button>
+			<button v-if="canManage" type="button" role="tab" :aria-selected="activeTab === 'requests'" :class="{ active: activeTab === 'requests' }" @click="activeTab = 'requests'">
+				Заявки <span v-if="pendingTotal" class="count-badge count-badge--attention">{{ pendingTotal }}</span>
 			</button>
 		</div>
 
@@ -28,11 +31,17 @@
 			</div>
 
 			<dl class="space-facts">
-				<div v-if="owner">
+				<div v-if="owner?.uid">
 					<dt>Создатель</dt>
-					<dd>
-						<RouterLink :to="`/profile/${owner.uid}`">{{ owner.display_name || owner.username }}</RouterLink>
-					</dd>
+					<dd><RouterLink :to="`/profile/${owner.uid}`">{{ owner.display_name || owner.handle || 'Участник' }}</RouterLink></dd>
+				</div>
+				<div>
+					<dt>Участники</dt>
+					<dd>{{ roomInfo.member_count ?? activeTotal }} / {{ roomInfo.member_limit || '∞' }}</dd>
+				</div>
+				<div>
+					<dt>Вход</dt>
+					<dd>{{ joinPolicyLabel }}</dd>
 				</div>
 				<div v-if="roomInfo.region || roomInfo.country">
 					<dt>Регион</dt>
@@ -47,54 +56,84 @@
 			<div class="panel-note">
 				<i class="fas fa-handshake" aria-hidden="true"></i>
 				<div>
-					<strong>Общие правила, своя атмосфера</strong>
-					<span>Роли действуют только внутри этого пространства и не являются статусом человека во всём PubChat.</span>
+					<strong>Локальные роли</strong>
+					<span>Создатель и модераторы управляют только этим пространством. Роль здесь не даёт глобального статуса в PubChat.</span>
 				</div>
 			</div>
 		</section>
 
-		<section v-else class="panel-content panel-content--people">
-			<div v-if="users.length" class="people-list">
-				<div v-for="user in users" :key="user.uid" class="person-row">
-					<RouterLink :to="`/profile/${user.uid}`" class="person-link">
+		<section v-else-if="activeTab === 'people'" class="panel-content panel-content--people">
+			<div v-if="loadingActive" class="panel-loading">Загружаем участников…</div>
+			<div v-else-if="activeMembers.length" class="people-list">
+				<article v-for="member in activeMembers" :key="member.account_uid" class="person-row">
+					<RouterLink :to="`/profile/${member.account_uid}`" class="person-link">
 						<span class="person-avatar">
-							<img v-if="user.avatar" :src="resolveAvatar(user.avatar)" alt="" />
-							<span v-else>{{ avatarFallback(user.display_name || user.username) }}</span>
+							<img v-if="member.persona?.avatar" :src="resolveAvatar(member.persona.avatar)" alt="" />
+							<span v-else>{{ avatarFallback(member.persona?.display_name || member.persona?.handle) }}</span>
+							<span v-if="isOnline(member.account_uid)" class="online-dot" title="Сейчас в сети"></span>
 						</span>
 						<span class="person-copy">
-							<strong>{{ user.display_name || user.username }}</strong>
-							<small v-if="user.social_intent">{{ intentLabel(user.social_intent) }}</small>
+							<strong>{{ member.persona?.display_name || member.persona?.handle || 'Участник' }}</strong>
+							<small>{{ member.persona?.handle ? `@${member.persona.handle}` : intentLabel(member.persona?.social_intent) }}</small>
 						</span>
 					</RouterLink>
 
-					<span v-if="user.uid === roomInfo.owner_uid" class="role-chip role-chip--owner">Создатель</span>
-					<span v-else-if="isModerator(user.uid)" class="role-chip">Модератор</span>
+					<span v-if="member.role === 'owner'" class="role-chip role-chip--owner">Создатель</span>
+					<span v-else-if="member.role === 'moderator'" class="role-chip">Модератор</span>
 
-					<div
-						v-if="canManage(user.uid)"
-						class="person-actions"
-					>
-						<button type="button" class="more-button" :aria-expanded="activeUserMenu === user.uid" aria-label="Действия с участником" @click.stop="toggleUserMenu(user.uid)">
+					<div v-if="canManageMember(member)" class="person-actions">
+						<button type="button" class="more-button" :aria-expanded="activeUserMenu === member.account_uid" aria-label="Действия с участником" @click.stop="toggleUserMenu(member.account_uid)">
 							<i class="fas fa-ellipsis" aria-hidden="true"></i>
 						</button>
-						<div v-if="activeUserMenu === user.uid" class="person-menu">
-							<button v-if="isOwner" type="button" @click="toggleModeratorStatus(user.uid)">
+						<div v-if="activeUserMenu === member.account_uid" class="person-menu">
+							<button v-if="isOwner" type="button" :disabled="busyUid === member.account_uid" @click="toggleModerator(member)">
 								<i class="fas fa-user-shield" aria-hidden="true"></i>
-								{{ isModerator(user.uid) ? 'Снять роль модератора' : 'Сделать модератором' }}
+								{{ member.role === 'moderator' ? 'Снять роль модератора' : 'Сделать модератором' }}
 							</button>
-							<button type="button" class="person-menu__danger" @click="restrictUser(user.uid)">
-								<i class="fas fa-user-slash" aria-hidden="true"></i>
-								Ограничить доступ
+							<button type="button" :disabled="busyUid === member.account_uid" @click="removeMember(member)">
+								<i class="fas fa-door-open" aria-hidden="true"></i>Удалить из пространства
+							</button>
+							<button type="button" class="person-menu__danger" @click="restrictUser(member.account_uid)">
+								<i class="fas fa-user-slash" aria-hidden="true"></i>Ограничить доступ
 							</button>
 						</div>
 					</div>
-				</div>
+				</article>
 			</div>
-
 			<div v-else class="people-empty">
 				<i class="fas fa-couch" aria-hidden="true"></i>
 				<strong>Пока никого</strong>
-				<span>Когда люди зайдут в пространство, они появятся здесь.</span>
+				<span>Участники пространства появятся здесь независимо от того, находятся ли они сейчас онлайн.</span>
+			</div>
+			<button v-if="activeMembers.length < activeTotal" type="button" class="load-more" :disabled="loadingMore" @click="loadMoreActive">
+				{{ loadingMore ? 'Загружаем…' : 'Показать ещё' }}
+			</button>
+		</section>
+
+		<section v-else class="panel-content panel-content--people">
+			<div v-if="loadingPending" class="panel-loading">Проверяем заявки…</div>
+			<div v-else-if="pendingMembers.length" class="people-list">
+				<article v-for="member in pendingMembers" :key="member.account_uid" class="person-row person-row--request">
+					<RouterLink :to="`/profile/${member.account_uid}`" class="person-link">
+						<span class="person-avatar">
+							<img v-if="member.persona?.avatar" :src="resolveAvatar(member.persona.avatar)" alt="" />
+							<span v-else>{{ avatarFallback(member.persona?.display_name || member.persona?.handle) }}</span>
+						</span>
+						<span class="person-copy">
+							<strong>{{ member.persona?.display_name || member.persona?.handle || 'Участник' }}</strong>
+							<small>Хочет присоединиться</small>
+						</span>
+					</RouterLink>
+					<div class="request-actions">
+						<button type="button" class="request-action request-action--approve" :disabled="busyUid === member.account_uid" aria-label="Одобрить заявку" @click="manageRequest(member, 'approve')"><i class="fas fa-check"></i></button>
+						<button type="button" class="request-action" :disabled="busyUid === member.account_uid" aria-label="Отклонить заявку" @click="manageRequest(member, 'reject')"><i class="fas fa-xmark"></i></button>
+					</div>
+				</article>
+			</div>
+			<div v-else class="people-empty">
+				<i class="fas fa-inbox" aria-hidden="true"></i>
+				<strong>Новых заявок нет</strong>
+				<span>Когда кто-то попросится в пространство, запрос появится здесь.</span>
 			</div>
 		</section>
 	</aside>
@@ -105,7 +144,7 @@ import { computed, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useStore } from 'vuex';
 
-import UsersServices from '@/API/UsersService';
+import SpacesService from '@/API/SpacesService';
 
 const props = defineProps({
 	isActive: { type: Boolean, default: false },
@@ -113,25 +152,41 @@ const props = defineProps({
 	users: { type: Array, default: () => [] },
 });
 
-const emit = defineEmits(['close', 'user-banned', 'moderator-changed']);
+const emit = defineEmits(['close', 'user-banned', 'membership-changed']);
 const store = useStore();
-const owner = ref(null);
 const activeTab = ref('info');
 const activeUserMenu = ref(null);
+const activeMembers = ref([]);
+const pendingMembers = ref([]);
+const activeTotal = ref(0);
+const pendingTotal = ref(0);
+const loadingActive = ref(false);
+const loadingPending = ref(false);
+const loadingMore = ref(false);
+const busyUid = ref(null);
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000';
 
 const currentUserUid = computed(() => store.getters.getUser?.uid);
-const isOwner = computed(() => currentUserUid.value === props.roomInfo.owner_uid);
-const isCurrentUserModerator = computed(() => isModerator(currentUserUid.value));
-const tags = computed(() => String(props.roomInfo.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean));
+const owner = computed(() => props.roomInfo.owner || (props.roomInfo.owner_uid ? { uid: props.roomInfo.owner_uid } : null));
+const isOwner = computed(() => props.roomInfo.owner_uid === currentUserUid.value || props.roomInfo.viewer_membership?.role === 'owner');
+const isCurrentUserModerator = computed(() => props.roomInfo.viewer_membership?.status === 'active' && props.roomInfo.viewer_membership?.role === 'moderator');
+const canManage = computed(() => Boolean(props.roomInfo.can_manage || isOwner.value || isCurrentUserModerator.value));
+const tags = computed(() => Array.isArray(props.roomInfo.tags)
+	? props.roomInfo.tags
+	: String(props.roomInfo.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean));
+const joinPolicyLabel = computed(() => ({
+	open: 'Свободный вход',
+	request: 'По заявке',
+	invite: 'По приглашению',
+}[props.roomInfo.join_policy] || 'По правилам пространства'));
+const onlineIds = computed(() => new Set(props.users.map((user) => String(user.uid || user.account_uid || '')).filter(Boolean)));
 
-const isModerator = (uid) => props.roomInfo.moderators?.includes(uid) || false;
-const canManage = (userUid) => (
-	(isOwner.value || isCurrentUserModerator.value)
-	&& userUid !== currentUserUid.value
-	&& userUid !== props.roomInfo.owner_uid
-);
-
+const isOnline = (uid) => onlineIds.value.has(String(uid));
+const canManageMember = (member) => {
+	if (!canManage.value || member.account_uid === currentUserUid.value || member.role === 'owner') return false;
+	if (isCurrentUserModerator.value && member.role === 'moderator') return false;
+	return true;
+};
 const resolveAvatar = (avatar) => /^https?:\/\//.test(avatar) ? avatar : `${apiBaseUrl}${avatar}`;
 const avatarFallback = (value = '?') => String(value || '?').slice(0, 1).toUpperCase();
 const intentLabel = (intent) => ({
@@ -141,15 +196,85 @@ const intentLabel = (intent) => ({
 	friends: 'Общается со знакомыми',
 	quiet: 'Спокойный режим',
 }[intent] || 'В PubChat');
+const formatDate = (dateString) => new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(dateString));
 
-const toggleUserMenu = (userId) => {
-	activeUserMenu.value = activeUserMenu.value === userId ? null : userId;
+const loadActive = async ({ append = false } = {}) => {
+	if (!props.roomInfo.uid) return;
+	append ? loadingMore.value = true : loadingActive.value = true;
+	try {
+		const offset = append ? activeMembers.value.length : 0;
+		const response = await SpacesService.members(props.roomInfo.uid, { status: 'active', limit: 100, offset });
+		const items = response.data.members || [];
+		activeMembers.value = append ? [...activeMembers.value, ...items] : items;
+		activeTotal.value = response.data.pagination?.total ?? activeMembers.value.length;
+	} catch (error) {
+		console.error('Не удалось загрузить участников пространства:', error);
+	} finally {
+		loadingActive.value = false;
+		loadingMore.value = false;
+	}
 };
 
-const toggleModeratorStatus = (userId) => {
-	const action = isModerator(userId) ? 'remove_moderator' : 'add_moderator';
-	emit('moderator-changed', { userId, isModerator: action === 'add_moderator' });
-	activeUserMenu.value = null;
+const loadPending = async () => {
+	pendingMembers.value = [];
+	pendingTotal.value = 0;
+	if (!props.roomInfo.uid || !canManage.value) return;
+	loadingPending.value = true;
+	try {
+		const response = await SpacesService.members(props.roomInfo.uid, { status: 'pending', limit: 100, offset: 0 });
+		pendingMembers.value = response.data.members || [];
+		pendingTotal.value = response.data.pagination?.total ?? pendingMembers.value.length;
+	} catch (error) {
+		console.error('Не удалось загрузить заявки пространства:', error);
+	} finally {
+		loadingPending.value = false;
+	}
+};
+
+const refreshMemberships = async () => Promise.all([loadActive(), loadPending()]);
+const loadMoreActive = () => loadActive({ append: true });
+const toggleUserMenu = (userId) => { activeUserMenu.value = activeUserMenu.value === userId ? null : userId; };
+
+const toggleModerator = async (member) => {
+	busyUid.value = member.account_uid;
+	try {
+		const role = member.role === 'moderator' ? 'member' : 'moderator';
+		await SpacesService.updateMemberRole(props.roomInfo.uid, member.account_uid, role);
+		await refreshMemberships();
+		emit('membership-changed');
+	} catch (error) {
+		console.error('Не удалось изменить роль участника:', error);
+	} finally {
+		busyUid.value = null;
+		activeUserMenu.value = null;
+	}
+};
+
+const manageRequest = async (member, action) => {
+	busyUid.value = member.account_uid;
+	try {
+		await SpacesService.manageMembership(props.roomInfo.uid, member.account_uid, action);
+		await refreshMemberships();
+		emit('membership-changed');
+	} catch (error) {
+		console.error('Не удалось обработать заявку:', error);
+	} finally {
+		busyUid.value = null;
+	}
+};
+
+const removeMember = async (member) => {
+	busyUid.value = member.account_uid;
+	try {
+		await SpacesService.manageMembership(props.roomInfo.uid, member.account_uid, 'remove');
+		await refreshMemberships();
+		emit('membership-changed');
+	} catch (error) {
+		console.error('Не удалось удалить участника из пространства:', error);
+	} finally {
+		busyUid.value = null;
+		activeUserMenu.value = null;
+	}
 };
 
 const restrictUser = (userId) => {
@@ -157,92 +282,73 @@ const restrictUser = (userId) => {
 	activeUserMenu.value = null;
 };
 
-const closeSidebar = () => emit('close');
-const formatDate = (dateString) => new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(dateString));
-
-const loadOwner = async (ownerUid) => {
-	owner.value = null;
-	if (!ownerUid) return;
-	try {
-		const response = await UsersServices.get_user_by_uid(ownerUid);
-		if (response.data.status === 'ok') owner.value = response.data.user;
-	} catch (error) {
-		console.error('Не удалось загрузить Persona создателя пространства:', error);
-	}
-};
-
-watch(() => props.roomInfo.owner_uid, loadOwner, { immediate: true });
-watch(() => props.roomInfo.uid, () => {
-	activeTab.value = 'info';
-	activeUserMenu.value = null;
-});
+watch(
+	() => [props.roomInfo.uid, props.roomInfo.member_count, props.roomInfo.can_manage],
+	() => {
+		activeTab.value = 'info';
+		activeUserMenu.value = null;
+		refreshMemberships();
+	},
+	{ immediate: true },
+);
 </script>
 
 <style scoped>
-.space-panel {
-	position: relative;
-	width: 20rem;
-	min-width: 20rem;
-	height: 100%;
-	display: flex;
-	flex-direction: column;
-	border-left: 1px solid var(--ui-border);
-	background: var(--ui-surface);
-}
-
+.space-panel { position: relative; width: 21rem; min-width: 21rem; height: 100%; display: flex; flex-direction: column; border-left: 1px solid var(--ui-border); background: var(--ui-surface); }
 .space-panel__header { min-height: 4.25rem; display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-3); padding: var(--ui-space-3) var(--ui-space-4); }
 .space-panel__header > div { min-width: 0; display: grid; }
 .space-panel__header span { color: var(--ui-text-subtle); font-size: var(--ui-text-xs); }
 .space-panel__header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .icon-button { width: 2.5rem; height: 2.5rem; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text-muted); cursor: pointer; }
 .icon-button:hover { background: var(--ui-surface-muted); color: var(--ui-text); }
-
 .panel-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: var(--ui-space-1); margin: 0 var(--ui-space-3); padding: var(--ui-space-1); border-radius: var(--ui-radius-md); background: var(--ui-surface-muted); }
-.panel-tabs button { min-height: 2.35rem; display: flex; align-items: center; justify-content: center; gap: var(--ui-space-1); border: 0; border-radius: calc(var(--ui-radius-md) - 0.2rem); background: transparent; color: var(--ui-text-muted); font: inherit; font-size: var(--ui-text-sm); font-weight: 700; cursor: pointer; }
+.panel-tabs--manager { grid-template-columns: repeat(3, 1fr); }
+.panel-tabs button { min-width: 0; min-height: 2.35rem; display: flex; align-items: center; justify-content: center; gap: .25rem; padding: 0 .35rem; border: 0; border-radius: calc(var(--ui-radius-md) - .2rem); background: transparent; color: var(--ui-text-muted); font: inherit; font-size: var(--ui-text-xs); font-weight: 700; cursor: pointer; }
 .panel-tabs button.active { background: var(--ui-surface); color: var(--ui-text); box-shadow: var(--ui-shadow-sm); }
-.count-badge { min-width: 1.25rem; padding: 0 0.3rem; border-radius: var(--ui-radius-pill); background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 0.68rem; }
-
+.count-badge { min-width: 1.25rem; padding: 0 .3rem; border-radius: var(--ui-radius-pill); background: var(--ui-primary-soft); color: var(--ui-primary); font-size: .68rem; }
+.count-badge--attention { background: var(--ui-warning-soft); color: var(--ui-warning); }
 .panel-content { min-height: 0; flex: 1; overflow-y: auto; padding: var(--ui-space-4); }
 .space-summary p { margin: 0; color: var(--ui-text-muted); line-height: 1.55; }
 .tag-list { display: flex; flex-wrap: wrap; gap: var(--ui-space-1); margin-top: var(--ui-space-3); }
 .space-facts { display: grid; gap: var(--ui-space-3); margin: var(--ui-space-5) 0; }
-.space-facts div { display: grid; gap: 0.15rem; }
+.space-facts div { display: grid; gap: .15rem; }
 .space-facts dt { color: var(--ui-text-subtle); font-size: var(--ui-text-xs); }
 .space-facts dd { margin: 0; color: var(--ui-text); font-size: var(--ui-text-sm); }
 .space-facts a { color: var(--ui-primary); text-decoration: none; font-weight: 700; }
-.space-facts a:hover { text-decoration: underline; }
 .panel-note { display: flex; gap: var(--ui-space-3); padding: var(--ui-space-3); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-soft); color: var(--ui-text-muted); }
-.panel-note > i { margin-top: 0.15rem; color: var(--ui-primary); }
-.panel-note div { display: grid; gap: 0.2rem; }
+.panel-note > i { margin-top: .15rem; color: var(--ui-primary); }
+.panel-note div { display: grid; gap: .2rem; }
 .panel-note strong { color: var(--ui-text); font-size: var(--ui-text-sm); }
 .panel-note span { font-size: var(--ui-text-xs); line-height: 1.45; }
-
 .panel-content--people { padding-inline: var(--ui-space-2); }
+.panel-loading, .people-empty { min-height: 11rem; display: grid; place-items: center; align-content: center; gap: var(--ui-space-2); padding: var(--ui-space-4); color: var(--ui-text-subtle); text-align: center; }
+.people-empty i { font-size: 1.5rem; color: var(--ui-primary); }
+.people-empty strong { color: var(--ui-text); }
+.people-empty span { font-size: var(--ui-text-xs); line-height: 1.45; }
 .people-list { display: grid; gap: var(--ui-space-1); }
-.person-row { position: relative; min-height: 3.6rem; display: flex; align-items: center; gap: var(--ui-space-2); padding: var(--ui-space-2); border-radius: var(--ui-radius-lg); }
+.person-row { position: relative; min-height: 3.7rem; display: flex; align-items: center; gap: var(--ui-space-2); padding: var(--ui-space-2); border-radius: var(--ui-radius-lg); }
 .person-row:hover { background: var(--ui-surface-muted); }
+.person-row--request { border: 1px solid var(--ui-border); }
 .person-link { min-width: 0; flex: 1; display: flex; align-items: center; gap: var(--ui-space-2); color: var(--ui-text); text-decoration: none; }
-.person-avatar { width: 2.4rem; height: 2.4rem; display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-primary); font-weight: 800; }
-.person-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.person-avatar { position: relative; width: 2.4rem; height: 2.4rem; display: grid; place-items: center; flex: 0 0 auto; overflow: visible; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-primary); font-weight: 800; }
+.person-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.online-dot { position: absolute; right: -.05rem; bottom: -.05rem; width: .65rem; height: .65rem; border: 2px solid var(--ui-surface); border-radius: 50%; background: var(--ui-success); }
 .person-copy { min-width: 0; display: grid; }
 .person-copy strong, .person-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.person-copy small { color: var(--ui-text-subtle); font-size: 0.7rem; }
-.role-chip { flex: 0 0 auto; padding: 0.2rem 0.45rem; border-radius: var(--ui-radius-pill); background: var(--ui-info-soft); color: var(--ui-info); font-size: 0.65rem; font-weight: 700; }
+.person-copy small { color: var(--ui-text-subtle); font-size: .7rem; }
+.role-chip { flex: 0 0 auto; padding: .2rem .45rem; border-radius: var(--ui-radius-pill); background: var(--ui-info-soft); color: var(--ui-info); font-size: .65rem; font-weight: 700; }
 .role-chip--owner { background: var(--ui-primary-soft); color: var(--ui-primary); }
 .person-actions { position: relative; }
 .more-button { width: 2rem; height: 2rem; display: grid; place-items: center; border: 0; border-radius: var(--ui-radius-md); background: transparent; color: var(--ui-text-subtle); cursor: pointer; }
 .more-button:hover { background: var(--ui-surface); color: var(--ui-text); }
-.person-menu { position: absolute; right: 0; top: calc(100% + var(--ui-space-1)); z-index: 20; width: 14rem; display: grid; padding: var(--ui-space-1); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-raised); box-shadow: var(--ui-shadow-lg); }
+.person-menu { position: absolute; right: 0; top: calc(100% + var(--ui-space-1)); z-index: 20; width: 15rem; display: grid; padding: var(--ui-space-1); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-raised); box-shadow: var(--ui-shadow-lg); }
 .person-menu button { min-height: 2.55rem; display: flex; align-items: center; gap: var(--ui-space-2); padding: 0 var(--ui-space-3); border: 0; border-radius: var(--ui-radius-md); background: transparent; color: var(--ui-text); text-align: left; cursor: pointer; }
-.person-menu button:hover { background: var(--ui-surface-muted); }
-.person-menu .person-menu__danger { color: var(--ui-danger); }
-.people-empty { min-height: 14rem; display: grid; place-items: center; align-content: center; gap: var(--ui-space-2); text-align: center; color: var(--ui-text-muted); }
-.people-empty i { font-size: var(--ui-text-xl); color: var(--ui-primary); }
-.people-empty strong { color: var(--ui-text); }
-.people-empty span { max-width: 14rem; font-size: var(--ui-text-xs); }
-
-@media (max-width: 1099px) {
-	.space-panel { position: fixed; top: 4rem; right: 0; bottom: 4.7rem; z-index: 115; width: min(22rem, calc(100vw - 2rem)); min-width: 0; height: auto; transform: translateX(110%); box-shadow: var(--ui-shadow-lg); transition: transform var(--ui-motion-normal) var(--ui-ease); }
-	.space-panel.active { transform: translateX(0); }
-}
+.person-menu button:hover:not(:disabled) { background: var(--ui-surface-muted); }
+.person-menu button:disabled { opacity: .5; }
+.person-menu__danger { color: var(--ui-danger) !important; }
+.request-actions { display: flex; gap: .25rem; }
+.request-action { width: 2rem; height: 2rem; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text-muted); cursor: pointer; }
+.request-action--approve { background: var(--ui-success-soft); color: var(--ui-success); border-color: transparent; }
+.load-more { width: calc(100% - var(--ui-space-2)); min-height: 2.5rem; margin: var(--ui-space-3) var(--ui-space-1) 0; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text-muted); cursor: pointer; }
+@media (max-width: 1100px) { .space-panel { position: absolute; top: 0; right: 0; z-index: 40; width: min(21rem, 92vw); min-width: 0; transform: translateX(105%); box-shadow: var(--ui-shadow-lg); transition: transform var(--ui-motion-normal) var(--ui-ease); } .space-panel.active { transform: translateX(0); } }
 </style>
