@@ -10,6 +10,7 @@
 				<RouterLink :to="{ name: 'chats' }">Пространства</RouterLink>
 				<RouterLink :to="{ name: 'people' }">Люди</RouterLink>
 				<RouterLink :to="{ name: 'messenger' }">Сообщения</RouterLink>
+				<RouterLink v-if="spaceContextRoute" class="context-link" :to="spaceContextRoute"><i class="fas fa-landmark" aria-hidden="true"></i>Центр</RouterLink>
 			</nav>
 
 			<div class="topbar-actions">
@@ -38,6 +39,9 @@
 					<div v-if="isDropdownOpen" class="persona-dropdown" role="menu">
 						<RouterLink role="menuitem" :to="profileRoute" @click="closeDropdown">
 							<i class="fas fa-user-circle" aria-hidden="true"></i><span>Мой образ</span>
+						</RouterLink>
+						<RouterLink v-if="spaceContextRoute" role="menuitem" :to="spaceContextRoute" @click="closeDropdown">
+							<i class="fas fa-landmark" aria-hidden="true"></i><span>Центр пространства</span>
 						</RouterLink>
 						<RouterLink role="menuitem" :to="{ name: 'invitations' }" @click="closeDropdown">
 							<i class="fas fa-envelope-open-text" aria-hidden="true"></i><span>Приглашения</span>
@@ -72,10 +76,11 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { RouterLink, useRouter } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 
 const router = useRouter();
+const route = useRoute();
 const store = useStore();
 const currentTheme = ref('light');
 const isDropdownOpen = ref(false);
@@ -85,6 +90,11 @@ const isAuthenticated = computed(() => store.getters.isAuth);
 const currentUser = computed(() => store.getters.getUser || {});
 const isAdmin = computed(() => ['admin', 'superadmin'].includes(currentUser.value.global_role));
 const profileRoute = computed(() => ({ name: 'UserProfile', params: { uid: currentUser.value.uid } }));
+const spaceContextRoute = computed(() => {
+	const uid = route.params?.uid;
+	if (!uid || !['space', 'space-community'].includes(String(route.name || ''))) return null;
+	return { name: 'space-community', params: { uid } };
+});
 const avatarFallback = computed(() => (currentUser.value.display_name || currentUser.value.username || '?').slice(0, 1).toUpperCase());
 const avatarUrl = computed(() => {
 	const avatar = currentUser.value.avatar;
@@ -132,8 +142,9 @@ onMounted(() => applyTheme(localStorage.getItem('theme') || 'light'));
 .brand-mark { width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: 0.65rem; background: var(--ui-primary); color: var(--ui-primary-contrast); font-size: var(--ui-text-sm); }
 .brand-name { font-size: var(--ui-text-lg); }
 .desktop-nav { display: flex; align-items: center; gap: var(--ui-space-1); }
-.desktop-nav a, .guest-link { min-height: 2.5rem; display: inline-flex; align-items: center; padding: 0 var(--ui-space-3); border-radius: var(--ui-radius-md); color: var(--ui-text-muted); text-decoration: none; font-size: var(--ui-text-sm); font-weight: 650; }
+.desktop-nav a, .guest-link { min-height: 2.5rem; display: inline-flex; align-items: center; gap: .4rem; padding: 0 var(--ui-space-3); border-radius: var(--ui-radius-md); color: var(--ui-text-muted); text-decoration: none; font-size: var(--ui-text-sm); font-weight: 650; }
 .desktop-nav a:hover, .desktop-nav a.router-link-active, .guest-link:hover { background: var(--ui-surface-muted); color: var(--ui-text); }
+.desktop-nav .context-link { color: var(--ui-primary); }
 .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: var(--ui-space-2); }
 .signup-button { min-height: 2.5rem; }
 .icon-button { width: 2.5rem; height: 2.5rem; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text-muted); cursor: pointer; }
