@@ -91,10 +91,12 @@ Stage 3 включён в релизную базу `0.3.0-alpha.1`.
 - exact bridge к legacy `RoomBan` для enforcement;
 - Safety Center пользователя;
 - manager moderation queue;
-- one appeal per action;
+- one appeal per action и one action per report — DB invariants;
 - independent appeal reviewer;
 - overturn снимает именно связанное ограничение;
-- повторный restrict помечает предыдущее действие как `superseded`;
+- повторный restrict отзывает предыдущее активное решение и закрывает его pending appeal;
+- закрыт side-channel приватных report metadata: consistency checks идут после scoped manager authorization;
+- legacy tag backfill не зависит от locale PostgreSQL и безопасен для Unicode;
 - UI/UX обновляется одновременно с доменом, включая mobile states.
 
 ### Gate для `0.4.0-alpha.1`
@@ -111,6 +113,7 @@ Stage 3 включён в релизную базу `0.3.0-alpha.1`.
 ### Осознанный технический долг после alpha checkpoint
 
 - устранить race вокруг member capacity при конкурентных join/approve;
+- добавить platform-level fallback для апелляций, если в Space нет второго независимого manager;
 - продолжить уменьшение зависимости от legacy `users/rooms/room_members/room_bans`;
 - расширить integration tests реальной PostgreSQL/Redis средой;
 - observability, metrics и нагрузочные сценарии до beta.
