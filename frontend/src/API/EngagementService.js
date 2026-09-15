@@ -26,6 +26,10 @@ export default class EngagementService {
 		return withUtc($api.get(`/appearance/v1/personas/${personaUid}`));
 	}
 
+	static spaceAppearances(spaceUids) {
+		return withUtc($api.post('/appearance/v1/spaces/batch', { space_uids: spaceUids }));
+	}
+
 	static spaceAppearance(spaceUid) {
 		return withUtc($api.get(`/appearance/v1/spaces/${spaceUid}`));
 	}
