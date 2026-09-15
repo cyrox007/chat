@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta
 from hashlib import sha256
 from uuid import UUID, uuid4
@@ -20,9 +21,9 @@ from components.identity.schemas import PersonaUpdateRequest, PrivacyUpdateReque
 from components.user.model import User
 from services.auth_service import generate_tokens
 from settings import config
+from utils.jwt import validate_refresh_token
 from utils.password import hash_password, verify_password
 from utils.user_agents import parse_user_agent
-from utils.jwt import validate_refresh_token
 
 
 def _token_hash(token: str) -> str:
@@ -33,6 +34,15 @@ def _client_metadata(request: Request) -> tuple[str, str, dict]:
     ip_address = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("User-Agent", "unknown")
     return ip_address, user_agent, parse_user_agent(user_agent)
+
+
+def _normalize_identifier(value: str) -> list[str]:
+    normalized = value.strip().casefold()
+    candidates = [normalized]
+    phone = re.sub(r"[^0-9+]", "", value.strip())
+    if phone and phone != normalized:
+        candidates.append(phone)
+    return list(dict.fromkeys(candidates))
 
 
 async def _role_name(db: AsyncSession, account_uid: UUID) -> str:
@@ -56,12 +66,17 @@ async def _primary_persona(db: AsyncSession, account_uid: UUID) -> Persona | Non
     return result.scalar_one_or_none()
 
 
+async def _legacy_user_by_uid(db: AsyncSession, user_uid: UUID | None) -> User | None:
+    if not user_uid:
+        return None
+    result = await db.execute(select(User).where(User.uid == user_uid).limit(1))
+    return result.scalar_one_or_none()
+
+
 async def build_identity_projection(db: AsyncSession, account: Account) -> dict:
     persona = await _primary_persona(db, account.uid)
     role = await _role_name(db, account.uid)
-    privacy = None
-    if persona:
-        privacy = await db.get(PrivacySettings, persona.uid)
+    privacy = await db.get(PrivacySettings, persona.uid) if persona else None
 
     persona_data = None
     if persona:
@@ -87,8 +102,6 @@ async def build_identity_projection(db: AsyncSession, account: Account) -> dict:
             "show_location": privacy.show_location,
         }
 
-    # `user` is a compatibility projection for the current Vuex store. It will
-    # disappear when the remaining legacy UI switches to account/persona.
     compatibility_user = None
     if persona:
         compatibility_user = {
@@ -119,25 +132,50 @@ async def build_identity_projection(db: AsyncSession, account: Account) -> dict:
     }
 
 
+async def build_public_profile(db: AsyncSession, account: Account, viewer_uid: str) -> dict:
+    persona = await _primary_persona(db, account.uid)
+    if not persona:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error_type": "persona_not_found"})
+
+    privacy = await db.get(PrivacySettings, persona.uid)
+    is_owner = str(account.uid) == str(viewer_uid)
+    visibility = privacy.profile_visibility if privacy else "public"
+    if visibility == "private" and not is_owner:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"error_type": "profile_private"})
+
+    show_location = is_owner or not privacy or privacy.show_location
+    role = await _role_name(db, account.uid)
+    return {
+        "uid": str(account.uid),
+        "persona_uid": str(persona.uid),
+        "handle": persona.handle,
+        "display_name": persona.display_name,
+        "avatar": persona.avatar,
+        "bio": persona.bio,
+        "city": persona.city if show_location else None,
+        "country": persona.country if show_location else None,
+        "social_intent": persona.social_intent,
+        "role": role if role != "user" else None,
+        "is_self": is_owner,
+        "contact_policy": privacy.dm_policy if privacy else "shared_spaces",
+    }
+
+
 async def _issue_session(db: AsyncSession, account: Account, request: Request) -> dict:
     tokens = generate_tokens(str(account.uid))
-    refresh_hash = _token_hash(tokens["refresh"])
     ip_address, user_agent, device_info = _client_metadata(request)
     expires_at = datetime.utcnow() + timedelta(days=config.REFRESH_TOKEN_EXPIRE_DAYS)
 
     db.add(
         IdentitySession(
             account_uid=account.uid,
-            refresh_token_hash=refresh_hash,
+            refresh_token_hash=_token_hash(tokens["refresh"]),
             device_label=device_info.get("device") or device_info.get("device_type"),
             user_agent=user_agent,
             ip_address=ip_address,
             expires_at=expires_at,
         )
     )
-
-    # Compatibility for the legacy /refresh and /logout paths while the SPA is
-    # migrated. New identity code treats IdentitySession as authoritative.
     db.add(
         UserDevice(
             id=str(uuid4()),
@@ -156,29 +194,19 @@ async def _issue_session(db: AsyncSession, account: Account, request: Request) -
 async def register_account(db: AsyncSession, payload: RegisterRequest, request: Request) -> tuple[Account, dict]:
     handle = payload.handle.strip()
     normalized_handle = handle.casefold()
-
     existing_handle = await db.execute(
         select(Persona.uid).where(func.lower(Persona.handle) == normalized_handle).limit(1)
     )
     if existing_handle.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"error_type": "handle_taken", "field": "handle"},
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_type": "handle_taken", "field": "handle"})
 
     email = str(payload.email).strip().casefold() if payload.email else None
     if email:
         existing_email = await db.execute(
-            select(Credential.uid).where(
-                Credential.kind == "email",
-                Credential.value_normalized == email,
-            ).limit(1)
+            select(Credential.uid).where(Credential.kind == "email", Credential.value_normalized == email).limit(1)
         )
         if existing_email.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={"error_type": "email_taken", "field": "email"},
-            )
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_type": "email_taken", "field": "email"})
 
     account_uid = uuid4()
     password_hash = hash_password(payload.password)
@@ -200,12 +228,10 @@ async def register_account(db: AsyncSession, payload: RegisterRequest, request: 
     db.add(legacy_user)
     await db.flush()
 
-    account = Account(
-        uid=account_uid,
-        legacy_user_uid=account_uid,
-        status="active",
-        trust_level="new",
-    )
+    account = Account(uid=account_uid, legacy_user_uid=account_uid, status="active", trust_level="new")
+    db.add(account)
+    await db.flush()
+
     persona = Persona(
         account_uid=account_uid,
         handle=handle,
@@ -215,29 +241,12 @@ async def register_account(db: AsyncSession, payload: RegisterRequest, request: 
         social_intent=payload.social_intent,
         is_primary=True,
     )
-    db.add(account)
-    await db.flush()
     db.add(persona)
     await db.flush()
 
-    db.add(
-        Credential(
-            account_uid=account_uid,
-            kind="password",
-            secret_hash=password_hash,
-            is_primary=True,
-        )
-    )
+    db.add(Credential(account_uid=account_uid, kind="password", secret_hash=password_hash, is_primary=True))
     if email:
-        db.add(
-            Credential(
-                account_uid=account_uid,
-                kind="email",
-                value_normalized=email,
-                is_primary=True,
-            )
-        )
-
+        db.add(Credential(account_uid=account_uid, kind="email", value_normalized=email, is_primary=True))
     db.add(PrivacySettings(persona_uid=persona.uid))
     db.add(AccountRole(account_uid=account_uid, role_id=1))
 
@@ -248,10 +257,9 @@ async def register_account(db: AsyncSession, payload: RegisterRequest, request: 
 
 
 async def authenticate_account(db: AsyncSession, identifier: str, password: str, request: Request) -> tuple[Account, dict]:
-    normalized = identifier.strip().casefold()
-
+    candidates = _normalize_identifier(identifier)
     persona_result = await db.execute(
-        select(Persona).where(func.lower(Persona.handle) == normalized).limit(1)
+        select(Persona).where(func.lower(Persona.handle) == candidates[0]).limit(1)
     )
     persona = persona_result.scalar_one_or_none()
     account_uid = persona.account_uid if persona else None
@@ -260,7 +268,7 @@ async def authenticate_account(db: AsyncSession, identifier: str, password: str,
         credential_result = await db.execute(
             select(Credential).where(
                 Credential.kind.in_(["email", "phone"]),
-                Credential.value_normalized == normalized,
+                Credential.value_normalized.in_(candidates),
             ).limit(1)
         )
         identifier_credential = credential_result.scalar_one_or_none()
@@ -274,10 +282,7 @@ async def authenticate_account(db: AsyncSession, identifier: str, password: str,
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"error_type": "account_unavailable"})
 
     password_result = await db.execute(
-        select(Credential).where(
-            Credential.account_uid == account.uid,
-            Credential.kind == "password",
-        ).limit(1)
+        select(Credential).where(Credential.account_uid == account.uid, Credential.kind == "password").limit(1)
     )
     password_credential = password_result.scalar_one_or_none()
     if not password_credential or not password_credential.secret_hash or not verify_password(password, password_credential.secret_hash):
@@ -293,10 +298,9 @@ async def rotate_session(db: AsyncSession, refresh_token: str, request: Request)
     if not payload:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"error_type": "invalid_refresh_token"})
 
-    token_hash = _token_hash(refresh_token)
     result = await db.execute(
         select(IdentitySession).where(
-            IdentitySession.refresh_token_hash == token_hash,
+            IdentitySession.refresh_token_hash == _token_hash(refresh_token),
             IdentitySession.revoked_at.is_(None),
             IdentitySession.expires_at > datetime.utcnow(),
         ).with_for_update().limit(1)
@@ -314,10 +318,10 @@ async def rotate_session(db: AsyncSession, refresh_token: str, request: Request)
     identity_session.last_seen_at = datetime.utcnow()
     identity_session.expires_at = datetime.utcnow() + timedelta(days=config.REFRESH_TOKEN_EXPIRE_DAYS)
 
-    legacy_device_result = await db.execute(
+    legacy_result = await db.execute(
         select(UserDevice).where(UserDevice.token == refresh_token, UserDevice.is_active.is_(True)).limit(1)
     )
-    legacy_device = legacy_device_result.scalar_one_or_none()
+    legacy_device = legacy_result.scalar_one_or_none()
     if legacy_device:
         ip_address, user_agent, _ = _client_metadata(request)
         legacy_device.token = tokens["refresh"]
@@ -333,10 +337,9 @@ async def revoke_session(db: AsyncSession, refresh_token: str | None) -> None:
     if not refresh_token:
         return
 
-    token_hash = _token_hash(refresh_token)
     result = await db.execute(
         select(IdentitySession).where(
-            IdentitySession.refresh_token_hash == token_hash,
+            IdentitySession.refresh_token_hash == _token_hash(refresh_token),
             IdentitySession.revoked_at.is_(None),
         ).limit(1)
     )
@@ -375,8 +378,7 @@ async def update_primary_persona(db: AsyncSession, account: Account, payload: Pe
     for field, value in updates.items():
         setattr(persona, field, value)
 
-    # Keep fields consumed by legacy room/messenger UI synchronized during migration.
-    legacy_user = await db.get(User, account.legacy_user_uid) if account.legacy_user_uid else None
+    legacy_user = await _legacy_user_by_uid(db, account.legacy_user_uid)
     if legacy_user:
         for field in ("avatar", "bio", "city", "country"):
             if field in updates:
