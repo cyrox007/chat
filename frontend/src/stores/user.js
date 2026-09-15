@@ -1,6 +1,7 @@
 import CSRFService from "@/API/CSRFService";
 import UsersServices from "@/API/UsersService";
 import AuthService from "@/API/AuthService";
+import { clearAccessToken, setAccessToken } from "@/API/session";
 
 const readJSON = (key) => {
 	try {
@@ -11,11 +12,15 @@ const readJSON = (key) => {
 	}
 };
 
+const cachedUser = readJSON('user');
+const cachedIdentity = readJSON('identity');
+const hasSessionHint = localStorage.getItem('auth') === 'true' && Boolean(cachedUser);
+
 export default {
 	state: {
-		auth: Boolean(localStorage.getItem('access_token')),
-		user: readJSON('user'),
-		identity: readJSON('identity'),
+		auth: hasSessionHint,
+		user: cachedUser,
+		identity: cachedIdentity,
 		userStatuses: {},
 	},
 	getters: {
@@ -60,13 +65,15 @@ export default {
 	},
 	actions: {
 		clearUser({ commit }) {
+			clearAccessToken();
+			localStorage.removeItem('access_token');
 			commit('setUser', null);
 			commit('setIdentity', null);
 			commit('setAuth', false);
-			localStorage.removeItem('access_token');
 		},
 		async applyIdentitySession({ commit }, responseData) {
-			localStorage.setItem('access_token', responseData.access_token);
+			setAccessToken(responseData.access_token);
+			localStorage.removeItem('access_token');
 			commit('setUser', responseData.user);
 			commit('setIdentity', {
 				account: responseData.account,
@@ -87,11 +94,12 @@ export default {
 			return true;
 		},
 		initializeUser({ commit }) {
-			const accessToken = localStorage.getItem('access_token');
 			const user = readJSON('user');
 			const identity = readJSON('identity');
+			const sessionHint = localStorage.getItem('auth') === 'true';
+			localStorage.removeItem('access_token');
 
-			if (accessToken && user) {
+			if (sessionHint && user) {
 				commit('setAuth', true);
 				commit('setUser', user);
 				if (identity) commit('setIdentity', identity);
@@ -112,6 +120,7 @@ export default {
 					privacy: response.data.privacy,
 					role: response.data.role,
 				});
+				commit('setAuth', true);
 				return response.data;
 			} catch (error) {
 				if (error.response?.status === 401) await dispatch('clearUser');
