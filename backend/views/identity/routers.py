@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, FastAPI, Request, Response, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +22,7 @@ from components.identity.service import (
     update_primary_persona,
     update_privacy,
 )
+from components.social.privacy import can_view_profile
 from database import Database
 from settings import config
 
@@ -120,6 +121,9 @@ def install(app: FastAPI):
         _: dict = Depends(auth_middle),
         db: AsyncSession = Depends(Database.session_generator),
     ):
+        # This endpoint is a deliberately small presence projection used by
+        # realtime room/messenger surfaces. Discovery and direct profile access
+        # use the stricter privacy-aware social/profile contracts.
         requested = list(dict.fromkeys(payload.account_uids))
         result = await db.execute(
             select(Persona).where(
@@ -152,6 +156,13 @@ def install(app: FastAPI):
         db: AsyncSession = Depends(Database.session_generator),
     ):
         account = await get_account_by_uid(db, account_uid)
+        if not await can_view_profile(db, current_user["user_uid"], account.uid):
+            # Deliberately return 404 rather than exposing whether the target is
+            # private or has a block relationship with the viewer.
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error_type": "profile_not_available"},
+            )
         profile = await build_public_profile(db, account, current_user["user_uid"])
         return {"status": "ok", "profile": profile}
 
