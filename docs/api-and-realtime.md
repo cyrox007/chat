@@ -69,9 +69,9 @@ POST /activity-occurrences/v1/activities/{activity_uid}/sync
 
 Reminder preferences никогда не запрашиваются для чужого Account через API.
 
-### `/support/v1` — In development (`0.5.3-alpha.x`)
+### `/support/v1`
 
-Consent-first internal gifts и cosmetic entitlements без payment/wallet/currency semantics.
+Выпущено в `0.5.3-alpha.1`. Consent-first internal gifts и cosmetic entitlements без payment/wallet/currency semantics.
 
 Основные operations:
 
@@ -100,6 +100,7 @@ GET   /support/v1/spaces/{space_uid}/received
 - own/manager received history приватна;
 - ledger не имеет PATCH/DELETE API;
 - writable contract не содержит price/currency/balance/points/rank/trust/role/payment fields;
+- sender anti-spam limit сериализуется Account row lock;
 - gifts не меняют permissions, moderation power или discovery ranking.
 
 ## Realtime v2
