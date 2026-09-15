@@ -1,6 +1,6 @@
 # PubChat — руководство пользователя
 
-Документ описывает пользовательские функции выпущенного checkpoint PubChat `0.5.3-alpha.1`.
+Документ описывает пользовательские функции выпущенного checkpoint PubChat `0.5.4-alpha.1`.
 
 ## 1. Account и Persona
 
@@ -193,7 +193,40 @@ Activity сейчас хранит canonical UTC instant. Для recurring sched
 - append-only ledger сохраняет historical snapshot даже после удаления исходной Persona/Space;
 - реальных checkout/payment/wallet/balance/refund/payout функций в `0.5.3` нет.
 
-## 17. Что PubChat сознательно не делает
+## 17. Explainable Space Discovery
+
+В `0.5.4-alpha.1` основной экран Spaces использует organic discovery вместо простой сортировки только по созданию.
+
+### Что влияет на рекомендации
+
+Backend может учитывать:
+
+- недавнее общение разных участников;
+- ближайшую доступную Activity/Event;
+- общие темы с вашими активными Spaces;
+- знакомый формат Space;
+- ваш явный social intent;
+- небольшие freshness/member-count сигналы.
+
+Privacy и block проверяются **до** ranking. Рекомендация не может сделать private или недоступный Space видимым.
+
+### «Почему здесь»
+
+Карточка может показать до трёх коротких причин: например «Здесь недавно общались», «Похожие темы на ваши пространства» или «Скоро общая активность».
+
+Числовой score пользователю не показывается и не является частью публичного API.
+
+### Что не влияет
+
+- legacy `rating` Space;
+- количество gifts/support;
+- цена, платежи или покупка boost;
+- moderation authority;
+- скрытый рейтинг пользователя.
+
+Текущий organic-v1 работает на bounded pool до 200 канонически допустимых кандидатов. Это alpha-ограничение: очень старый Space за пределами pool может не попасть в ranking, даже если снова ожил. До beta candidate generation будет улучшен без unbounded scan.
+
+## 18. Что PubChat сознательно не делает
 
 - не продаёт moderation roles;
 - не продаёт trust;
@@ -203,4 +236,5 @@ Activity сейчас хранит canonical UTC instant. Для recurring sched
 - не использует casino/loot-box/stake механику;
 - не включает reminders или support без согласия пользователя;
 - не использует gift count как discovery/trust signal;
+- не продаёт organic discovery ranking;
 - не скрывает причины moderation decisions за игровой терминологией.
