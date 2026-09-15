@@ -35,7 +35,11 @@ async def materialize_activity_occurrences(
     now: datetime | None = None,
     horizon_days: int = OCCURRENCE_HORIZON_DAYS,
 ) -> list[ActivityOccurrence]:
-    """Materialize a bounded rolling window with DB-level race protection."""
+    """Materialize a bounded rolling window with DB-level race protection.
+
+    This helper intentionally does not commit. It is called only from explicit
+    command flows such as reminder reconciliation or the occurrence sync route.
+    """
     if activity.status != "scheduled":
         return []
 
@@ -82,6 +86,33 @@ async def materialize_activity_occurrences(
     return result.scalars().all()
 
 
+async def _activity_for_member(
+    db: AsyncSession,
+    activity_uid: UUID,
+    viewer_uid: UUID | str,
+) -> SpaceActivity:
+    activity = await db.get(SpaceActivity, activity_uid)
+    if not activity:
+        raise HTTPException(status_code=404, detail={"error_type": "activity_not_found"})
+    room = await _load_room(db, activity.room_uid)
+    await _require_active_member(db, room, viewer_uid)
+    return activity
+
+
+async def sync_activity_occurrences(
+    db: AsyncSession,
+    activity_uid: UUID,
+    viewer_uid: UUID | str,
+    *,
+    limit: int = 20,
+) -> list[dict]:
+    """Explicit command that materializes and persists the bounded window."""
+    activity = await _activity_for_member(db, activity_uid, viewer_uid)
+    occurrences = await materialize_activity_occurrences(db, activity)
+    await db.commit()
+    return [occurrence_projection(item) for item in occurrences[:limit]]
+
+
 async def list_activity_occurrences(
     db: AsyncSession,
     activity_uid: UUID,
@@ -89,12 +120,12 @@ async def list_activity_occurrences(
     *,
     limit: int = 20,
 ) -> list[dict]:
-    activity = await db.get(SpaceActivity, activity_uid)
-    if not activity:
-        raise HTTPException(status_code=404, detail={"error_type": "activity_not_found"})
-    room = await _load_room(db, activity.room_uid)
-    await _require_active_member(db, room, viewer_uid)
-
-    occurrences = await materialize_activity_occurrences(db, activity)
-    await db.commit()
-    return [occurrence_projection(item) for item in occurrences[:limit]]
+    """Read already-materialized occurrences without mutating database state."""
+    activity = await _activity_for_member(db, activity_uid, viewer_uid)
+    result = await db.execute(
+        select(ActivityOccurrence)
+        .where(ActivityOccurrence.activity_uid == activity.uid)
+        .order_by(ActivityOccurrence.starts_at.asc())
+        .limit(limit)
+    )
+    return [occurrence_projection(item) for item in result.scalars().all()]
