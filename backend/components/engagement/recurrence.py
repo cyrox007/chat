@@ -24,6 +24,10 @@ def add_months(anchor: datetime, months: int) -> datetime:
     return anchor.replace(year=year, month=month, day=day)
 
 
+def _month_offset(anchor: datetime, current: datetime) -> int:
+    return max(0, (current.year - anchor.year) * 12 + current.month - anchor.month)
+
+
 def next_occurrence(
     starts_at: datetime,
     recurrence: str,
@@ -41,7 +45,7 @@ def next_occurrence(
         return candidate if candidate >= current else candidate + step
 
     if recurrence == "monthly":
-        months = max(0, (current.year - anchor.year) * 12 + current.month - anchor.month)
+        months = _month_offset(anchor, current)
         candidate = add_months(anchor, months)
         return candidate if candidate >= current else add_months(anchor, months + 1)
 
@@ -66,17 +70,24 @@ def occurrences_between(
     if recurrence == "none":
         return [anchor] if start <= anchor <= end else []
 
+    if recurrence == "monthly":
+        months = _month_offset(anchor, start)
+        current = add_months(anchor, months)
+        if current < start:
+            months += 1
+            current = add_months(anchor, months)
+
+        values: list[datetime] = []
+        while current <= end and len(values) < limit:
+            values.append(current)
+            months += 1
+            current = add_months(anchor, months)
+        return values
+
     current = next_occurrence(anchor, recurrence, start)
+    step = timedelta(days=1 if recurrence == "daily" else 7)
     values: list[datetime] = []
     while current <= end and len(values) < limit:
-        if current >= start:
-            values.append(current)
-        if recurrence == "daily":
-            current += timedelta(days=1)
-        elif recurrence == "weekly":
-            current += timedelta(days=7)
-        elif recurrence == "monthly":
-            current = add_months(current, 1)
-        else:
-            break
+        values.append(current)
+        current += step
     return values
