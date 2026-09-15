@@ -2,11 +2,11 @@
 
 ## Текущий статус
 
-Released: **`0.5.2-alpha.1`**.
+Released: **`0.5.3-alpha.1`**.
 
-In development: **`0.5.3-alpha.0`** — Creator Support & Cosmetic Gifts.
+Next development line: **`0.5.4-alpha.0`** — Discovery quality.
 
-PubChat остаётся alpha: основные продуктовые контуры сформированы, но production-like hardening, creator/discovery maturity и pre-beta эксплуатационные проверки ещё не завершены.
+PubChat остаётся alpha: основные продуктовые контуры сформированы, но production-like hardening, discovery maturity и pre-beta эксплуатационные проверки ещё не завершены.
 
 ## Завершённые checkpoints
 
@@ -50,11 +50,7 @@ Earned achievements и Conversation Rounds без score/winner/prize/stake, ин
 
 Browser/native push не входит в `0.5.2`; domain inbox и reconciliation теперь являются базой для будущего delivery adapter.
 
-## Stage 5.4 — Creator Support & Cosmetic Gifts 🚧 `0.5.3-alpha.0`
-
-Цель: дать людям спокойный способ благодарить Persona и поддерживать Spaces, не превращая gifts или будущие деньги в социальную власть.
-
-### Реализовано в ветке
+### Stage 5.4 — Creator Support & Cosmetic Gifts ✅ `0.5.3-alpha.1`
 
 - opt-in `CreatorSupportProfile` для Persona;
 - opt-in `SpaceSupportSettings` для Spaces;
@@ -66,6 +62,7 @@ Browser/native push не входит в `0.5.2`; domain inbox и reconciliation
 - self-gift Persona запрещён;
 - owner не может отправлять gift собственному Space;
 - максимум 20 внутренних gifts с Account за rolling 24h;
+- sender limit сериализован Account row lock против concurrent bypass;
 - публичный shelf показывает только gift + aggregate count;
 - sender/message доступны только recipient/manager private history;
 - historical ledger переживает удаление Persona/Space через `SET NULL` live references + snapshots;
@@ -77,22 +74,13 @@ Browser/native push не входит в `0.5.2`; domain inbox и reconciliation
 - contract regressions запрещают payment/balance/price/power fields и ledger mutation routes;
 - отдельный domain-document `creator-support-v1.md`.
 
-### Product boundary
-
 `0.5.3` остаётся бесплатным/internal support slice. В нём нет checkout, payment provider, wallet, currency, balance, payout, refund/chargeback, paid discovery, paid trust, paid moderation role или paid ban immunity.
 
 Реальные payments требуют отдельного financial/security review и отдельной transaction/fraud/idempotency модели.
 
-### Осталось до `0.5.3-alpha.1`
+## Stage 5.5 — Discovery quality 🚧 `0.5.4-alpha.0`
 
-- финальный abuse/privacy/permissions self-review;
-- docs/API/UI Kit sync;
-- functional exact-head backend/frontend CI на frozen head;
-- version bump + changelog/version docs;
-- второй exact-head CI на versioned head;
-- squash merge в `main`.
-
-## Stage 5.5 — Discovery quality
+Следующий продуктовый slice.
 
 - activity-aware Space discovery;
 - intent/interests/shared-context recommendations;
