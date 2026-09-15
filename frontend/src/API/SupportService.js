@@ -18,6 +18,7 @@ export default class SupportService {
 	static myProfile() { return $api.get('/support/v1/me/profile'); }
 	static updateMyProfile(payload) { return $api.patch('/support/v1/me/profile', payload); }
 	static myReceived(params = {}) { return normalizeUtc($api.get('/support/v1/me/received', { params })); }
+	static accountShelf(accountUid) { return $api.get(`/support/v1/accounts/${accountUid}/shelf`); }
 	static personaShelf(personaUid) { return $api.get(`/support/v1/personas/${personaUid}/shelf`); }
 	static giftPersona(personaUid, payload) { return normalizeUtc($api.post(`/support/v1/personas/${personaUid}/gifts`, payload)); }
 	static spaceSettings(spaceUid) { return $api.get(`/support/v1/spaces/${spaceUid}/settings`); }
