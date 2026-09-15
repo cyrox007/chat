@@ -44,6 +44,9 @@
 						<RouterLink role="menuitem" :to="{ name: 'persona-style' }" @click="closeDropdown">
 							<i class="fas fa-palette" aria-hidden="true"></i><span>Стиль образа</span>
 						</RouterLink>
+						<RouterLink role="menuitem" :to="{ name: 'achievements' }" @click="closeDropdown">
+							<i class="fas fa-medal" aria-hidden="true"></i><span>Достижения</span>
+						</RouterLink>
 						<RouterLink v-if="spaceContextRoute" role="menuitem" :to="spaceContextRoute" @click="closeDropdown">
 							<i class="fas fa-landmark" aria-hidden="true"></i><span>Центр пространства</span>
 						</RouterLink>
