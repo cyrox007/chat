@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
+from components.identity.legacy import rotate_session_with_legacy_fallback
 from components.identity.model import Persona
 from components.identity.schemas import (
     LoginRequest,
@@ -18,7 +19,6 @@ from components.identity.service import (
     get_account_by_uid,
     register_account,
     revoke_session,
-    rotate_session,
     update_primary_persona,
     update_privacy,
 )
@@ -85,7 +85,9 @@ def install(app: FastAPI):
         db: AsyncSession = Depends(Database.session_generator),
     ):
         refresh_token = request.cookies.get(COOKIE_NAME)
-        account, tokens = await rotate_session(db, refresh_token or "", request)
+        account, tokens = await rotate_session_with_legacy_fallback(
+            db, refresh_token or "", request
+        )
         _set_refresh_cookie(response, tokens["refresh"])
         return {
             "status": "ok",
