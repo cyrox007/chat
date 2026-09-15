@@ -12,10 +12,7 @@
 		<div v-else-if="items.length" class="achievement-grid">
 			<article v-for="item in items" :key="`${item.code}-${item.earned_at}`" class="achievement-item">
 				<span class="achievement-icon" aria-hidden="true"><i :class="iconClass(item.icon_preset)"></i></span>
-				<div>
-					<strong>{{ item.title }}</strong>
-					<p>{{ item.description }}</p>
-				</div>
+				<div><strong>{{ item.title }}</strong><p>{{ item.description }}</p></div>
 			</article>
 		</div>
 		<div v-else-if="!failed" class="shelf-state">
@@ -23,6 +20,8 @@
 			<span>Достижения отмечают участие и вклад, но не дают прав, ранга или преимуществ.</span>
 		</div>
 	</section>
+
+	<SupportShelf :account-uid="accountUid" :is-self="isSelf" />
 </template>
 
 <script setup>
@@ -30,6 +29,7 @@ import { onMounted, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 
 import AchievementService from '@/API/AchievementService';
+import SupportShelf from '@/components/Profile/SupportShelf.vue';
 
 const props = defineProps({
 	accountUid: { type: String, required: true },
@@ -56,13 +56,10 @@ const load = async () => {
 		items.value = response.data.achievements || [];
 		total.value = response.data.pagination?.total || items.value.length;
 	} catch {
-		// Appearance/achievement layers must never make the base profile fail.
 		items.value = [];
 		total.value = 0;
 		failed.value = true;
-	} finally {
-		loading.value = false;
-	}
+	} finally { loading.value = false; }
 };
 
 watch(() => props.accountUid, load);
