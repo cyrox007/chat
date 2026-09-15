@@ -17,7 +17,8 @@
 - [`../CHANGELOG.md`](../CHANGELOG.md) — история выпущенных версий.
 - [`versioning.md`](versioning.md) — политика alpha/beta/stable.
 - [`versioning-quick-reference.md`](versioning-quick-reference.md) — краткий статус версии.
-- [`ui-ux-kit.md`](ui-ux-kit.md) — дизайн-система и UX-правила.
+- [`ui-ux-kit.md`](ui-ux-kit.md) — основная дизайн-система и UX-правила.
+- [`ui-ux-notifications.md`](ui-ux-notifications.md) — notification/reminder UX extension.
 
 ## Для разработчика
 
