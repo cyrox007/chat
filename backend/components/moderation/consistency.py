@@ -6,16 +6,26 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.moderation.model import ModerationAction, ModerationAppeal, ModerationReport
+from components.space.membership_service import _load_room, _manager_context
 
 
 async def ensure_report_actionable(
     db: AsyncSession,
     *,
     space_uid: UUID,
+    viewer_uid: UUID | str,
     report_uid: UUID | None,
     target_account_uid: UUID,
 ) -> None:
-    """Reject actions that try to reuse or reopen a closed report."""
+    """Authorize the Space manager before inspecting a private report."""
+    room = await _load_room(db, space_uid)
+    _, manager_role = await _manager_context(db, room, viewer_uid)
+    if manager_role not in {"owner", "moderator"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error_type": "space_moderation_required"},
+        )
+
     if report_uid is None:
         return
 
