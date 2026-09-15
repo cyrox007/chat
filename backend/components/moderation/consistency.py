@@ -17,9 +17,9 @@ async def supersede_previous_restrictions(
     """Keep a single canonical active Space restriction for a target.
 
     Legacy RoomBan creation already deactivates older bans. This companion update
-    keeps the canonical moderation journal consistent with enforcement so old
-    restrictions do not continue to render as active after a newer restriction
-    replaces them.
+    keeps the canonical moderation journal consistent with enforcement. Replaced
+    restrictions use the existing ``revoked`` state so appeal/UI semantics stay
+    unambiguous while ``revoked_at`` preserves when replacement happened.
     """
     now = datetime.utcnow()
     result = await db.execute(
@@ -31,7 +31,7 @@ async def supersede_previous_restrictions(
             ModerationAction.status == "active",
             ModerationAction.uid != keep_action_uid,
         )
-        .values(status="superseded", revoked_at=now, updated_at=now)
+        .values(status="revoked", revoked_at=now, updated_at=now)
     )
     await db.commit()
     return int(result.rowcount or 0)
