@@ -2,9 +2,9 @@
 
 ## Current release
 
-`0.5.0-alpha.1`
+`0.5.1-alpha.1`
 
-Active development line: `0.5.1-alpha.0`.
+Next compatible Stage 5 work will start from `0.5.2-alpha.0` after this checkpoint is merged.
 
 The canonical released value lives in the repository root `VERSION` file. `CHANGELOG.md` records released and in-development lines.
 
@@ -17,8 +17,8 @@ Before `1.0.0`, PubChat uses Semantic Versioning with an explicit readiness chan
 `MAJOR.MINOR.PATCH` for stable releases.
 
 Examples:
-- `0.5.1-alpha.0` — active compatible development inside the Stage 5 milestone;
-- `0.5.1-alpha.1` — first validated checkpoint of that patch line;
+- `0.5.2-alpha.0` — active compatible development inside the Stage 5 milestone;
+- `0.5.2-alpha.1` — first validated checkpoint of that patch line;
 - `0.9.0-beta.1` — core product flows complete and entering stabilization;
 - `1.0.0` — first stable public release.
 
@@ -37,7 +37,7 @@ After `1.0.0`, normal SemVer rules apply: MAJOR for incompatible public-contract
 
 Use alpha while one or more launch-critical product/hardening domains are incomplete. Schema/API contracts may still evolve, although data-preserving migrations are preferred. Every recorded alpha checkpoint must pass CI on the exact release head.
 
-PubChat remains alpha even though Identity, Realtime, Living Spaces, social graph, moderation and the first product-identity slice are implemented. Pre-beta hardening is still incomplete: production-like PostgreSQL/Redis integration coverage, migration rehearsal, observability, accessibility, load testing, legacy compatibility reduction and final security review remain required.
+PubChat remains alpha even though Identity, Realtime, Living Spaces, social graph, moderation and the first product-identity/engagement slices are implemented. Pre-beta hardening is still incomplete: production-like PostgreSQL/Redis integration coverage, migration rehearsal, observability, accessibility, load testing, legacy compatibility reduction and final security review remain required.
 
 ### Beta
 
@@ -79,4 +79,4 @@ A version number is therefore a readiness statement, not a count of commits.
 - `0.3.0-alpha.1` — Realtime v2 + resilient client transport;
 - `0.4.0-alpha.1` — Living Spaces, social graph and transparent moderation;
 - `0.5.0-alpha.1` — Persona/Space appearance + recurring Activities;
-- `0.5.1-alpha.0` — earned achievements and Conversation Rounds development line.
+- `0.5.1-alpha.1` — earned achievements + Activity-scoped Conversation Rounds.
