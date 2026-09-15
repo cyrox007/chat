@@ -12,9 +12,11 @@
 ## О продукте
 
 - [`product-concept.md`](product-concept.md) — позиционирование и продуктовые инварианты.
-- [`revival-roadmap.md`](revival-roadmap.md) — этапы развития и текущий план.
-- [`../CHANGELOG.md`](../CHANGELOG.md) — история версий.
-- [`versioning.md`](versioning.md) — политика версий alpha/beta/stable.
+- [`roadmap.md`](roadmap.md) — актуальная дорожная карта.
+- [`revival-roadmap.md`](revival-roadmap.md) — совместимая историческая ссылка на новый roadmap.
+- [`../CHANGELOG.md`](../CHANGELOG.md) — история выпущенных версий.
+- [`versioning.md`](versioning.md) — политика alpha/beta/stable.
+- [`versioning-quick-reference.md`](versioning-quick-reference.md) — краткий статус версии.
 - [`ui-ux-kit.md`](ui-ux-kit.md) — дизайн-система и UX-правила.
 
 ## Для разработчика
@@ -22,8 +24,8 @@
 - [`architecture.md`](architecture.md) — модули, домены, данные и границы ответственности.
 - [`client-architecture.md`](client-architecture.md) — SPA-first/API-first модель клиента.
 - [`api-and-realtime.md`](api-and-realtime.md) — HTTP API, auth/session и WebSocket v2.
-- [`development.md`](development.md) — ветки, миграции, тесты, CI и Definition of Done.
-- [`operations.md`](operations.md) — production-конфигурация, Redis/PostgreSQL, reverse proxy и эксплуатационные ограничения.
+- [`development.md`](development.md) — ветки, миграции, тесты и CI.
+- [`operations.md`](operations.md) — production-конфигурация и эксплуатационные ограничения.
 - [`release-checklist.md`](release-checklist.md) — release gate.
 
 ## Доменные документы
@@ -36,7 +38,7 @@
 
 ## Статус документов
 
-`VERSION` и `CHANGELOG.md` являются источником истины для выпущенного checkpoint. Документ, описывающий активную ветку разработки, может содержать функции, ещё не вошедшие в `main`; такие разделы должны быть явно помечены как **In development**.
+`VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md` и domain-документе ветки.
 
 Текущий release: `0.5.1-alpha.1`.
 
