@@ -1,0 +1,272 @@
+from datetime import datetime, timezone
+from uuid import UUID
+
+from fastapi import HTTPException, status
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from components.engagement.model import ActivityRSVP, PersonaAppearance, SpaceActivity, SpaceAppearance
+from components.engagement.schemas import (
+    ActivityCreateRequest,
+    ActivityRSVPRequest,
+    ActivityUpdateRequest,
+    PersonaAppearanceUpdateRequest,
+    SpaceAppearanceUpdateRequest,
+)
+from components.identity.model import Persona
+from components.social.privacy import can_view_profile
+from components.space.membership_service import _load_room, _manager_context, _require_active_member
+from components.space.service import _get_account, get_space
+
+
+def _utc_naive(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _persona_appearance_projection(item: PersonaAppearance | None, persona_uid: UUID) -> dict:
+    return {
+        "persona_uid": str(persona_uid),
+        "accent_preset": item.accent_preset if item else "plum",
+        "background_preset": item.background_preset if item else "soft",
+        "avatar_frame_preset": item.avatar_frame_preset if item else "none",
+        "status_line": item.status_line if item else None,
+        "updated_at": item.updated_at.isoformat() if item and item.updated_at else None,
+    }
+
+
+def _space_appearance_projection(item: SpaceAppearance | None, space_uid: UUID) -> dict:
+    return {
+        "space_uid": str(space_uid),
+        "theme_preset": item.theme_preset if item else "lounge",
+        "cover_preset": item.cover_preset if item else "soft-gradient",
+        "ambient_icon": item.ambient_icon if item else None,
+        "welcome_line": item.welcome_line if item else None,
+        "updated_at": item.updated_at.isoformat() if item and item.updated_at else None,
+    }
+
+
+async def get_persona_appearance(
+    db: AsyncSession,
+    persona_uid: UUID,
+    viewer_uid: UUID | str,
+) -> dict:
+    persona = await db.get(Persona, persona_uid)
+    if not persona:
+        raise HTTPException(status_code=404, detail={"error_type": "persona_not_found"})
+    if not await can_view_profile(db, viewer_uid, persona.account_uid):
+        raise HTTPException(status_code=404, detail={"error_type": "persona_not_found"})
+    item = await db.get(PersonaAppearance, persona.uid)
+    return _persona_appearance_projection(item, persona.uid)
+
+
+async def update_my_persona_appearance(
+    db: AsyncSession,
+    viewer_uid: UUID | str,
+    payload: PersonaAppearanceUpdateRequest,
+) -> dict:
+    account = await _get_account(db, viewer_uid)
+    result = await db.execute(
+        select(Persona).where(Persona.account_uid == account.uid, Persona.is_primary.is_(True)).limit(1)
+    )
+    persona = result.scalar_one_or_none()
+    if not persona:
+        raise HTTPException(status_code=409, detail={"error_type": "primary_persona_missing"})
+
+    item = await db.get(PersonaAppearance, persona.uid)
+    if not item:
+        item = PersonaAppearance(persona_uid=persona.uid)
+        db.add(item)
+
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(item, field, value)
+    item.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(item)
+    return _persona_appearance_projection(item, persona.uid)
+
+
+async def get_space_appearance(
+    db: AsyncSession,
+    space_uid: UUID,
+    viewer_uid: UUID | str,
+) -> dict:
+    await get_space(db, space_uid, viewer_uid)
+    item = await db.get(SpaceAppearance, space_uid)
+    return _space_appearance_projection(item, space_uid)
+
+
+async def update_space_appearance(
+    db: AsyncSession,
+    space_uid: UUID,
+    viewer_uid: UUID | str,
+    payload: SpaceAppearanceUpdateRequest,
+) -> dict:
+    room = await _load_room(db, space_uid)
+    _, role = await _manager_context(db, room, viewer_uid)
+    if role not in {"owner", "moderator"}:
+        raise HTTPException(status_code=403, detail={"error_type": "space_appearance_manage_required"})
+
+    item = await db.get(SpaceAppearance, room.uid)
+    if not item:
+        item = SpaceAppearance(room_uid=room.uid)
+        db.add(item)
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(item, field, value)
+    item.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(item)
+    return _space_appearance_projection(item, room.uid)
+
+
+async def _activity_projection(
+    db: AsyncSession,
+    activity: SpaceActivity,
+    viewer_account_uid: UUID,
+) -> dict:
+    counts_result = await db.execute(
+        select(ActivityRSVP.status, func.count(ActivityRSVP.account_uid))
+        .where(ActivityRSVP.activity_uid == activity.uid)
+        .group_by(ActivityRSVP.status)
+    )
+    counts = {key: int(value) for key, value in counts_result.all()}
+    viewer_rsvp = await db.get(ActivityRSVP, (activity.uid, viewer_account_uid))
+    return {
+        "uid": str(activity.uid),
+        "space_uid": str(activity.room_uid),
+        "created_by_account_uid": str(activity.created_by_account_uid) if activity.created_by_account_uid else None,
+        "title": activity.title,
+        "description": activity.description,
+        "activity_type": activity.activity_type,
+        "starts_at": activity.starts_at.isoformat(),
+        "recurrence": activity.recurrence,
+        "status": activity.status,
+        "rsvp": {
+            "interested": counts.get("interested", 0),
+            "going": counts.get("going", 0),
+            "viewer": viewer_rsvp.status if viewer_rsvp else None,
+        },
+        "created_at": activity.created_at.isoformat() if activity.created_at else None,
+        "updated_at": activity.updated_at.isoformat() if activity.updated_at else None,
+    }
+
+
+async def list_activities(
+    db: AsyncSession,
+    space_uid: UUID,
+    viewer_uid: UUID | str,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    account = await _get_account(db, viewer_uid)
+    await get_space(db, space_uid, account.uid)
+    filters = (SpaceActivity.room_uid == space_uid,)
+    total = int((await db.execute(select(func.count(SpaceActivity.uid)).where(*filters))).scalar_one() or 0)
+    result = await db.execute(
+        select(SpaceActivity)
+        .where(*filters)
+        .order_by(SpaceActivity.starts_at.asc(), SpaceActivity.created_at.asc())
+        .limit(limit)
+        .offset(offset)
+    )
+    items = []
+    for activity in result.scalars().all():
+        items.append(await _activity_projection(db, activity, account.uid))
+    return items, total
+
+
+async def create_activity(
+    db: AsyncSession,
+    space_uid: UUID,
+    viewer_uid: UUID | str,
+    payload: ActivityCreateRequest,
+) -> dict:
+    room = await _load_room(db, space_uid)
+    account = await _require_active_member(db, room, viewer_uid)
+    activity = SpaceActivity(
+        room_uid=room.uid,
+        created_by_account_uid=account.uid,
+        title=payload.title,
+        description=payload.description,
+        activity_type=payload.activity_type,
+        starts_at=_utc_naive(payload.starts_at),
+        recurrence=payload.recurrence,
+        status="scheduled",
+    )
+    db.add(activity)
+    await db.commit()
+    await db.refresh(activity)
+    return await _activity_projection(db, activity, account.uid)
+
+
+async def update_activity(
+    db: AsyncSession,
+    space_uid: UUID,
+    activity_uid: UUID,
+    viewer_uid: UUID | str,
+    payload: ActivityUpdateRequest,
+) -> dict:
+    room = await _load_room(db, space_uid)
+    account = await _require_active_member(db, room, viewer_uid)
+    _, manager_role = await _manager_context(db, room, account.uid)
+    activity = await db.get(SpaceActivity, activity_uid)
+    if not activity or activity.room_uid != room.uid:
+        raise HTTPException(status_code=404, detail={"error_type": "activity_not_found"})
+    if activity.created_by_account_uid != account.uid and manager_role not in {"owner", "moderator"}:
+        raise HTTPException(status_code=403, detail={"error_type": "activity_manage_required"})
+
+    changes = payload.model_dump(exclude_unset=True)
+    if changes.get("starts_at") is not None:
+        changes["starts_at"] = _utc_naive(changes["starts_at"])
+    for field, value in changes.items():
+        setattr(activity, field, value)
+    activity.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(activity)
+    return await _activity_projection(db, activity, account.uid)
+
+
+async def set_activity_rsvp(
+    db: AsyncSession,
+    activity_uid: UUID,
+    viewer_uid: UUID | str,
+    payload: ActivityRSVPRequest,
+) -> dict:
+    activity = await db.get(SpaceActivity, activity_uid)
+    if not activity:
+        raise HTTPException(status_code=404, detail={"error_type": "activity_not_found"})
+    room = await _load_room(db, activity.room_uid)
+    account = await _require_active_member(db, room, viewer_uid)
+    if activity.status == "cancelled":
+        raise HTTPException(status_code=409, detail={"error_type": "activity_cancelled"})
+
+    item = await db.get(ActivityRSVP, (activity.uid, account.uid))
+    if not item:
+        item = ActivityRSVP(activity_uid=activity.uid, account_uid=account.uid, status=payload.status)
+        db.add(item)
+    else:
+        item.status = payload.status
+        item.updated_at = datetime.utcnow()
+    await db.commit()
+    return await _activity_projection(db, activity, account.uid)
+
+
+async def clear_activity_rsvp(
+    db: AsyncSession,
+    activity_uid: UUID,
+    viewer_uid: UUID | str,
+) -> dict:
+    activity = await db.get(SpaceActivity, activity_uid)
+    if not activity:
+        raise HTTPException(status_code=404, detail={"error_type": "activity_not_found"})
+    room = await _load_room(db, activity.room_uid)
+    account = await _require_active_member(db, room, viewer_uid)
+    await db.execute(
+        delete(ActivityRSVP).where(
+            ActivityRSVP.activity_uid == activity.uid,
+            ActivityRSVP.account_uid == account.uid,
+        )
+    )
+    await db.commit()
+    return await _activity_projection(db, activity, account.uid)
