@@ -4,7 +4,7 @@
 
 PubChat — modular monolith с отдельным Vue SPA-клиентом.
 
-- Backend отвечает за identity, privacy, permissions, social graph, messaging rules, moderation, persistence и realtime contracts.
+- Backend отвечает за identity, privacy, permissions, social graph, messaging rules, moderation, discovery, persistence и realtime contracts.
 - Frontend отвечает за navigation, presentation, responsive UX и client-side application state.
 - PostgreSQL — authoritative persistent storage.
 - Redis — ephemeral/distributed realtime storage и transport coordination.
@@ -115,7 +115,7 @@ Ownership/permissions основываются на Account UID.
 
 Accepted friendship совместима с DM mutual policy через двустороннюю friendship semantic.
 
-Block всегда проверяется на Account-level и должен влиять на новые social features, включая support/gifts.
+Block всегда проверяется на Account-level и должен влиять на новые social features, включая support/gifts и discovery.
 
 ## 6. Messaging и Realtime v2
 
@@ -232,7 +232,36 @@ Reconciliation idempotent и пригоден для двух вызывающи
 
 Реальный money flow, если будет добавлен позже, должен стать отдельным financial domain с provider-event idempotency, fraud/refund/chargeback lifecycle и жёсткой границей между financial state и social authority.
 
-## 11. Data boundaries
+## 11. Explainable Organic Discovery
+
+Выпущено в `0.5.4-alpha.1`.
+
+`/spaces/v1` остаётся стабильным каталогом/management contract. Персонализированная выдача вынесена в `/discovery/v1/spaces`.
+
+Pipeline:
+
+```text
+canonical eligibility -> block/privacy suppression -> bounded candidate context -> organic score -> diversity -> explainable projection
+```
+
+Сигналы organic-v1:
+
+- distinct recent authors;
+- nearest allowed Activity/Event;
+- shared tags/purpose;
+- explicit Persona social intent;
+- modest freshness/member-count context;
+- weak membership/pending context.
+
+Score остаётся server-only. Клиент получает только до трёх reasons и optional upcoming context.
+
+Не используются legacy `Room.rating`, support/gifts, price/currency/payment или moderation authority.
+
+Privacy rule важнее ranking: алгоритм не может сделать недопустимый Space видимым и не раскрывает upcoming details private/unlisted Space без active membership.
+
+Текущий bounded pool ограничен 200 canonical candidates и пока bias-ится к новым Spaces из-за исходной catalog ordering. До beta candidate generation должен комбинировать несколько bounded источников активности/контекста без unbounded scan.
+
+## 12. Data boundaries
 
 ### PostgreSQL
 
@@ -246,7 +275,7 @@ Reconciliation idempotent и пригоден для двух вызывающи
 
 `backend/uploads` — текущая compatibility/local development storage. Для multi-instance production требуется shared/object storage.
 
-## 12. API boundaries
+## 13. API boundaries
 
 Новые домены используют versioned prefixes, например:
 
@@ -260,11 +289,12 @@ Reconciliation idempotent и пригоден для двух вызывающи
 - `/achievements/v1`;
 - `/activity-occurrences/v1`;
 - `/notifications/v1`;
-- `/support/v1`.
+- `/support/v1`;
+- `/discovery/v1`.
 
 ORM object не является API DTO. Public/private projections должны быть явными.
 
-## 13. UI architecture
+## 14. UI architecture
 
 SPA route-driven. Основные области:
 
@@ -282,7 +312,7 @@ SPA route-driven. Основные области:
 
 Backend remains authoritative для permissions. Frontend route guards — только UX hint.
 
-## 14. Legacy debt
+## 15. Legacy debt
 
 До beta ещё остаются compatibility зависимости от:
 
@@ -294,7 +324,7 @@ Backend remains authoritative для permissions. Frontend route guards — то
 
 Удаление делается постепенно. Требование — data-preserving migrations и отсутствие big-bang rewrite.
 
-## 15. Non-negotiable architecture invariants
+## 16. Non-negotiable architecture invariants
 
 - Account != Persona.
 - Reputation != Permission.
@@ -306,3 +336,4 @@ Backend remains authoritative для permissions. Frontend route guards — то
 - WebSocket credentials never appear in URL.
 - Browser access JWT is memory-only.
 - Monetary/cosmetic systems cannot modify trust/moderation authority/discovery ranking.
+- Discovery ranking cannot expand eligibility/privacy.

@@ -26,7 +26,7 @@ GET /service/version
 Account/Persona/session/privacy: registration, login, refresh/logout, current identity, Persona/privacy update и privacy-aware profile projection.
 
 ### `/spaces/v1`
-Living Spaces: discovery/create/update, membership, members/requests, invitations, rules/events/history и scoped management.
+Living Spaces: catalog/create/update, membership, members/requests, invitations, rules/events/history и scoped management.
 
 ### `/social/v1`
 People discovery, follow/unfollow, friend requests/friendship и Account-level block.
@@ -103,6 +103,27 @@ GET   /support/v1/spaces/{space_uid}/received
 - sender anti-spam limit сериализуется Account row lock;
 - gifts не меняют permissions, moderation power или discovery ranking.
 
+### `/discovery/v1`
+
+Выпущено в `0.5.4-alpha.1`. Explainable organic Space discovery.
+
+```text
+GET /discovery/v1/spaces
+```
+
+Поддерживает те же явные filter inputs `q`, `purpose`, `tag`, `limit`, `offset`, но работает отдельно от стабильного `/spaces/v1` catalog.
+
+Контракт:
+
+- eligibility/visibility/block policy применяется до ranking;
+- ranking работает на bounded candidate pool;
+- недавняя активность учитывает разных авторов, а не raw message volume;
+- ближайшая Activity/Event используется только когда её детали разрешено раскрыть viewer’у;
+- client получает до трёх `discovery.reasons` и optional `discovery.upcoming`;
+- числовой score остаётся server-only и не входит в public projection;
+- legacy `Room.rating`, gifts/support, price/currency/payment не являются ranking signals;
+- фильтры только сужают допустимый набор и не расширяют privacy visibility.
+
 ## Realtime v2
 
 ### Handshake без credentials в URL
@@ -160,3 +181,4 @@ Privacy-sensitive API может намеренно отвечать `404`, чт
 9. Credentials не попадают в URL.
 10. Contract пригоден для SPA и будущих native clients.
 11. Cosmetic/support data не становится trust/permission/ranking signal автоматически.
+12. Personalized ranking не может расширять eligibility/visibility.

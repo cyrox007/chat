@@ -19,6 +19,7 @@
 - [`versioning-quick-reference.md`](versioning-quick-reference.md) — краткий статус версии.
 - [`ui-ux-kit.md`](ui-ux-kit.md) — основная дизайн-система и UX-правила.
 - [`ui-ux-notifications.md`](ui-ux-notifications.md) — notification/reminder UX extension.
+- [`ui-ux-discovery.md`](ui-ux-discovery.md) — explainable organic discovery UX rules.
 
 ## Для разработчика
 
@@ -38,11 +39,12 @@
 - [`social-engagement-v2.md`](social-engagement-v2.md) — earned achievements и Conversation Rounds.
 - [`activity-occurrences-v1.md`](activity-occurrences-v1.md) — Activity Occurrences, reminders и notification inbox, выпущенные в `0.5.2-alpha.1`.
 - [`creator-support-v1.md`](creator-support-v1.md) — opt-in gifts, append-only ledger и cosmetic entitlements, выпущенные в `0.5.3-alpha.1` без real-money flows.
+- [`discovery-v1.md`](discovery-v1.md) — eligibility-first, explainable organic Space discovery, выпущенный в `0.5.4-alpha.1`.
 
 ## Статус документов
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md` и domain-документе текущего slice.
 
-Текущий release: `0.5.3-alpha.1`.
+Текущий release: `0.5.4-alpha.1`.
 
-Следующая development-линия: `0.5.4-alpha.0` — Discovery quality.
+Следующая development-линия: `0.5.5-alpha.0` — Web application maturity.

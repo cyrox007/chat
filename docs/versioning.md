@@ -2,9 +2,9 @@
 
 ## Current release
 
-`0.5.3-alpha.1`
+`0.5.4-alpha.1`
 
-Next development line: `0.5.4-alpha.0` — Discovery quality.
+Next development line: `0.5.5-alpha.0` — Web application maturity.
 
 The canonical released value lives in the repository root `VERSION` file. `CHANGELOG.md` records released checkpoints; active work is additionally tracked in `docs/roadmap.md` and domain documents.
 
@@ -17,8 +17,8 @@ Before `1.0.0`, PubChat uses Semantic Versioning with an explicit readiness chan
 `MAJOR.MINOR.PATCH` for stable releases.
 
 Examples:
-- `0.5.4-alpha.0` — active compatible development inside Stage 5;
-- `0.5.4-alpha.1` — first validated checkpoint of that patch line;
+- `0.5.5-alpha.0` — active compatible development inside Stage 5;
+- `0.5.5-alpha.1` — first validated checkpoint of that patch line;
 - `0.9.0-beta.1` — core product flows complete and entering stabilization;
 - `1.0.0` — first stable public release.
 
@@ -68,4 +68,5 @@ Version number is a readiness statement, not commit count.
 - `0.5.1-alpha.1` — earned achievements + Conversation Rounds;
 - `0.5.2-alpha.1` — Activity Occurrences + private in-app reminders/inbox;
 - `0.5.3-alpha.1` — consent-first internal gifts + cosmetic support ledger/entitlements;
-- `0.5.4-alpha.0` — next Discovery Quality development line.
+- `0.5.4-alpha.1` — explainable organic Space discovery;
+- `0.5.5-alpha.0` — next Web application maturity development line.

@@ -69,6 +69,22 @@
 					<div v-if="space.tags?.length" class="tag-row">
 						<button v-for="tag in space.tags.slice(0, 4)" :key="tag" type="button" class="ui-chip" @click="filterByTag(tag)">#{{ tag }}</button>
 					</div>
+
+					<div v-if="space.discovery?.reasons?.length" class="reason-block" aria-label="Почему пространство показано">
+						<span class="reason-label">Почему здесь</span>
+						<div class="reason-row">
+							<span v-for="reason in space.discovery.reasons" :key="reason.code" class="reason-chip">{{ reason.label }}</span>
+						</div>
+					</div>
+
+					<div v-if="space.discovery?.upcoming" class="upcoming-note">
+						<i class="far fa-calendar" aria-hidden="true"></i>
+						<div>
+							<small>{{ space.discovery.upcoming.kind === 'event' ? 'Скоро событие' : 'Скоро активность' }}</small>
+							<strong>{{ space.discovery.upcoming.title }}</strong>
+							<time :datetime="space.discovery.upcoming.starts_at">{{ formatUpcoming(space.discovery.upcoming.starts_at) }}</time>
+						</div>
+					</div>
 				</div>
 
 				<div class="space-card__meta">
@@ -115,6 +131,7 @@
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
+import DiscoveryService from '@/API/DiscoveryService';
 import EngagementService from '@/API/EngagementService';
 import SpacesService from '@/API/SpacesService';
 import CreateSpaceModal from '@/components/Spaces/CreateSpaceModal.vue';
@@ -167,7 +184,7 @@ const loadSpaces = async () => {
 	loading.value = true;
 	errorMessage.value = '';
 	try {
-		const response = await SpacesService.list({
+		const response = await DiscoveryService.spaces({
 			q: searchQuery.value || undefined,
 			purpose: purpose.value || undefined,
 			tag: tagFilter.value || undefined,
@@ -224,7 +241,7 @@ const enterSpace = async (space) => {
 		const response = await SpacesService.join(space.uid);
 		const updated = response.data.space;
 		const index = spaces.value.findIndex((item) => item.uid === updated.uid);
-		if (index >= 0) spaces.value[index] = { ...updated, appearance: spaces.value[index].appearance };
+		if (index >= 0) spaces.value[index] = { ...spaces.value[index], ...updated };
 		if (updated.viewer_membership?.status === 'active') {
 			await router.push({ name: 'space', params: { uid: updated.uid } });
 		}
@@ -278,6 +295,13 @@ const spaceAppearanceClasses = (space) => {
 const locationLabel = (space) => [space.region, space.country].filter(Boolean).join(', ');
 const resolveAvatar = (avatar) => /^https?:\/\//.test(avatar) ? avatar : `${apiBaseUrl}${avatar}`;
 const avatarFallback = (value = '?') => String(value || '?').slice(0, 1).toUpperCase();
+const formatUpcoming = (value) => new Intl.DateTimeFormat('ru', {
+	weekday: 'short',
+	day: 'numeric',
+	month: 'short',
+	hour: '2-digit',
+	minute: '2-digit',
+}).format(new Date(value));
 
 onMounted(loadSpaces);
 </script>
@@ -317,10 +341,19 @@ onMounted(loadSpaces);
 .space-card__title { display: flex; align-items: center; gap: var(--ui-space-2); }
 .ambient-icon { width: 2rem; height: 2rem; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: color-mix(in srgb, var(--ui-surface) 82%, transparent); font-size: 1rem; }
 .space-card h2 { margin: 0; font-size: var(--ui-text-xl); letter-spacing: -.02em; }
-.space-card__body p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; margin: var(--ui-space-2) 0 0; color: var(--ui-text-muted); line-height: 1.55; }
+.space-card__body > p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; margin: var(--ui-space-2) 0 0; color: var(--ui-text-muted); line-height: 1.55; }
 .space-card__body .welcome-line { color: var(--ui-text); font-size: var(--ui-text-sm); font-weight: 700; -webkit-line-clamp: 2; }
 .tag-row { display: flex; flex-wrap: wrap; gap: var(--ui-space-1); margin-top: var(--ui-space-3); }
 .tag-row .ui-chip { border: 0; cursor: pointer; }
+.reason-block { display: grid; gap: .4rem; margin-top: var(--ui-space-3); }
+.reason-label { color: var(--ui-text-subtle); font-size: .68rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.reason-row { display: flex; flex-wrap: wrap; gap: .35rem; }
+.reason-chip { padding: .35rem .55rem; border: 1px solid color-mix(in srgb, var(--ui-primary) 20%, var(--ui-border)); border-radius: var(--ui-radius-pill); background: color-mix(in srgb, var(--ui-primary-soft) 45%, transparent); color: var(--ui-text-muted); font-size: .7rem; font-weight: 650; }
+.upcoming-note { display: grid; grid-template-columns: auto minmax(0,1fr); gap: var(--ui-space-2); align-items: start; margin-top: var(--ui-space-3); padding: var(--ui-space-3); border-radius: var(--ui-radius-lg); background: color-mix(in srgb, var(--ui-info-soft) 55%, var(--ui-surface)); }
+.upcoming-note > i { margin-top: .2rem; color: var(--ui-info); }
+.upcoming-note > div { min-width: 0; display: grid; gap: .1rem; }
+.upcoming-note small, .upcoming-note time { color: var(--ui-text-subtle); font-size: .7rem; }
+.upcoming-note strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--ui-text-sm); }
 .space-card__meta { display: flex; flex-wrap: wrap; gap: var(--ui-space-3); color: var(--ui-text-subtle); font-size: var(--ui-text-xs); }
 .space-card__meta span { display: inline-flex; align-items: center; gap: var(--ui-space-1); }
 .space-card__footer { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-4); padding-top: var(--ui-space-3); border-top: 1px solid var(--ui-border); }
