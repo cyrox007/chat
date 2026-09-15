@@ -5,6 +5,12 @@ from fastapi import APIRouter, Depends, FastAPI, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
+from components.space.membership_schemas import (
+    SpaceMembershipActionRequest,
+    SpaceMembershipRoleFilter,
+    SpaceMembershipStatusFilter,
+)
+from components.space.membership_service import list_members_page, manage_membership
 from components.space.schemas import (
     SpaceCreateRequest,
     SpaceMembershipRoleUpdateRequest,
@@ -17,7 +23,6 @@ from components.space.service import (
     get_space,
     join_space,
     leave_space,
-    list_space_members,
     list_spaces,
     update_member_role,
     update_space,
@@ -111,11 +116,32 @@ def install(app: FastAPI) -> None:
     @router.get("/{space_uid}/members")
     async def members(
         space_uid: UUID,
+        membership_status: SpaceMembershipStatusFilter = Query(default="active", alias="status"),
+        role: Optional[SpaceMembershipRoleFilter] = None,
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
         current_user: dict = Depends(auth_middle),
         db: AsyncSession = Depends(Database.session_generator),
     ):
-        items = await list_space_members(db, space_uid, current_user["user_uid"])
-        return {"status": "ok", "members": items}
+        items, total = await list_members_page(
+            db,
+            space_uid=space_uid,
+            viewer_uid=current_user["user_uid"],
+            membership_status=membership_status,
+            role=role,
+            limit=limit,
+            offset=offset,
+        )
+        return {
+            "status": "ok",
+            "members": items,
+            "pagination": {
+                "limit": limit,
+                "offset": offset,
+                "count": len(items),
+                "total": total,
+            },
+        }
 
     @router.patch("/{space_uid}/members/{account_uid}")
     async def patch_member_role(
@@ -131,6 +157,23 @@ def install(app: FastAPI) -> None:
             target_account_uid=account_uid,
             viewer_uid=current_user["user_uid"],
             role=payload.role,
+        )
+        return {"status": "ok", "membership": membership}
+
+    @router.patch("/{space_uid}/members/{account_uid}/membership")
+    async def patch_membership(
+        space_uid: UUID,
+        account_uid: UUID,
+        payload: SpaceMembershipActionRequest,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        membership = await manage_membership(
+            db,
+            space_uid=space_uid,
+            target_account_uid=account_uid,
+            viewer_uid=current_user["user_uid"],
+            action=payload.action,
         )
         return {"status": "ok", "membership": membership}
 
