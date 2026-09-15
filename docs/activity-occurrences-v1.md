@@ -1,6 +1,6 @@
 # PubChat Stage 5.3 — Activity Occurrences & Notifications
 
-Development line after `0.5.1-alpha.1`: `0.5.2-alpha.x`.
+Released checkpoint: `0.5.2-alpha.1`.
 
 ## Зачем нужен этот slice
 
@@ -22,6 +22,8 @@ Concrete scheduled instance Activity template.
 - repeated materialization идемпотентна;
 - monthly recurrence считается от исходного calendar anchor и не накапливает drift после февраля/коротких месяцев.
 
+`GET` не материализует данные. Materialization — отдельная command operation через `POST .../sync`.
+
 ## Reminder preference
 
 Reminder — приватное Account state и всегда opt-in.
@@ -34,7 +36,7 @@ Allowlisted lead time:
 
 Manager Space не видит preferences участников. Reminder не меняет RSVP, reputation, discovery или achievements.
 
-Активных reminder preferences на Account допускается не больше 200 — этот лимит совпадает с bounded reconciliation pass, поэтому старые preferences не могут голодать за пределами query limit.
+Активных reminder preferences на Account допускается не больше 200 — лимит совпадает с bounded reconciliation pass, поэтому preferences не могут постоянно выпадать за пределы query limit.
 
 ## Notification inbox
 
@@ -55,23 +57,17 @@ Manager Space не видит preferences участников. Reminder не м
 
 `POST /notifications/v1/sync` — явная command operation.
 
-Для каждого разрешённого reminder:
+Для каждого разрешённого reminder backend повторно проверяет Account и active membership/ownership, materialize-ит bounded occurrence window, выбирает наступившее reminder time и пишет notification через DB-level dedupe. Очень старые occurrences не создают delayed spam.
 
-1. backend повторно проверяет Account и текущее active membership/ownership;
-2. materialize-ит bounded occurrence window;
-3. выбирает occurrence, для которого наступило reminder time;
-4. не создаёт слишком старые delayed reminders за пределами grace window;
-5. пишет notification через DB-level dedupe;
-6. commit выполняется server-side.
-
-GET endpoints не создают состояние.
+GET endpoints состояния не создают.
 
 Dedupe рассчитан как один reminder на concrete occurrence. Изменение lead time не создаёт второй notification для того же occurrence.
 
-## Реализованный API
+## API
 
-- `GET /activity-occurrences/v1/activities/{activity_uid}`;
-- `POST /notifications/v1/sync`;
+- `GET /activity-occurrences/v1/activities/{activity_uid}` — прочитать materialized occurrences;
+- `POST /activity-occurrences/v1/activities/{activity_uid}/sync` — явно materialize bounded window;
+- `POST /notifications/v1/sync` — reconcile свои reminders;
 - `GET /notifications/v1/unread-count`;
 - `GET /notifications/v1`;
 - `GET /notifications/v1/spaces/{space_uid}/reminders`;
@@ -80,7 +76,7 @@ Dedupe рассчитан как один reminder на concrete occurrence. И�
 - `PATCH /notifications/v1/{notification_uid}/read`;
 - `POST /notifications/v1/read-all`.
 
-## Реализованный SPA UX
+## SPA UX
 
 - reminder control внутри Activity;
 - один batch request загружает reminder state всего Space — без HTTP N+1;
@@ -96,7 +92,7 @@ UI правила: [`ui-ux-notifications.md`](ui-ux-notifications.md).
 
 ## Delivery boundary
 
-`0.5.2` обеспечивает in-app reminders. Background browser/native push в этот checkpoint не входит.
+`0.5.2-alpha.1` обеспечивает in-app reminders. Background browser/native push в этот checkpoint не входит.
 
 Business rules находятся в backend reconciliation service, поэтому будущий worker/native push adapter сможет использовать тот же домен без переноса правил в Vue.
 
@@ -111,16 +107,10 @@ Business rules находятся в backend reconciliation service, поэто�
 - no cross-account inbox API;
 - bounded preferences + bounded occurrence horizon обеспечивают bounded work per sync.
 
+## Calendar limitation
+
+Activity принимает datetime с timezone и нормализует durable instant в UTC, но IANA timezone name пока не хранится. Recurrence остаётся UTC-anchored; при DST локальное wall-clock время weekly/monthly серии может сдвинуться. DST-correct semantics входят в pre-beta hardening.
+
 ## Release gate
 
-До `0.5.2-alpha.1`:
-
-- additive migration graph и одна Alembic head;
-- occurrence/reminder/inbox contract tests;
-- frontend production build;
-- notification ownership/timezone/spam/privacy self-review;
-- documentation/roadmap/UI Kit sync;
-- functional exact-head CI;
-- version bump только после зелёного functional gate;
-- второй exact-head CI на versioned release head;
-- merge только после второго gate.
+`0.5.2-alpha.1` проходит два gate: functional exact-head CI, затем version bump/documentation sync и повторный exact-head CI. Merge разрешён только после второго зелёного gate.
