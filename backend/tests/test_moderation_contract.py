@@ -63,6 +63,10 @@ class ModerationContractTests(unittest.TestCase):
         names = {constraint.name for constraint in ModerationAppeal.__table__.constraints if constraint.name}
         self.assertIn("uq_moderation_appeal_action_appellant", names)
 
+    def test_one_action_per_report_is_enforced_in_db(self):
+        names = {constraint.name for constraint in ModerationAction.__table__.constraints if constraint.name}
+        self.assertIn("uq_moderation_action_report", names)
+
     def test_reports_and_actions_are_space_scoped(self):
         for model in (ModerationReport, ModerationAction):
             targets = {foreign_key.target_fullname for foreign_key in model.__table__.c.room_uid.foreign_keys}
