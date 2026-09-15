@@ -22,14 +22,14 @@ def upgrade() -> None:
         "space_rules",
         sa.Column("uid", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("room_uid", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("created_by_account_uid", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("created_by_account_uid", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("title", sa.String(length=120), nullable=False),
         sa.Column("body", sa.Text(), nullable=False),
         sa.Column("position", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.ForeignKeyConstraint(["room_uid"], ["rooms.uid"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["created_by_account_uid"], ["accounts.uid"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["created_by_account_uid"], ["accounts.uid"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("uid"),
     )
     op.create_index("ix_space_rules_room_position", "space_rules", ["room_uid", "position", "created_at"])
@@ -38,7 +38,7 @@ def upgrade() -> None:
         "space_events",
         sa.Column("uid", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("room_uid", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("created_by_account_uid", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("created_by_account_uid", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("title", sa.String(length=120), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("starts_at", sa.DateTime(), nullable=False),
@@ -47,7 +47,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.ForeignKeyConstraint(["room_uid"], ["rooms.uid"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["created_by_account_uid"], ["accounts.uid"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["created_by_account_uid"], ["accounts.uid"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("uid"),
     )
     op.create_index("ix_space_events_room_start", "space_events", ["room_uid", "starts_at"])
