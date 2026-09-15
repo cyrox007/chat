@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 
@@ -9,23 +9,48 @@ import MessageNotifications from './components/Notifications/MessageNotification
 
 const store = useStore();
 const router = useRouter();
-const showErrorNotification = ref(false);
+const networkOnline = ref(navigator.onLine);
+const bootstrapError = ref(false);
 
-const ensureValidTokenAndConnect = async () => {
-	if (!store.getters['isAuth']) return;
+const connectionNotice = computed(() => {
+	if (!store.getters.isAuth) return null;
+	if (!networkOnline.value) {
+		return {
+			tone: 'warning',
+			title: 'Вы офлайн',
+			message: 'PubChat сохранит текущий экран и восстановит разговоры, когда сеть вернётся.',
+		};
+	}
+
+	const roomState = store.getters['chat/getConnectionState'];
+	const messengerState = store.getters['messenger/getConnectionState'];
+	if (['reconnecting', 'offline'].includes(roomState) || ['reconnecting', 'offline'].includes(messengerState)) {
+		return {
+			tone: 'info',
+			title: 'Восстанавливаем связь',
+			message: 'Можно оставаться в приложении — повторное подключение выполняется автоматически.',
+		};
+	}
+	if (bootstrapError.value) {
+		return {
+			tone: 'danger',
+			title: 'Сервис временно недоступен',
+			message: 'Интерфейс остаётся доступным. PubChat повторит подключение автоматически.',
+		};
+	}
+	return null;
+});
+
+const ensureSessionAndConnect = async () => {
+	if (!store.getters.isAuth) return;
 	try {
-		if (store.getters['chat/getCurrentRoom']) {
-			const roomId = store.getters['chat/getCurrentRoom'].uid;
-			await store.dispatch('chat/connectSocket', roomId);
-		}
+		await store.dispatch('syncIdentity');
 		await store.dispatch('messenger/connectMessenger');
-		showErrorNotification.value = false;
+		const room = store.getters['chat/getCurrentRoom'];
+		if (room?.uid) await store.dispatch('chat/connectSocket', room.uid);
+		bootstrapError.value = false;
 	} catch (error) {
-		if (error.response && [500, 502, 503, 504].includes(error.response.status)) {
-			showErrorNotification.value = true;
-		} else if (!error.response) {
-			showErrorNotification.value = true;
-		}
+		if (error.response?.status !== 401) bootstrapError.value = true;
 	}
 };
 
@@ -36,20 +61,38 @@ const handleSessionExpired = async () => {
 	}
 };
 
+const handleOffline = () => {
+	networkOnline.value = false;
+};
+
+const handleOnline = () => {
+	networkOnline.value = true;
+	bootstrapError.value = false;
+	if (!store.getters.isAuth) return;
+	store.dispatch('messenger/reconnectIfNeeded');
+	store.dispatch('chat/reconnectIfNeeded');
+};
+
 onMounted(async () => {
+	await store.dispatch('initializeUser');
 	window.addEventListener('pubchat:session-expired', handleSessionExpired);
-	await ensureValidTokenAndConnect();
+	window.addEventListener('offline', handleOffline);
+	window.addEventListener('online', handleOnline);
+	await ensureSessionAndConnect();
 });
 
 onUnmounted(() => {
 	window.removeEventListener('pubchat:session-expired', handleSessionExpired);
+	window.removeEventListener('offline', handleOffline);
+	window.removeEventListener('online', handleOnline);
 });
 
-watch(() => store.getters['isAuth'], (isAuthenticated) => {
-	if (isAuthenticated) {
-		ensureValidTokenAndConnect();
-	} else {
+watch(() => store.getters.isAuth, (isAuthenticated, wasAuthenticated) => {
+	if (isAuthenticated && !wasAuthenticated) {
+		ensureSessionAndConnect();
+	} else if (!isAuthenticated && wasAuthenticated) {
 		store.dispatch('messenger/disconnectMessenger');
+		store.dispatch('chat/disconnectSocket');
 	}
 });
 </script>
@@ -61,12 +104,18 @@ watch(() => store.getters['isAuth'], (isAuthenticated) => {
 		<HeaderComponent />
 
 		<transition name="fade">
-			<div v-if="showErrorNotification" class="connection-notice" role="status" aria-live="polite">
+			<div
+				v-if="connectionNotice"
+				class="connection-notice"
+				:class="`connection-notice--${connectionNotice.tone}`"
+				role="status"
+				aria-live="polite"
+			>
+				<div class="connection-notice__pulse" aria-hidden="true"></div>
 				<div class="connection-notice__content">
-					<strong>Связь с PubChat потеряна</strong>
-					<span>Можно продолжать просмотр. Подключение восстановится, когда сеть вернётся.</span>
+					<strong>{{ connectionNotice.title }}</strong>
+					<span>{{ connectionNotice.message }}</span>
 				</div>
-				<button type="button" class="connection-notice__close" aria-label="Закрыть уведомление" @click="showErrorNotification = false">×</button>
 			</div>
 		</transition>
 
@@ -79,14 +128,20 @@ watch(() => store.getters['isAuth'], (isAuthenticated) => {
 <style scoped>
 .app-shell { min-height: 100dvh; }
 .app-content { margin-top: var(--ui-space-2); }
-.connection-notice { position: fixed; top: var(--ui-space-3); left: 50%; z-index: 1000; width: min(calc(100% - 24px), 620px); display: flex; align-items: flex-start; gap: var(--ui-space-3); padding: var(--ui-space-3) var(--ui-space-4); transform: translateX(-50%); border: 1px solid color-mix(in srgb, var(--ui-danger) 28%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: var(--ui-surface-raised); box-shadow: var(--ui-shadow-lg); color: var(--ui-text); }
-.connection-notice__content { min-width: 0; display: grid; gap: 2px; flex: 1; }
-.connection-notice__content strong { font-size: var(--ui-text-sm); color: var(--ui-danger); }
+.connection-notice { position: fixed; top: var(--ui-space-3); left: 50%; z-index: 1000; width: min(calc(100% - 24px), 640px); display: flex; align-items: center; gap: var(--ui-space-3); padding: var(--ui-space-3) var(--ui-space-4); transform: translateX(-50%); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-raised); box-shadow: var(--ui-shadow-lg); color: var(--ui-text); }
+.connection-notice--warning { border-color: color-mix(in srgb, var(--ui-warning) 32%, var(--ui-border)); }
+.connection-notice--danger { border-color: color-mix(in srgb, var(--ui-danger) 32%, var(--ui-border)); }
+.connection-notice--info { border-color: color-mix(in srgb, var(--ui-info) 32%, var(--ui-border)); }
+.connection-notice__pulse { width: 0.625rem; height: 0.625rem; flex: 0 0 auto; border-radius: 50%; background: var(--ui-info); animation: connection-pulse 1.6s ease-in-out infinite; }
+.connection-notice--warning .connection-notice__pulse { background: var(--ui-warning); }
+.connection-notice--danger .connection-notice__pulse { background: var(--ui-danger); }
+.connection-notice__content { min-width: 0; display: grid; gap: 2px; }
+.connection-notice__content strong { font-size: var(--ui-text-sm); }
 .connection-notice__content span { font-size: var(--ui-text-sm); color: var(--ui-text-muted); }
-.connection-notice__close { width: 32px; height: 32px; display: inline-grid; place-items: center; flex: 0 0 auto; padding: 0; border: 0; border-radius: var(--ui-radius-md); background: transparent; color: var(--ui-text-muted); font-size: 1.35rem; line-height: 1; cursor: pointer; }
-.connection-notice__close:hover { background: var(--ui-surface-muted); color: var(--ui-text); }
 .fade-enter-active, .fade-leave-active { transition: opacity var(--ui-motion-normal) var(--ui-ease), transform var(--ui-motion-normal) var(--ui-ease); }
 .fade-enter-from, .fade-leave-to { opacity: 0; transform: translate(-50%, -10px); }
+@keyframes connection-pulse { 0%, 100% { opacity: 0.45; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) { .connection-notice__pulse { animation: none; } }
 @media (max-width: 720px) {
 	.app-shell { padding-bottom: 4.75rem; }
 	.app-content { margin-top: 0; }
