@@ -129,21 +129,66 @@ class RealtimeService:
             self._redis = None
         self._listener_task = None
 
-    async def _listen(self) -> None:
-        assert self._pubsub is not None
+    async def _recreate_pubsub(self) -> bool:
+        if not self._redis:
+            return False
+        if self._pubsub:
+            try:
+                await self._pubsub.aclose()
+            except Exception:
+                pass
         try:
-            async for message in self._pubsub.listen():
-                if message.get("type") != "message":
-                    continue
-                try:
-                    event = json.loads(message["data"])
-                    await self._dispatch(event)
-                except Exception:
-                    logger.exception("Ошибка обработки Redis realtime event")
-        except asyncio.CancelledError:
-            raise
+            self._pubsub = self._redis.pubsub(ignore_subscribe_messages=True)
+            await self._pubsub.subscribe(self.CHANNEL)
+            return True
         except Exception:
-            logger.exception("Redis realtime listener остановлен из-за ошибки")
+            logger.exception("Не удалось восстановить Redis PubSub subscription")
+            self._pubsub = None
+            return False
+
+    async def _listen(self) -> None:
+        retry_delay = 1.0
+        while True:
+            try:
+                if not self._pubsub:
+                    restored = await self._recreate_pubsub()
+                    if not restored:
+                        await asyncio.sleep(retry_delay)
+                        retry_delay = min(retry_delay * 2, 30.0)
+                        continue
+
+                async for message in self._pubsub.listen():
+                    retry_delay = 1.0
+                    if message.get("type") != "message":
+                        continue
+                    try:
+                        event = json.loads(message["data"])
+                        await self._dispatch(event)
+                    except Exception:
+                        logger.exception("Ошибка обработки Redis realtime event")
+
+                # A PubSub iterator normally lives forever. Reaching EOF means
+                # the subscription was lost, so force a resubscribe path.
+                logger.warning("Redis realtime PubSub iterator завершился; восстанавливаем подписку")
+                if self._pubsub:
+                    try:
+                        await self._pubsub.aclose()
+                    except Exception:
+                        pass
+                    self._pubsub = None
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Redis realtime listener потерял соединение; восстанавливаем подписку")
+                if self._pubsub:
+                    try:
+                        await self._pubsub.aclose()
+                    except Exception:
+                        pass
+                    self._pubsub = None
+
+            await asyncio.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, 30.0)
 
     async def _dispatch(self, event: dict) -> None:
         if not self._callbacks:
@@ -196,6 +241,11 @@ class RealtimeService:
         target: str,
         resource_uid: UUID | str | None = None,
     ) -> tuple[str, int]:
+        # If Redis was unavailable during application startup, allow a production
+        # worker to recover on the next normal ticket request instead of requiring
+        # a process restart. DEBUG deliberately keeps its cheap local fallback.
+        if not self._redis and not config.DEBUG and config.REDIS_URL:
+            await self.start()
         if not self._redis and not config.DEBUG:
             raise RealtimeUnavailable("Redis is required to issue production realtime tickets")
 
@@ -320,9 +370,6 @@ class RealtimeService:
                 ex=config.REALTIME_PRESENCE_TTL_SECONDS,
             )
             pipe.zadd(user_presence_key, {connection_id: expires_at})
-            # Heartbeats must refresh the index key itself as well as the member
-            # score; otherwise Redis expires the whole sorted-set while a socket
-            # is still active and presence silently drops after ~2 TTLs.
             pipe.expire(user_presence_key, presence_index_ttl)
             if record.get("room_uid"):
                 member = f"{connection_id}|{record['user_uid']}"
