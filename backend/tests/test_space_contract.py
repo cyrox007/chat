@@ -15,6 +15,7 @@ class SpaceContractTests(unittest.TestCase):
         self.assertIn("/spaces/v1/{space_uid}", paths)
         self.assertIn("/spaces/v1/{space_uid}/join", paths)
         self.assertIn("/spaces/v1/{space_uid}/membership", paths)
+        self.assertIn("/spaces/v1/{space_uid}/members", paths)
         self.assertIn("/spaces/v1/{space_uid}/members/{account_uid}", paths)
 
     def test_private_space_cannot_be_open_join(self):
@@ -24,6 +25,10 @@ class SpaceContractTests(unittest.TestCase):
                 visibility="private",
                 join_policy="open",
             )
+
+    def test_visible_name_cannot_be_only_whitespace(self):
+        with self.assertRaises(ValidationError):
+            SpaceCreateRequest(name="      ")
 
     def test_tags_are_trimmed_and_deduplicated(self):
         payload = SpaceCreateRequest(
