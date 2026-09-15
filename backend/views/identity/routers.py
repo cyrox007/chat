@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, FastAPI, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
+from components.identity.model import Persona
 from components.identity.schemas import (
     LoginRequest,
     PersonaUpdateRequest,
@@ -110,24 +112,36 @@ def install(app: FastAPI):
         account = await get_account_by_uid(db, current_user["user_uid"])
         return {"status": "ok", **(await build_identity_projection(db, account))}
 
-    @router.post("/profiles/batch")
-    async def batch_profiles(
+    @router.post("/personas/batch")
+    async def batch_personas(
         payload: ProfilesBatchRequest,
-        current_user: dict = Depends(auth_middle),
+        _: dict = Depends(auth_middle),
         db: AsyncSession = Depends(Database.session_generator),
     ):
-        profiles = []
-        for account_uid in dict.fromkeys(payload.account_uids):
-            try:
-                account = await get_account_by_uid(db, str(account_uid))
-                profiles.append(
-                    await build_public_profile(db, account, current_user["user_uid"])
-                )
-            except HTTPException as exc:
-                if exc.status_code in {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND}:
-                    continue
-                raise
-        return {"status": "ok", "profiles": profiles}
+        requested = list(dict.fromkeys(payload.account_uids))
+        result = await db.execute(
+            select(Persona).where(
+                Persona.account_uid.in_(requested),
+                Persona.is_primary.is_(True),
+            )
+        )
+        personas_by_account = {persona.account_uid: persona for persona in result.scalars().all()}
+        personas = []
+        for account_uid in requested:
+            persona = personas_by_account.get(account_uid)
+            if not persona:
+                continue
+            personas.append(
+                {
+                    "uid": str(account_uid),
+                    "persona_uid": str(persona.uid),
+                    "handle": persona.handle,
+                    "display_name": persona.display_name,
+                    "avatar": persona.avatar,
+                    "social_intent": persona.social_intent,
+                }
+            )
+        return {"status": "ok", "personas": personas}
 
     @router.get("/profiles/{account_uid}")
     async def public_profile(
