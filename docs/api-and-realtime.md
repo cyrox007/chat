@@ -105,7 +105,7 @@ GET   /support/v1/spaces/{space_uid}/received
 
 ### `/discovery/v1`
 
-Development line `0.5.4-alpha.x`. Explainable organic Space discovery.
+Выпущено в `0.5.4-alpha.1`. Explainable organic Space discovery.
 
 ```text
 GET /discovery/v1/spaces
