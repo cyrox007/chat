@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 
 from database import Database
@@ -69,6 +69,7 @@ class ModerationAppeal(Database.Base):
     resolved_at = Column(DateTime, nullable=True)
 
     __table_args__ = (
+        UniqueConstraint("action_uid", "appellant_account_uid", name="uq_moderation_appeal_action_appellant"),
         Index("ix_moderation_appeals_action_status", "action_uid", "status"),
         Index("ix_moderation_appeals_appellant", "appellant_account_uid", "created_at"),
     )
