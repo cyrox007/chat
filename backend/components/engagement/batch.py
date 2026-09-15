@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -19,6 +20,14 @@ class SpaceAppearanceBatchRequest(BaseModel):
         return list(dict.fromkeys(value))
 
 
+def _utc_iso(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return f"{value.isoformat()}Z"
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def _projection(item: SpaceAppearance | None, space_uid: UUID) -> dict:
     return {
         "space_uid": str(space_uid),
@@ -26,7 +35,7 @@ def _projection(item: SpaceAppearance | None, space_uid: UUID) -> dict:
         "cover_preset": item.cover_preset if item else "soft-gradient",
         "ambient_icon": item.ambient_icon if item else None,
         "welcome_line": item.welcome_line if item else None,
-        "updated_at": f"{item.updated_at.isoformat()}Z" if item and item.updated_at else None,
+        "updated_at": _utc_iso(item.updated_at) if item else None,
     }
 
 
