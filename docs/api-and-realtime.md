@@ -23,47 +23,40 @@ GET /service/version
 ## Основные API domains
 
 ### `/identity/v2`
-
 Account/Persona/session/privacy: registration, login, refresh/logout, current identity, Persona/privacy update и privacy-aware profile projection.
 
 ### `/spaces/v1`
-
 Living Spaces: discovery/create/update, membership, members/requests, invitations, rules/events/history и scoped management.
 
 ### `/social/v1`
-
 People discovery, follow/unfollow, friend requests/friendship и Account-level block.
 
 ### `/moderation/v1`
-
 Reports, manager queues, moderation actions, appeals и appeal review. Private metadata проверяется только после scoped authorization.
 
 ### `/appearance/v1`
-
 Persona/Space cosmetic projections. Appearance наследует privacy/visibility основной сущности.
 
 ### `/activities/v1`
-
 Activities, RSVP и Conversation Rounds. Участие требует active Space membership; creator/scoped manager управляет activity/round.
 
 ### `/achievements/v1`
-
 Read-only earned achievements. Клиентского grant endpoint нет.
 
-### `/activity-occurrences/v1` — In development
+### `/activity-occurrences/v1`
 
-Concrete bounded occurrences recurring Activity.
+Выпущено в `0.5.2-alpha.1`. Concrete bounded occurrences recurring Activity.
 
 ```text
 GET  /activity-occurrences/v1/activities/{activity_uid}
 POST /activity-occurrences/v1/activities/{activity_uid}/sync
 ```
 
-`GET` только читает уже materialized rows и не изменяет БД. `POST .../sync` — явная idempotent command для bounded materialization. Reminder reconciliation также использует тот же server-side materialization service.
+`GET` только читает уже materialized rows и не изменяет БД. `POST .../sync` — явная idempotent command для bounded materialization. Reminder reconciliation использует тот же server-side materialization service.
 
-### `/notifications/v1` — In development
+### `/notifications/v1`
 
-Private Account-owned reminders/inbox.
+Выпущено в `0.5.2-alpha.1`. Private Account-owned reminders/inbox.
 
 Основные operations:
 
@@ -107,7 +100,7 @@ Message creation использует `frontId` как server-side idempotency k
 
 Новые API projections возвращают UTC timestamps с `Z`. Activity create/update требует datetime с explicit timezone offset, затем durable `starts_at` нормализуется в UTC.
 
-**Текущее alpha-ограничение:** Activity пока не хранит отдельный IANA timezone name (`Europe/Berlin` и т.п.). Recurrence поэтому UTC-anchored. При переходе DST локальное wall-clock время recurring встречи может сдвинуться на час. Это зафиксированный pre-beta calendar-time hardening task; reminders `0.5.2` следуют текущему canonical UTC recurrence и не пытаются самостоятельно менять расписание.
+**Текущее alpha-ограничение:** Activity пока не хранит отдельный IANA timezone name (`Europe/Berlin` и т.п.). Recurrence поэтому UTC-anchored. При переходе DST локальное wall-clock время recurring встречи может сдвинуться на час. Это pre-beta calendar-time hardening task; reminders `0.5.2` следуют текущему canonical UTC recurrence и не меняют расписание самостоятельно.
 
 ## Ошибки
 
