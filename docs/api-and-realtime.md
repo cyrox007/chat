@@ -2,228 +2,133 @@
 
 ## Общие правила
 
-Backend — FastAPI. В development OpenAPI доступен по `/docs`, а машинная схема — по стандартному `/openapi.json`.
+Backend — FastAPI. В development OpenAPI доступен по `/docs`, машинная схема — по `/openapi.json`.
 
-Версия приложения:
-
-```text
-GET /service/version
-```
-
-Health-check:
+Служебные endpoints:
 
 ```text
 GET /health
+GET /service/version
 ```
 
-Новые продуктовые домены используют versioned prefixes. Legacy routes пока существуют как compatibility layer и не должны становиться основой нового клиента.
+Новые домены используют versioned prefixes. Legacy routes остаются compatibility layer и не должны становиться основой нового клиента.
 
-## Authentication model
+## Authentication
 
-### Access token
+Короткоживущий bearer access token используется для HTTP requests и в browser SPA хранится только в памяти. Долговременная refresh session — HttpOnly cookie. Cookie-based state-changing flows защищены CSRF.
 
-Короткоживущий bearer access token используется для authenticated HTTP requests. В browser SPA он хранится только в памяти процесса страницы.
-
-### Refresh session
-
-Долговременная сессия использует HttpOnly cookie. При reload SPA выполняет refresh flow и получает новый access token.
-
-### CSRF
-
-Cookie-based state-changing flows используют CSRF protection. SPA умеет получить CSRF cookie и повторить запрос при ожидаемом CSRF failure.
-
-### 401 и 403
-
-- `401` — session/authentication problem; клиент может попытаться refresh.
-- `403` — authorization decision; клиент не должен автоматически считать его expired session.
+- `401` — authentication/session problem; клиент может попробовать refresh.
+- `403` — authorization decision; его нельзя превращать в бесконечный refresh/reconnect.
 
 ## Основные API domains
 
 ### `/identity/v2`
 
-Account/Persona/session/privacy.
-
-Типовые операции:
-
-- registration/login;
-- refresh/logout;
-- current identity;
-- Persona update;
-- privacy update;
-- privacy-aware profile projection.
-
-Подробности: [`identity-v2.md`](identity-v2.md).
+Account/Persona/session/privacy: registration, login, refresh/logout, current identity, Persona/privacy update и privacy-aware profile projection.
 
 ### `/spaces/v1`
 
-Living Spaces:
-
-- discovery;
-- create/read/update;
-- membership/join/request;
-- members/pending requests;
-- invitations;
-- rules/events/history;
-- scoped management.
-
-Space visibility и membership checks должны применяться backend к любому новому endpoint, который раскрывает Space data.
+Living Spaces: discovery/create/update, membership, members/requests, invitations, rules/events/history и scoped management.
 
 ### `/social/v1`
 
-Account-level social graph:
-
-- discovery;
-- follow/unfollow;
-- friend request/accept/reject/remove;
-- block/unblock.
+People discovery, follow/unfollow, friend requests/friendship и Account-level block.
 
 ### `/moderation/v1`
 
-Transparent moderation:
-
-- reports;
-- manager queues;
-- moderation actions;
-- appeals;
-- appeal review.
-
-Private report metadata нельзя раскрывать до scoped authorization.
+Reports, manager queues, moderation actions, appeals и appeal review. Private metadata проверяется только после scoped authorization.
 
 ### `/appearance/v1`
 
-Persona/Space cosmetic projections. Public appearance наследует privacy/visibility основной сущности.
+Persona/Space cosmetic projections. Appearance наследует privacy/visibility основной сущности.
 
 ### `/activities/v1`
 
-Activities, RSVP и Conversation Rounds.
-
-Activities требуют active Space membership для участия. Creator или scoped manager управляет activity/round.
+Activities, RSVP и Conversation Rounds. Участие требует active Space membership; creator/scoped manager управляет activity/round.
 
 ### `/achievements/v1`
 
-Read-only achievement API. Клиентского write/grant endpoint нет.
+Read-only earned achievements. Клиентского grant endpoint нет.
 
 ### `/activity-occurrences/v1` — In development
 
-Concrete bounded occurrences для recurring Activities.
+Concrete bounded occurrences recurring Activity.
+
+```text
+GET  /activity-occurrences/v1/activities/{activity_uid}
+POST /activity-occurrences/v1/activities/{activity_uid}/sync
+```
+
+`GET` только читает уже materialized rows и не изменяет БД. `POST .../sync` — явная idempotent command для bounded materialization. Reminder reconciliation также использует тот же server-side materialization service.
 
 ### `/notifications/v1` — In development
 
-Private Account-owned reminder preferences и in-app inbox.
+Private Account-owned reminders/inbox.
 
-Основные operations development slice:
+Основные operations:
 
-- list reminder preferences for Space;
-- set/delete reminder preference;
-- explicit sync/reconciliation;
+- explicit `POST /sync` reconciliation;
 - unread count;
 - notification list;
-- mark one/read-all.
+- mark one/read-all;
+- batch reminder preferences for Space;
+- set/delete Activity reminder.
 
-GET endpoints не должны иметь side effects; materialization/reconciliation вызывается отдельным command request.
+Reminder preferences никогда не запрашиваются для чужого Account через API.
 
 ## Realtime v2
 
-### Почему нет JWT в URL
+### Handshake без credentials в URL
 
-Credentials в WebSocket URL могут попадать в access logs, proxy logs и monitoring. PubChat использует ticket handshake.
-
-### Handshake
-
-1. SPA выполняет authenticated HTTP request:
-
-```text
-POST /realtime/v2/tickets
-```
-
-2. В payload указывается target (`room`/messenger target) и при необходимости Space UID.
-3. Backend возвращает короткоживущий one-time ticket и `websocket_path`.
-4. SPA открывает WebSocket по чистому path без credential.
+1. SPA делает authenticated `POST /realtime/v2/tickets`.
+2. Payload указывает target и при необходимости Space UID.
+3. Backend возвращает короткоживущий one-time ticket + `websocket_path`.
+4. SPA открывает WebSocket по чистому path.
 5. Ticket отправляется первым frame.
-6. Backend consume-ит ticket и отвечает readiness event.
+6. Backend consume-ит ticket и подтверждает readiness.
 
-Ticket имеет TTL и scope и не предназначен для повторного использования.
+Ticket scope/TTL и одноразовость проверяются server-side.
 
-## Realtime channels
+## Presence и multi-worker
 
-### Space
+Membership и presence — разные сущности. Membership durable в PostgreSQL; presence ephemeral в Redis.
 
-Canonical route v2 не содержит bearer/token в path. После authorization backend дополнительно проверяет canonical active membership/restriction.
-
-### Messenger
-
-Отдельный realtime target для direct conversations. Privacy policy и block проверяются server-side.
-
-## Presence
-
-Presence distributed через Redis. Heartbeat обновляет connection state и TTL indexes. Presence не равна membership:
-
-- membership — durable право/участие;
-- presence — текущий online/realtime state.
-
-UI обязан различать эти сущности.
-
-## Pub/Sub и multi-worker
-
-Локальный worker хранит только реальные WebSocket objects своих клиентов. Межworker events доставляются Redis pub/sub.
-
-Control events, включая disconnect/restriction, также распространяются между workers.
-
-Listener восстанавливает subscription после transient Redis failure.
+WebSocket objects живут только внутри local worker. Redis pub/sub обеспечивает межworker delivery/control. Heartbeat продлевает connection и presence-index TTL. Listener восстанавливает subscription после transient Redis failure.
 
 ## Reconnect/resume
 
-SPA использует state machine:
+SPA использует состояния `connecting -> authenticating -> connected -> reconnecting/offline`. После reconnect восстанавливаются нужные subscriptions/context без full-page reload.
 
-```text
-connecting -> authenticating -> connected
-                     |             |
-                     v             v
-                reconnecting <- offline
-```
+## Idempotency, rate limiting, backpressure
 
-После reconnect клиент восстанавливает контекст, subscriptions и небольшое окно данных вместо полной перезагрузки SPA.
-
-## Idempotency
-
-Message create использует client `frontId` как idempotency key. Защита существует server-side до durable write, поэтому reconnect/retry не должен создавать duplicate messages.
-
-## Rate limiting и backpressure
-
-Realtime message rate limiting хранится в distributed ephemeral layer. Local socket send имеет timeout: один slow consumer не должен блокировать broadcast всему Space.
+Message creation использует `frontId` как server-side idempotency key. Redis хранит ephemeral claims/rate limits. Local send имеет timeout, поэтому slow consumer не блокирует broadcast всего Space.
 
 ## Time contract
 
-Новые API projections должны возвращать UTC timestamps с явным `Z`.
+Новые API projections возвращают UTC timestamps с `Z`. Activity create/update требует datetime с explicit timezone offset, затем durable `starts_at` нормализуется в UTC.
 
-Принимаемые datetime для Activity creation/update требуют explicit timezone. Backend нормализует durable value в UTC.
-
-Legacy timestamps могут существовать в старых contracts; SPA compatibility normalization не должна становиться моделью для новых API.
+**Текущее alpha-ограничение:** Activity пока не хранит отдельный IANA timezone name (`Europe/Berlin` и т.п.). Recurrence поэтому UTC-anchored. При переходе DST локальное wall-clock время recurring встречи может сдвинуться на час. Это зафиксированный pre-beta calendar-time hardening task; reminders `0.5.2` следуют текущему canonical UTC recurrence и не пытаются самостоятельно менять расписание.
 
 ## Ошибки
 
-Новые endpoints стремятся возвращать структурированный `detail.error_type`. Клиент должен ориентироваться прежде всего на HTTP status + stable error type, а не на русскоязычный текст сообщения.
+Новые endpoints используют HTTP status + структурированный `detail.error_type`.
 
-Типовые категории:
+- `404` — объект отсутствует либо намеренно скрыт privacy policy;
+- `403` — действие запрещено;
+- `409` — конфликт состояния/лимит;
+- `422` — invalid DTO.
 
-- `404` — ресурс недоступен или скрыт privacy policy;
-- `403` — authenticated, но действие запрещено;
-- `409` — конфликт состояния;
-- `422` — invalid DTO/input.
+Privacy-sensitive API может намеренно отвечать `404`, чтобы не раскрывать факт существования ресурса.
 
-Privacy-sensitive resources часто намеренно возвращают `404`, чтобы не раскрывать факт существования скрытого объекта.
+## Правила нового API
 
-## Правила добавления API
-
-Новый endpoint должен:
-
-1. Использовать typed Pydantic DTO.
-2. Не сериализовать ORM через `__dict__`.
-3. Иметь explicit public/private projection.
-4. Проверять Account/Space authorization server-side.
-5. Учитывать Account-level block там, где появляются люди/контент людей.
-6. Использовать pagination/batch вместо N+1.
-7. Не создавать state через GET.
-8. Иметь contract/regression coverage.
-9. Не передавать credentials в URL.
-10. Быть пригодным для SPA и будущих native clients.
+1. Typed request DTO.
+2. Никакого ORM `__dict__` как API.
+3. Explicit public/private projection.
+4. Authorization server-side.
+5. Account-level block учитывается в social surfaces.
+6. Pagination/batch вместо N+1.
+7. GET не создаёт durable state.
+8. Contract/regression coverage.
+9. Credentials не попадают в URL.
+10. Contract пригоден для SPA и будущих native clients.
