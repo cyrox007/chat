@@ -1,5 +1,6 @@
+import calendar
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -32,6 +33,39 @@ def _utc_iso(value: datetime | None) -> str | None:
     if value.tzinfo is None:
         return f"{value.isoformat()}Z"
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _add_months(anchor: datetime, months: int) -> datetime:
+    month_index = anchor.month - 1 + months
+    year = anchor.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(anchor.day, calendar.monthrange(year, month)[1])
+    return anchor.replace(year=year, month=month, day=day)
+
+
+def _next_occurrence(
+    starts_at: datetime,
+    recurrence: str,
+    now: datetime | None = None,
+) -> datetime:
+    """Compute the next occurrence without materializing recurring DB rows."""
+    anchor = _utc_naive(starts_at)
+    current = _utc_naive(now or datetime.now(timezone.utc))
+    if recurrence == "none" or anchor >= current:
+        return anchor
+
+    if recurrence in {"daily", "weekly"}:
+        step = timedelta(days=1 if recurrence == "daily" else 7)
+        steps = max(0, int((current - anchor).total_seconds() // step.total_seconds()))
+        candidate = anchor + (step * steps)
+        return candidate if candidate >= current else candidate + step
+
+    if recurrence == "monthly":
+        months = max(0, (current.year - anchor.year) * 12 + current.month - anchor.month)
+        candidate = _add_months(anchor, months)
+        return candidate if candidate >= current else _add_months(anchor, months + 1)
+
+    return anchor
 
 
 def _persona_appearance_projection(item: PersonaAppearance | None, persona_uid: UUID) -> dict:
@@ -135,6 +169,7 @@ def _activity_projection(
     viewer_rsvp: str | None = None,
 ) -> dict:
     counts = counts or {}
+    next_starts_at = _next_occurrence(activity.starts_at, activity.recurrence)
     return {
         "uid": str(activity.uid),
         "space_uid": str(activity.room_uid),
@@ -143,6 +178,7 @@ def _activity_projection(
         "description": activity.description,
         "activity_type": activity.activity_type,
         "starts_at": _utc_iso(activity.starts_at),
+        "next_starts_at": _utc_iso(next_starts_at),
         "recurrence": activity.recurrence,
         "status": activity.status,
         "rsvp": {
@@ -210,14 +246,16 @@ async def list_activities(
     )
     viewer_by_activity = {activity_uid: rsvp_status for activity_uid, rsvp_status in viewer_result.all()}
 
-    return [
+    projected = [
         _activity_projection(
             activity,
             counts_by_activity.get(activity.uid),
             viewer_by_activity.get(activity.uid),
         )
         for activity in activities
-    ], total
+    ]
+    projected.sort(key=lambda item: item["next_starts_at"] or item["starts_at"])
+    return projected, total
 
 
 async def create_activity(
