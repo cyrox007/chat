@@ -34,7 +34,9 @@ from components.identity.model import (
 )
 from components.achievement.model import AccountAchievement, AchievementDefinition
 from components.engagement.model import ActivityRSVP, PersonaAppearance, SpaceActivity, SpaceAppearance
+from components.engagement.occurrence_model import ActivityOccurrence
 from components.engagement.round_model import ConversationRound, ConversationRoundResponse
+from components.notification.model import ActivityReminderPreference, UserNotification
 from components.moderation.model import ModerationAction, ModerationAppeal, ModerationReport
 from components.space.model import (
     SpaceEvent,

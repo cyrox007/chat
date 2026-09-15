@@ -1,248 +1,108 @@
 # PubChat — история версий
 
-Формат версий: `MAJOR.MINOR.PATCH-channel.N` до стабильного `1.0.0`.
+Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
+
+## [0.5.2-alpha.1] — 2026-09-15
+
+Stage 5.3 — Activity Occurrences & Notifications.
+
+- bounded `ActivityOccurrence` с горизонтом 45 дней и unique Activity+start;
+- recurring calendar regression без накопительного monthly drift;
+- side-effect-free occurrence GET и отдельный explicit materialization command;
+- opt-in reminders: 15 минут, 1 час, 1 день;
+- максимум 200 активных Activity reminders на Account;
+- private Account-owned notification inbox;
+- DB-level dedupe: максимум одно reminder notification на occurrence;
+- idempotent reconciliation/sync для SPA и будущего worker/native push adapter;
+- `/activity-occurrences/v1` и `/notifications/v1`;
+- reminder controls в Space Life без HTTP N+1;
+- `/notifications` screen, unread/read/read-all и app-shell bell;
+- periodic in-app sync без browser permission prompts;
+- системная документация полностью реструктурирована: README, установка, требования, функции, архитектура, API/realtime, security/privacy, operations, troubleshooting, roadmap и UI notification contract.
+
+Известное alpha-ограничение: recurrence пока UTC-anchored и не хранит IANA timezone; DST-correct wall-clock semantics входят в pre-beta hardening. Browser/native push в этот checkpoint не входит.
+
+Quality gate: functional exact-head backend/frontend CI → version bump → повторный exact-head CI перед merge.
 
 ## [0.5.1-alpha.1] — 2026-09-15
 
-Stage 5.2: Earned Achievements & Conversation Rounds. Второй engagement-checkpoint поверх `0.5.0-alpha.1`.
+Stage 5.2 — Earned Achievements & Conversation Rounds.
 
-### Earned achievements
-- system-only каталог и выдача достижений;
-- read-only `/achievements/v1` API;
-- public shelf подчиняется profile privacy/block policy;
-- собственная история может показывать source/context, публичная — никогда;
-- первые системные отметки: `first_host`, `conversation_starter`, `first_round_response`;
-- один Account получает каждый код максимум один раз;
-- клиент не имеет achievement grant endpoint;
-- достижения не меняют trust, permissions, moderation power, reputation или discovery ranking.
-
-### Conversation Rounds
+- system-only achievements и read-only `/achievements/v1`;
+- public shelf + private own history без утечки source/context;
+- `first_host`, `conversation_starter`, `first_round_response`;
 - Activity-scoped `icebreaker`, `choice`, `story_chain`;
-- один открытый round на Activity на уровне PostgreSQL;
-- один response на Account+round, повторный ответ обновляет существующую запись;
-- активное membership обязательно для участия;
-- Activity creator или scoped owner/moderator управляет round;
+- один open round на Activity и один response на Account+round;
 - Account-level block фильтрует ответы в обе стороны;
-- prompt/response ограничены по длине;
-- score, rank, winner, prize, stake, currency/payment отсутствуют из DTO/модели;
-- отмена Activity атомарно завершает её открытый round.
-
-### SPA / UI/UX
-- achievement shelf в Persona profile;
-- отдельная собственная история достижений;
-- Conversation Rounds встроены внутрь Activity в «Жизни пространства»;
-- choice показывает распределение ответов, но не объявляет победителя;
-- текстовые раунды поддерживают редактирование собственного ответа;
-- creator/manager может завершить round;
-- mobile-first presentation без отдельного «игрового аккаунта».
-
-### Abuse / privacy review
-- achievement source/context не раскрывается чужим пользователям;
-- private/blocked Persona не обходится через achievement API;
-- blocked Accounts не видят ответы друг друга в rounds;
-- bounded rows: один response на Account+round и один open round на Activity;
-- rounds используют существующие membership/moderation границы, а не параллельную trust-систему;
-- достижения выдаются только backend system hooks и идемпотентны.
-
-### Quality gate
-До version bump успешно прошли:
-- additive migration graph с одной Alembic head;
-- backend compile/import/security/contracts;
-- SPA security guard + production build;
-- final abuse/privacy/permissions self-review;
-- roadmap/versioning/UI Kit sync;
-- functional exact-head CI на frozen feature head.
-
-После version bump выполняется повторный exact-head CI уже на `0.5.1-alpha.1`; merge разрешён только после его успешного завершения.
+- score/rank/winner/prize/stake/currency отсутствуют;
+- cancellation Activity закрывает open round;
+- profile/activity SPA UI и mobile-first presentation.
 
 ## [0.5.0-alpha.1] — 2026-09-15
 
-Stage 5: Product Identity & Engagement. Первый alpha-checkpoint визуальной идентичности и повторных социальных активностей поверх `0.4.0-alpha.1`.
+Stage 5.1 — Product Identity & Activities.
 
-### Persona Appearance
-- allowlisted accent/background/avatar-frame presets;
-- короткая status line;
-- appearance отделён от Account/security/trust/permissions;
-- public appearance подчиняется существующим profile privacy/block rules;
-- профиль деградирует к базовому виду, если cosmetic projection временно недоступен.
-
-### Space Appearance
-- theme/cover presets, ambient icon и welcome line;
-- изменение оформления доступно только scoped owner/moderator;
-- оформление не меняет visibility, membership policy, permissions или discovery power;
-- privacy-aware batch projection до 100 Space UID без HTTP N+1;
-- недоступные private Spaces не раскрываются через appearance batch;
-- Space Discovery показывает атмосферу, но не использует cosmetics в сортировке.
-
-### Recurring Activities
-- versioned `/activities/v1` contract;
-- activity types и recurrence rules из allowlist;
-- `starts_at` требует explicit timezone;
-- API возвращает UTC timestamps с `Z`;
-- recurrence хранится одной canonical записью-шаблоном без бесконечной материализации строк;
-- `next_starts_at` вычисляется при чтении для daily/weekly/monthly;
-- RSVP `interested` / `going`;
-- active membership требуется для RSVP;
-- creator или scoped manager может редактировать/отменять activity;
-- bulk RSVP projection без N+1 на списке.
-
-### SPA / UI/UX
-- экран «Стиль образа»;
-- privacy-aware Persona appearance в обычном профиле;
-- экран «Жизнь пространства»;
-- appearance в Space Discovery;
-- ближайшее occurrence recurring activity;
-- RSVP и отмена activity;
-- routes/context navigation и mobile-first customization/activity surfaces.
-
-### Инварианты первого slice
-- cosmetics != trust/reputation/permissions;
-- Space appearance != discovery ranking power;
-- нет внутренней валюты, loot boxes, marketplace или pay-to-status;
-- recurring rule хранится как шаблон и не материализует бесконечную цепочку строк в БД.
-
-### Quality gate
-До version bump успешно прошли:
-- branch синхронизация с `main@0.4.0-alpha.1`;
-- additive migration graph с одной Alembic head;
-- backend dependency install, compile и FastAPI import;
-- realtime security regression guard;
-- backend contract tests;
-- SPA security regression guard и production build;
-- privacy/scoped-role/migration self-review;
-- public appearance/UI Kit polish.
-
-После version bump выполняется повторный exact-head CI уже на `0.5.0-alpha.1`; merge разрешён только после его успешного завершения.
+- Persona Appearance и privacy-aware public projection;
+- Space Appearance и batch projection без N+1;
+- cosmetics не влияют на trust/permissions/discovery ranking;
+- recurring Activities `none/daily/weekly/monthly`;
+- explicit timezone input, UTC API timestamps, `next_starts_at`;
+- RSVP `interested/going`;
+- экран «Стиль образа» и «Жизнь пространства».
 
 ## [0.4.0-alpha.1] — 2026-09-15
 
-Stage 4: Living Spaces & Social Core. Первый alpha-checkpoint продуктового социального ядра PubChat.
+Stage 4 — Living Spaces & Social Core.
 
-### Living Spaces
-- канонический `/spaces/v1` domain поверх legacy `rooms/messages` без destructive rewrite;
-- additive settings, memberships, tags и backfill существующих комнат;
-- public / unlisted / private visibility, private = invite-only;
-- open / request / invite membership flows;
-- canonical membership lifecycle и scoped owner/moderator/member roles;
-- pagination, заявки на вступление, approve/reject/remove;
-- realtime access зависит от canonical active membership;
-- Space Discovery, route-driven conversation и новый create flow;
-- Unicode-safe legacy tag backfill.
-
-### Social graph / privacy
-- `/social/v1` follow/unfollow;
-- friend request / accept / reject / remove;
-- account-level block/unblock;
-- privacy-aware people discovery;
-- direct profile access подчиняется тем же privacy/block правилам;
-- location показывается только по privacy consent;
-- account-bound Space invitations с TTL и повторной проверкой block/ban/capacity;
-- SPA-разделы «Люди» и «Приглашения».
-
-### Living community
-- Space Rules;
-- scheduled Events с UTC-normalization;
-- append-only Space History;
-- Центр пространства `/spaces/:uid/community`;
-- правила/события сохраняются при удалении аккаунта автора;
-- manager-only вход из Центра в moderation queue.
-
-### Transparent moderation
-- `/moderation/v1` reports / actions / appeals;
-- private reports для команды пространства;
-- scoped warning и restrict без тюремной терминологии;
-- restrict синхронизирован с точным legacy `RoomBan` и cross-worker disconnect;
-- Safety Center пользователя;
-- manager moderation queue;
-- one appeal per action на уровне БД;
-- one moderation action per report на уровне БД;
-- original decision maker не может рассматривать собственную апелляцию;
-- overturn отзывает именно связанное ограничение;
-- повторный restrict отзывает предыдущее активное решение и закрывает его pending appeal;
-- закрытые/уже обработанные жалобы нельзя повторно использовать для нового action;
-- private report metadata проверяется только после scoped manager authorization.
-
-### SPA / UI/UX
-- Space Discovery вместо legacy списка комнат;
-- People/relationship flows;
-- canonical member/presence separation;
-- mobile-first навигация;
-- rules/events/history surfaces;
-- Safety Center и manager moderation UI;
-- terminology приведена к концепции PubChat: Space, участие, ограничение доступа, апелляция;
-- legacy UTC timestamps нормализуются на SPA Space boundary.
-
-### Quality gate
-Перед version bump успешно прошли:
-- backend dependency install, compile и FastAPI import;
-- realtime security regression guard;
-- ровно одна Alembic migration head;
-- все backend contract tests;
-- SPA security regression guard;
-- production Vite build;
-- final privacy/permission/migration self-review.
-
-После version bump выполнен повторный exact-head CI; PR #4 слит только после его успешного завершения.
-
-### Известный технический долг
-- race вокруг member capacity при конкурентных join/approve будет отдельно harden перед beta;
-- нужен platform-level fallback для апелляций, если в Space нет второго независимого manager;
-- legacy `users/rooms/room_members/room_bans` остаются compatibility backbone для части домена;
-- до beta нужны реальные PostgreSQL + Redis integration tests, migration rehearsal, observability и load testing.
+- `/spaces/v1`, canonical membership lifecycle и scoped roles;
+- public/unlisted/private Spaces, open/request/invite flows;
+- social graph: follow/friend/block;
+- privacy-aware People discovery;
+- account-bound Space invitations;
+- Rules, Events, append-only History;
+- Safety Center;
+- reports/actions/appeals и manager moderation queue;
+- scoped restrict синхронизирован с compatibility `RoomBan`;
+- Space/People/Safety mobile-first SPA surfaces.
 
 ## [0.3.0-alpha.1] — 2026-09-15
 
-Первая формально зафиксированная версия проекта после ревизии Stage 1–3.
+Stage 3 — Realtime v2.
 
-### Realtime v2
-- одноразовые scoped WebSocket tickets вместо JWT в URL;
-- Redis pub/sub, distributed presence, heartbeat и cross-worker delivery;
-- reconnect/resume, rate limiting и server-side idempotency;
-- bounded socket send latency и cleanup stale connections.
-
-### Privacy / security
-- browser access token хранится только в памяти SPA;
-- HttpOnly refresh session сохранена как долговременная сессия;
-- серверное применение DM policy и block rules;
-- CI guards против credentials в WebSocket URL и persistent access-token storage.
-
-### Client
-- connection state machine и автоматический reconnect;
-- offline/reconnect UX без full-page failure;
-- mobile-first application shell и обновлённый Space/DM transport.
-
-### Quality gate
-- backend compile/import;
-- единственная Alembic head;
-- Identity + Realtime contract tests;
-- frontend production build;
-- security regression guards.
+- one-time scoped WebSocket tickets вместо JWT в URL;
+- Redis pub/sub, distributed presence и multi-worker delivery;
+- heartbeat, reconnect/resume, rate limiting и server-side idempotency;
+- slow-consumer timeout/backpressure;
+- browser access JWT хранится только в памяти SPA;
+- DM privacy/block policy применяется server-side.
 
 ## [0.2.0-alpha.1] — 2026-09-15
 
-Stage 2: Identity v2 и SPA application shell.
+Stage 2 — Identity v2 & SPA shell.
 
 - `Account != Persona`;
-- Credential, IdentitySession, PrivacySettings, relationships и platform RBAC;
-- additive migration/backfill legacy users;
+- Credential, IdentitySession, PrivacySettings, relationships, platform RBAC;
+- additive legacy-user backfill;
 - hashed refresh-token sessions;
-- `/identity/v2` register/login/refresh/logout/me/profile/privacy API;
-- Persona-first registration и privacy-aware profiles;
-- app shell, light/dark design tokens и mobile navigation;
-- Identity contract tests и production frontend build.
+- `/identity/v2` API;
+- Persona-first onboarding/profile;
+- mobile-first SPA shell и design tokens.
 
 ## [0.1.0-alpha.1] — 2026-09-15
 
-Stage 1: revival foundation и security baseline.
+Stage 1 — Foundation & Security.
 
-- product/revival architecture зафиксирована;
-- backend admin RBAC закрыт server-side;
-- profile IDOR и mass-assignment устранены;
-- sensitive user projections закрыты от анонимного доступа;
-- JWT secrets и token logging исправлены;
-- database health-check исправлен;
-- добавлен GitHub Actions CI.
+- новая концепция PubChat и revival roadmap;
+- server-side admin authorization;
+- profile IDOR/mass-assignment fixes;
+- sensitive legacy projection hardening;
+- production-capable default secrets удалены;
+- token logging удалён;
+- DB health-check исправлен;
+- GitHub Actions CI введён.
 
 ## [0.0.0-alpha.0] — legacy baseline
 
-Исходное состояние старого проекта до revival. Это историческая точка отсчёта, а не рекомендуемый к запуску релиз.
+Исходное состояние старого проекта до revival. Историческая точка отсчёта, не рекомендуемый релиз.
+
+Подробные доменные изменения и активный план находятся в `docs/README.md`, `docs/roadmap.md` и профильных документах `docs/*`.
