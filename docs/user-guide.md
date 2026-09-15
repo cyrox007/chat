@@ -1,6 +1,6 @@
 # PubChat — руководство пользователя
 
-Документ описывает пользовательские функции выпущенного checkpoint PubChat `0.5.2-alpha.1` и явно помечает функции активной development-линии.
+Документ описывает пользовательские функции выпущенного checkpoint PubChat `0.5.3-alpha.1`.
 
 ## 1. Account и Persona
 
@@ -66,7 +66,7 @@ WebSocket использует одноразовый короткоживущи
 
 Раздел «Люди» использует privacy-aware discovery. Доступны follow/unfollow, friend request, accept/reject/remove friendship и block/unblock.
 
-Block действует на Account-level в обе стороны и влияет на discovery, профиль, DM и Conversation Round responses.
+Block действует на Account-level в обе стороны и влияет на discovery, профиль, DM, Conversation Round responses и gifts.
 
 ## 7. Приглашения в Spaces
 
@@ -158,9 +158,9 @@ Owner/moderator имеет отдельную scoped queue. Решения: warn
 
 Activity сейчас хранит canonical UTC instant. Для recurring schedule пока не сохраняется IANA timezone name, поэтому при переходе летнего/зимнего времени локальное wall-clock время weekly/monthly серии может сдвинуться на час. Reminder следует фактическому UTC schedule. Это известное alpha-ограничение и будет исправлено до beta на backend, а не client-side костылём.
 
-## 16. Поддержка Persona и Spaces — In development (`0.5.3-alpha.x`)
+## 16. Поддержка Persona и Spaces
 
-Stage 5.4 добавляет бесплатные внутренние gifts как спокойный способ сказать «спасибо». Это не магазин и не платёжная система.
+В `0.5.3-alpha.1` появились бесплатные внутренние gifts как спокойный способ сказать «спасибо». Это не магазин и не платёжная система.
 
 ### Persona support
 
@@ -188,11 +188,10 @@ Stage 5.4 добавляет бесплатные внутренние gifts к�
 - Persona нельзя подарить gift самому себе;
 - Account-level block применяется и к support;
 - максимум 20 внутренних gifts с Account за rolling 24 часа;
+- параллельные sends одного Account сериализуются server-side для соблюдения лимита;
 - публичный shelf не показывает sender/message;
 - append-only ledger сохраняет historical snapshot даже после удаления исходной Persona/Space;
 - реальных checkout/payment/wallet/balance/refund/payout функций в `0.5.3` нет.
-
-До merge PR #9 функция не считается выпущенной.
 
 ## 17. Что PubChat сознательно не делает
 
