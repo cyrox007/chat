@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
+from components.engagement.batch import SpaceAppearanceBatchRequest, get_space_appearance_batch
 from components.engagement.queries import get_my_persona_appearance
 from components.engagement.schemas import (
     ActivityCreateRequest,
@@ -57,6 +58,19 @@ def install(app: FastAPI) -> None:
     ):
         item = await update_my_persona_appearance(db, current_user["user_uid"], payload)
         return {"status": "ok", "appearance": item}
+
+    @appearance.post("/spaces/batch")
+    async def batch_space_appearance(
+        payload: SpaceAppearanceBatchRequest,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        items = await get_space_appearance_batch(
+            db,
+            current_user["user_uid"],
+            payload.space_uids,
+        )
+        return {"status": "ok", "appearances": items}
 
     @appearance.get("/spaces/{space_uid}")
     async def space_appearance(
