@@ -30,6 +30,18 @@ jobs:
         run: python -m compileall -q .
       - name: Import FastAPI application
         run: python -c "from app import app; assert app.title == 'PubChat API'"
+      - name: Realtime security regression guard
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          offenders = []
+          for path in Path('.').rglob('*.py'):
+              text = path.read_text(encoding='utf-8')
+              if '{token}' in text and 'websocket' in text.lower():
+                  offenders.append(str(path))
+          if offenders:
+              raise SystemExit(f'Credential-like WebSocket URL found: {offenders}')
+          PY
       - name: Check Alembic migration head
         run: |
           test "$(alembic heads | wc -l)" -eq 1
@@ -51,5 +63,19 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: npm ci
+      - name: SPA security regression guard
+        run: |
+          if grep -R "setItem('access_token'" -n src; then
+            echo "Persistent access token write detected"
+            exit 1
+          fi
+          if grep -R 'setItem("access_token"' -n src; then
+            echo "Persistent access token write detected"
+            exit 1
+          fi
+          if grep -R '/ws/.*token' -n src; then
+            echo "Credential-like WebSocket URL detected"
+            exit 1
+          fi
       - name: Build frontend
         run: npm run build
