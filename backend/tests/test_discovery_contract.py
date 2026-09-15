@@ -15,21 +15,20 @@ class DiscoveryContractTests(unittest.TestCase):
         }
         self.assertIn(("/discovery/v1/spaces", "GET"), route_methods)
 
-    def test_algorithm_does_not_import_paid_or_legacy_rank_signals(self):
-        source = inspect.getsource(service)
-        forbidden = (
+    def test_algorithm_does_not_import_paid_or_legacy_rank_models(self):
+        imported_names = set(service.__dict__)
+        forbidden_models = {
             "GiftDefinition",
             "SupportLedgerEntry",
             "CosmeticEntitlement",
-            "Room.rating",
-            ".rating",
-            "wallet",
-            "currency",
-            "payment",
-            "price",
-        )
-        for token in forbidden:
-            self.assertNotIn(token, source)
+            "CreatorSupportProfile",
+            "Room",
+        }
+        self.assertTrue(forbidden_models.isdisjoint(imported_names))
+
+        score_source = inspect.getsource(service._score_space).casefold()
+        for token in ("gift_code", "wallet", "currency", "payment", "price"):
+            self.assertNotIn(token, score_source)
 
     def test_score_is_internal_and_projection_is_explainable(self):
         now = datetime(2026, 9, 15, 12, 0, 0)
@@ -44,7 +43,7 @@ class DiscoveryContractTests(unittest.TestCase):
         }
         score, reasons = service._score_space(
             space,
-            recent_messages=8,
+            recent_contributors=4,
             upcoming={"starts_at": now + timedelta(hours=4)},
             viewer_purposes={"conversation"},
             viewer_tags={"кино"},
@@ -70,7 +69,7 @@ class DiscoveryContractTests(unittest.TestCase):
         }
         _, reasons = service._score_space(
             space,
-            recent_messages=0,
+            recent_contributors=0,
             upcoming=None,
             viewer_purposes=set(),
             viewer_tags=set(),
@@ -78,6 +77,18 @@ class DiscoveryContractTests(unittest.TestCase):
             now=now,
         )
         self.assertNotIn("intent_match", {item["code"] for item in reasons})
+
+    def test_recent_activity_uses_distinct_authors_not_message_volume(self):
+        source = inspect.getsource(service._recent_contributor_counts)
+        self.assertIn("func.distinct(Message.author_uid)", source)
+        self.assertNotIn("func.count(Message.uid)", source)
+
+    def test_private_pending_context_is_not_used_for_live_signals(self):
+        source = inspect.getsource(service.discover_spaces)
+        self.assertIn('space.get("visibility") == "public"', source)
+        self.assertIn('membership.get("status") == "active"', source)
+        self.assertIn("recent_contributors = recent_by_room.get(room_uid, 0) if can_see_live_context else 0", source)
+        self.assertIn("upcoming = upcoming_by_room.get(room_uid) if can_see_live_context else None", source)
 
     def test_diversity_breaks_three_similar_results_when_close(self):
         ranked = [
