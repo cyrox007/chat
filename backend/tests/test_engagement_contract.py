@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone
 
 from pydantic import ValidationError
 
@@ -8,9 +9,11 @@ from components.engagement.model import ActivityRSVP, PersonaAppearance, SpaceAc
 from components.engagement.schemas import (
     ActivityCreateRequest,
     ActivityRSVPRequest,
+    ActivityUpdateRequest,
     PersonaAppearanceUpdateRequest,
     SpaceAppearanceUpdateRequest,
 )
+from components.engagement.service import _next_occurrence
 
 
 class EngagementContractTests(unittest.TestCase):
@@ -61,7 +64,7 @@ class EngagementContractTests(unittest.TestCase):
                 space_uids=[f"00000000-0000-0000-0000-{index:012d}" for index in range(101)]
             )
 
-    def test_activity_types_and_rsvp_are_allowlisted(self):
+    def test_activity_types_rsvp_and_timezone_are_allowlisted(self):
         payload = ActivityCreateRequest(
             title="Вечер викторины",
             activity_type="quiz",
@@ -73,6 +76,25 @@ class EngagementContractTests(unittest.TestCase):
         self.assertEqual(ActivityRSVPRequest(status="going").status, "going")
         with self.assertRaises(ValidationError):
             ActivityRSVPRequest(status="paid_priority")
+        with self.assertRaises(ValidationError):
+            ActivityCreateRequest(title="Без зоны", starts_at="2026-09-20T18:00:00")
+        with self.assertRaises(ValidationError):
+            ActivityUpdateRequest(starts_at="2026-09-20T18:00:00")
+
+    def test_recurring_activity_projects_next_occurrence_without_rows(self):
+        now = datetime(2026, 9, 15, 17, 0, tzinfo=timezone.utc)
+        weekly = _next_occurrence(
+            datetime(2026, 9, 1, 18, 0, tzinfo=timezone.utc),
+            "weekly",
+            now,
+        )
+        monthly = _next_occurrence(
+            datetime(2026, 1, 31, 18, 0, tzinfo=timezone.utc),
+            "monthly",
+            datetime(2026, 2, 15, 12, 0, tzinfo=timezone.utc),
+        )
+        self.assertEqual(weekly, datetime(2026, 9, 15, 18, 0))
+        self.assertEqual(monthly, datetime(2026, 2, 28, 18, 0))
 
     def test_appearance_and_activity_fk_boundaries(self):
         persona_targets = {fk.target_fullname for fk in PersonaAppearance.__table__.c.persona_uid.foreign_keys}
