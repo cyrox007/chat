@@ -6,7 +6,7 @@
 				{{ showPicker ? 'Закрыть' : 'Поддержать' }}
 			</button>
 		</header>
-		<p v-if="supportNote" class="support-note">{{ supportNote }}</p>
+		<p class="support-note">{{ supportNote }}</p>
 		<div v-if="items.length" class="gift-shelf" aria-label="Полученные знаки поддержки">
 			<span v-for="item in items" :key="item.gift.code" class="gift-chip" :title="item.gift.description || item.gift.name">
 				<span aria-hidden="true">{{ item.gift.icon }}</span><strong>{{ item.gift.name }}</strong><small>× {{ item.count }}</small>
@@ -35,11 +35,13 @@ import { computed, onMounted, ref, watch } from 'vue';
 import SupportService from '@/API/SupportService';
 
 const props = defineProps({
+	accountUid: { type: String, default: '' },
 	personaUid: { type: String, default: '' },
 	isSelf: { type: Boolean, default: false },
 });
 
 const loading = ref(true);
+const resolvedPersonaUid = ref(props.personaUid || '');
 const settings = ref({ enabled: false, note: null });
 const items = ref([]);
 const catalog = ref([]);
@@ -50,14 +52,17 @@ const sending = ref(false);
 const notice = ref(null);
 
 const visible = computed(() => props.isSelf || settings.value.enabled || items.value.length > 0);
-const canGift = computed(() => Boolean(props.personaUid && !props.isSelf && settings.value.enabled));
+const canGift = computed(() => Boolean(resolvedPersonaUid.value && !props.isSelf && settings.value.enabled));
 const supportNote = computed(() => settings.value.note || 'Gifts — спокойный способ сказать спасибо без покупки статуса.');
 
 const load = async () => {
-	if (!props.personaUid) return;
+	if (!props.personaUid && !props.accountUid) return;
 	loading.value = true;
 	try {
-		const response = await SupportService.personaShelf(props.personaUid);
+		const response = props.personaUid
+			? await SupportService.personaShelf(props.personaUid)
+			: await SupportService.accountShelf(props.accountUid);
+		resolvedPersonaUid.value = props.personaUid || response.data.persona_uid || '';
 		settings.value = response.data.settings || { enabled: false, note: null };
 		items.value = response.data.items || [];
 		if (canGift.value) {
@@ -72,10 +77,10 @@ const load = async () => {
 };
 
 const sendGift = async () => {
-	if (!selectedGift.value) return;
+	if (!selectedGift.value || !resolvedPersonaUid.value) return;
 	sending.value = true; notice.value = null;
 	try {
-		await SupportService.giftPersona(props.personaUid, { gift_code: selectedGift.value, message: message.value || null });
+		await SupportService.giftPersona(resolvedPersonaUid.value, { gift_code: selectedGift.value, message: message.value || null });
 		message.value = ''; showPicker.value = false;
 		notice.value = { type: 'success', message: 'Знак поддержки отправлен.' };
 		await load();
@@ -86,7 +91,7 @@ const sendGift = async () => {
 };
 
 onMounted(load);
-watch(() => props.personaUid, load);
+watch(() => [props.accountUid, props.personaUid], load);
 </script>
 
 <style scoped>
