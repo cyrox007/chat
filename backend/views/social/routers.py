@@ -1,9 +1,12 @@
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
+from components.identity.schemas import SocialIntent
+from components.social.discovery import discover_people
 from components.social.schemas import FriendActionRequest, RequestDirection
 from components.social.service import (
     apply_friend_action,
@@ -20,6 +23,29 @@ from database import Database
 
 def install(app: FastAPI) -> None:
     router = APIRouter(prefix="/social/v1", tags=["social-v1"])
+
+    @router.get("/discover")
+    async def discover(
+        q: Optional[str] = Query(default=None, max_length=80),
+        social_intent: Optional[SocialIntent] = None,
+        limit: int = Query(default=30, ge=1, le=50),
+        offset: int = Query(default=0, ge=0),
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        people, total = await discover_people(
+            db,
+            viewer_uid=current_user["user_uid"],
+            query=q,
+            social_intent=social_intent,
+            limit=limit,
+            offset=offset,
+        )
+        return {
+            "status": "ok",
+            "people": people,
+            "pagination": {"limit": limit, "offset": offset, "count": len(people), "total": total},
+        }
 
     @router.get("/relationships/{account_uid}")
     async def relationship(
