@@ -1,11 +1,22 @@
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from components.realtime import realtime_service
 from middlewares import csrf_middleware, error_handling_middleware
 from settings import config
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await realtime_service.start()
+    try:
+        yield
+    finally:
+        await realtime_service.stop()
 
 
 def create_app() -> FastAPI:
@@ -14,12 +25,13 @@ def create_app() -> FastAPI:
     from views.identity import routers as identity_routes
     from views.messenger import routers as http_routers_messenger
     from views.messenger import ws_routers as ws_routers_messenger
+    from views.realtime import routers as realtime_routes
     from views.rooms import routers as http_routes_chat
     from views.rooms import ws_routers as ws_routes_chat
     from views.service import routers as service_routes
     from views.users import routers as user_routes
 
-    app = FastAPI(title="PubChat API")
+    app = FastAPI(title="PubChat API", lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
@@ -40,6 +52,7 @@ def create_app() -> FastAPI:
     csrf_routes.install(app)
     service_routes.install(app)
     identity_routes.install(app)
+    realtime_routes.install(app)
     user_routes.install(app)
     http_routes_chat.install(app)
     ws_routes_chat.install(app)
