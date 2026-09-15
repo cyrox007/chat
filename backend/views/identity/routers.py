@@ -11,6 +11,7 @@ from components.identity.schemas import (
 from components.identity.service import (
     authenticate_account,
     build_identity_projection,
+    build_public_profile,
     get_account_by_uid,
     register_account,
     revoke_session,
@@ -30,7 +31,7 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
         key=COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=not config.DEBUG,
+        secure=config.SERVER_HTTP_PROTOCOL.lower().startswith("https"),
         samesite="lax",
         max_age=config.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
         path="/",
@@ -107,6 +108,16 @@ def install(app: FastAPI):
     ):
         account = await get_account_by_uid(db, current_user["user_uid"])
         return {"status": "ok", **(await build_identity_projection(db, account))}
+
+    @router.get("/profiles/{account_uid}")
+    async def public_profile(
+        account_uid: str,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        account = await get_account_by_uid(db, account_uid)
+        profile = await build_public_profile(db, account, current_user["user_uid"])
+        return {"status": "ok", "profile": profile}
 
     @router.patch("/persona")
     async def patch_persona(
