@@ -22,7 +22,9 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     from views.admin import routers as admin_routers
+    from views.achievements import routers as achievement_routes
     from views.csrf import routers as csrf_routes
+    from views.engagement import round_routers as engagement_round_routes
     from views.engagement import routers as engagement_routes
     from views.identity import routers as identity_routes
     from views.messenger import routers as http_routers_messenger
@@ -57,12 +59,14 @@ def create_app() -> FastAPI:
     csrf_routes.install(app)
     service_routes.install(app)
     identity_routes.install(app)
+    achievement_routes.install(app)
     realtime_routes.install(app)
     user_routes.install(app)
     social_routes.install(app)
     spaces_routes.install(app)
     moderation_routes.install(app)
     engagement_routes.install(app)
+    engagement_round_routes.install(app)
     http_routes_chat.install(app)
     ws_routes_chat.install(app)
     http_routers_messenger.install(app)
