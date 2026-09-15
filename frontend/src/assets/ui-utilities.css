@@ -23,3 +23,19 @@
 .ui-button--secondary[aria-disabled='true']:hover {
     background: var(--ui-surface);
 }
+
+/* MessageComposer is shared by Spaces and DM. When realtime is unavailable,
+   disable every interactive affordance rather than only the text field. */
+.chat-window-inputs.disabled {
+    opacity: 0.7;
+}
+
+.chat-window-inputs.disabled button,
+.chat-window-inputs.disabled [role='button'] {
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.chat-window-inputs.disabled .emoji-picker {
+    display: none;
+}
