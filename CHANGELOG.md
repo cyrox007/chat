@@ -4,33 +4,43 @@
 
 ## [Unreleased] — 0.5.0-alpha.0
 
-Stage 5: Product Identity & Engagement. Первый slice строится поверх выпущенного `0.4.0-alpha.1` и пока не является релизом.
+Stage 5: Product Identity & Engagement. Первый slice построен поверх выпущенного `0.4.0-alpha.1` и проходит финальный release gate.
 
 ### Persona Appearance
 - allowlisted accent/background/avatar-frame presets;
 - короткая status line;
 - appearance отделён от Account/security/trust/permissions;
-- public appearance подчиняется существующим profile privacy/block rules.
+- public appearance подчиняется существующим profile privacy/block rules;
+- профиль деградирует к базовому виду, если cosmetic projection временно недоступен.
 
 ### Space Appearance
 - theme/cover presets, ambient icon и welcome line;
 - изменение оформления доступно только scoped owner/moderator;
-- оформление не меняет visibility, membership policy, permissions или discovery power.
+- оформление не меняет visibility, membership policy, permissions или discovery power;
+- privacy-aware batch projection до 100 Space UID без HTTP N+1;
+- недоступные private Spaces не раскрываются через appearance batch;
+- Space Discovery показывает атмосферу, но не использует cosmetics в сортировке.
 
 ### Recurring Activities
 - versioned `/activities/v1` contract;
 - activity types и recurrence rules из allowlist;
+- `starts_at` требует explicit timezone;
+- API возвращает UTC timestamps с `Z`;
+- recurrence хранится одной canonical записью-шаблоном без бесконечной материализации строк;
+- `next_starts_at` вычисляется при чтении для daily/weekly/monthly;
 - RSVP `interested` / `going`;
 - active membership требуется для RSVP;
-- creator или scoped manager может редактировать activity;
-- bulk RSVP projection без N+1 на списке;
-- engagement timestamps возвращаются как explicit UTC (`Z`).
+- creator или scoped manager может редактировать/отменять activity;
+- bulk RSVP projection без N+1 на списке.
 
 ### SPA / UI/UX
 - экран «Стиль образа»;
+- privacy-aware Persona appearance в обычном профиле;
 - экран «Жизнь пространства»;
-- routes и context navigation;
-- mobile-first customization/activity surfaces.
+- appearance в Space Discovery;
+- ближайшее occurrence recurring activity;
+- RSVP и отмена activity;
+- routes/context navigation и mobile-first customization/activity surfaces.
 
 ### Инварианты первого slice
 - cosmetics != trust/reputation/permissions;
@@ -39,14 +49,15 @@ Stage 5: Product Identity & Engagement. Первый slice строится по
 - recurring rule хранится как шаблон и не материализует бесконечную цепочку строк в БД.
 
 ### Release gate
-Перед выпуском `0.5.0-alpha.x` обязательны:
-- синхронизация с `main@0.4.0-alpha.1`;
+Перед фиксацией `0.5.0-alpha.1` обязательны:
+- branch синхронизирован с `main@0.4.0-alpha.1`;
 - additive migration graph с одной Alembic head;
 - backend compile/import/contracts;
 - frontend production build;
-- privacy/scoped-role self-review;
+- privacy/scoped-role/migration self-review;
 - public appearance/UI Kit polish;
-- canonical version bump и повторный exact-head CI.
+- canonical `VERSION` bump только после зелёного functional exact-head CI;
+- повторный exact-head CI уже на `0.5.0-alpha.1` перед merge.
 
 ## [0.4.0-alpha.1] — 2026-09-15
 
