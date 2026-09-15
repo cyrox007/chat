@@ -1,0 +1,25 @@
+.ui-button--primary {
+    background: var(--ui-primary);
+    color: var(--ui-primary-contrast);
+}
+
+.ui-button--block {
+    width: 100%;
+}
+
+.ui-button:disabled,
+.ui-button[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.ui-button:disabled:hover,
+.ui-button[aria-disabled='true']:hover {
+    background: var(--ui-primary);
+}
+
+.ui-button--secondary:disabled:hover,
+.ui-button--secondary[aria-disabled='true']:hover {
+    background: var(--ui-surface);
+}
