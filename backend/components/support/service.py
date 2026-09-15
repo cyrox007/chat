@@ -5,8 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from components.identity.model import Persona
-from components.room.model import Room
+from components.identity.model import Account, Persona
 from components.social.privacy import can_view_profile
 from components.space.membership_service import _load_room, _manager_context, _require_active_member
 from components.space.service import _get_account, get_space
@@ -62,6 +61,14 @@ async def _gift_definition(
 
 
 async def _enforce_sender_limit(db: AsyncSession, sender_account_uid: UUID) -> None:
+    # Serialize support sends per Account so concurrent requests cannot all
+    # observe the same pre-limit count and bypass the anti-spam boundary.
+    await db.execute(
+        select(Account.uid)
+        .where(Account.uid == sender_account_uid)
+        .with_for_update()
+    )
+
     since = datetime.utcnow() - timedelta(days=1)
     result = await db.execute(
         select(func.count(SupportLedgerEntry.uid)).where(
@@ -178,7 +185,7 @@ async def _public_shelf(
     result = await db.execute(
         select(GiftDefinition, func.count(CosmeticEntitlement.uid))
         .join(CosmeticEntitlement, CosmeticEntitlement.gift_code == GiftDefinition.code)
-        .where(*filters, GiftDefinition.active.is_(True))
+        .where(*filters)
         .group_by(
             GiftDefinition.code,
             GiftDefinition.name,
@@ -207,10 +214,22 @@ async def persona_support_shelf(
     if not await can_view_profile(db, viewer_uid, persona.account_uid):
         raise HTTPException(status_code=404, detail={"error_type": "persona_not_found"})
     profile = await db.get(CreatorSupportProfile, persona.account_uid)
+    enabled = bool(profile and profile.enabled)
     return {
-        "settings": _settings_projection(profile.enabled, profile.note) if profile else _settings_projection(False, None),
+        "settings": _settings_projection(enabled, profile.note if enabled else None),
         "items": await _public_shelf(db, persona_uid=persona.uid),
     }
+
+
+async def account_support_shelf(
+    db: AsyncSession,
+    account_uid: UUID,
+    viewer_uid: UUID | str,
+) -> dict:
+    persona = await _primary_persona(db, account_uid)
+    if not persona:
+        raise HTTPException(status_code=404, detail={"error_type": "persona_not_found"})
+    return await persona_support_shelf(db, persona.uid, viewer_uid)
 
 
 async def space_support_shelf(
@@ -220,8 +239,9 @@ async def space_support_shelf(
 ) -> dict:
     await get_space(db, space_uid, viewer_uid)
     settings = await db.get(SpaceSupportSettings, space_uid)
+    enabled = bool(settings and settings.enabled)
     return {
-        "settings": _settings_projection(settings.enabled, settings.note) if settings else _settings_projection(False, None),
+        "settings": _settings_projection(enabled, settings.note if enabled else None),
         "items": await _public_shelf(db, room_uid=space_uid),
     }
 
