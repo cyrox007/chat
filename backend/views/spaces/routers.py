@@ -5,6 +5,13 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
+from components.space.invitation_schemas import SpaceInvitationActionRequest
+from components.space.invitation_service import (
+    create_invitation,
+    list_invitations,
+    respond_to_invitation,
+    revoke_invitation,
+)
 from components.space.membership_schemas import (
     SpaceMembershipActionRequest,
     SpaceMembershipRoleFilter,
@@ -67,6 +74,42 @@ def install(app: FastAPI) -> None:
     ):
         space = await create_space(db, current_user["user_uid"], payload)
         return {"status": "ok", "space": space}
+
+    # Keep collection-level invitation routes above /{space_uid}; otherwise the
+    # dynamic UUID route would consume the literal "invitations" segment.
+    @router.get("/invitations")
+    async def invitations(
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        items, total = await list_invitations(
+            db,
+            viewer_uid=current_user["user_uid"],
+            limit=limit,
+            offset=offset,
+        )
+        return {
+            "status": "ok",
+            "invitations": items,
+            "pagination": {"limit": limit, "offset": offset, "count": len(items), "total": total},
+        }
+
+    @router.patch("/invitations/{invitation_uid}")
+    async def invitation_action(
+        invitation_uid: UUID,
+        payload: SpaceInvitationActionRequest,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        invitation = await respond_to_invitation(
+            db,
+            invitation_uid=invitation_uid,
+            viewer_uid=current_user["user_uid"],
+            action=payload.action,
+        )
+        return {"status": "ok", "invitation": invitation}
 
     @router.get("/{space_uid}")
     async def detail(
@@ -189,5 +232,35 @@ def install(app: FastAPI) -> None:
             action=payload.action,
         )
         return {"status": "ok", "membership": membership}
+
+    @router.post("/{space_uid}/invitations/{account_uid}", status_code=status.HTTP_201_CREATED)
+    async def invite(
+        space_uid: UUID,
+        account_uid: UUID,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        invitation = await create_invitation(
+            db,
+            space_uid=space_uid,
+            invitee_uid=account_uid,
+            viewer_uid=current_user["user_uid"],
+        )
+        return {"status": "ok", "invitation": invitation}
+
+    @router.delete("/{space_uid}/invitations/{account_uid}")
+    async def revoke_invite(
+        space_uid: UUID,
+        account_uid: UUID,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        await revoke_invitation(
+            db,
+            space_uid=space_uid,
+            invitee_uid=account_uid,
+            viewer_uid=current_user["user_uid"],
+        )
+        return {"status": "ok"}
 
     app.include_router(router)
