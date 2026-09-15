@@ -1,5 +1,21 @@
 import UsersService from '@/API/UsersService';
-import CSRFService from '@/API/CSRFService';
+import RealtimeService from '@/API/RealtimeService';
+
+let roomReconnectTimer = null;
+let roomHeartbeatTimer = null;
+let roomConnectionGeneration = 0;
+
+const clearReconnectTimer = () => {
+	if (roomReconnectTimer) clearTimeout(roomReconnectTimer);
+	roomReconnectTimer = null;
+};
+
+const clearHeartbeatTimer = () => {
+	if (roomHeartbeatTimer) clearInterval(roomHeartbeatTimer);
+	roomHeartbeatTimer = null;
+};
+
+const messageKey = (message) => message?.uid || message?.frontId || message?.tempId || null;
 
 export default {
 	namespaced: true,
@@ -8,6 +24,10 @@ export default {
 		connectedUsers: [],
 		socket: null,
 		isConnected: false,
+		connectionState: 'idle',
+		reconnectAttempt: 0,
+		intendedRoomId: null,
+		realtimeNotice: null,
 		messages: [],
 		notifications: [],
 		unreadReplies: [],
@@ -17,20 +37,20 @@ export default {
 		getCurrentRoom: (state) => state.currentRoom,
 		getConnectedUsers: (state) => state.connectedUsers,
 		isConnected: (state) => state.isConnected,
+		getConnectionState: (state) => state.connectionState,
+		getRealtimeNotice: (state) => state.realtimeNotice,
 		getMessages: (state) => state.messages,
 		unreadReplies: (state) => state.unreadReplies,
 		hasUnreadReplies: (state) => state.unreadReplies.length > 0,
-		isUserMuted: (state) => !!state.muteStatus && state.muteStatus.status === 'muted',
+		isUserMuted: (state) => Boolean(state.muteStatus && state.muteStatus.status === 'muted'),
 		getMuteDetails: (state) => state.muteStatus?.details || null,
-		isCurrentUserOwner: (state) => {
-			return state.currentRoom?.owner_uid === state.currentUser?.uid;
+		isCurrentUserOwner: (state, getters, rootState, rootGetters) => {
+			return state.currentRoom?.owner_uid === rootGetters.getUser?.uid;
 		},
-		isCurrentUserModerator: (state) => {
-			return state.currentRoom?.moderators?.includes(state.currentUser?.uid) || false;
+		isCurrentUserModerator: (state, getters, rootState, rootGetters) => {
+			return state.currentRoom?.moderators?.includes(rootGetters.getUser?.uid) || false;
 		},
-		canManageUsers: (state, getters) => {
-			return getters.isCurrentUserOwner || getters.isCurrentUserModerator;
-		}
+		canManageUsers: (state, getters) => getters.isCurrentUserOwner || getters.isCurrentUserModerator,
 	},
 	mutations: {
 		setCurrentRoom(state, room) {
@@ -48,14 +68,49 @@ export default {
 		setConnectionStatus(state, status) {
 			state.isConnected = status;
 		},
+		setConnectionState(state, status) {
+			state.connectionState = status;
+		},
+		setReconnectAttempt(state, attempt) {
+			state.reconnectAttempt = attempt;
+		},
+		setIntendedRoomId(state, roomId) {
+			state.intendedRoomId = roomId;
+		},
+		setRealtimeNotice(state, notice) {
+			state.realtimeNotice = notice;
+		},
 		addMessage(state, message) {
+			const key = messageKey(message);
+			if (key) {
+				const index = state.messages.findIndex((item) => messageKey(item) === key);
+				if (index >= 0) {
+					state.messages[index] = { ...state.messages[index], ...message };
+					return;
+				}
+			}
 			state.messages.push(message);
+		},
+		mergeMessages(state, messages) {
+			messages.forEach((message) => {
+				const key = messageKey(message);
+				const index = key ? state.messages.findIndex((item) => messageKey(item) === key) : -1;
+				if (index >= 0) state.messages[index] = { ...state.messages[index], ...message };
+				else state.messages.push(message);
+			});
+			state.messages.sort((a, b) => {
+				const left = new Date(a.created_at || a.timestamp || 0).getTime();
+				const right = new Date(b.created_at || b.timestamp || 0).getTime();
+				return left - right;
+			});
 		},
 		clearMessages(state) {
 			state.messages = [];
 		},
 		ADD_UNREAD_REPLY(state, reply) {
-			state.unreadReplies.push(reply);
+			if (!state.unreadReplies.some((item) => messageKey(item) === messageKey(reply))) {
+				state.unreadReplies.push(reply);
+			}
 		},
 		CLEAR_UNREAD_REPLIES(state) {
 			state.unreadReplies = [];
@@ -67,238 +122,240 @@ export default {
 			state.muteStatus = null;
 		},
 		addModerator(state, userUid) {
-			if (state.currentRoom && !state.currentRoom.moderators.includes(userUid)) {
-				if (!state.currentRoom.moderators) {
-					state.currentRoom.moderators = [];
-				}
-				state.currentRoom.moderators.push(userUid);
-			}
+			if (!state.currentRoom) return;
+			if (!Array.isArray(state.currentRoom.moderators)) state.currentRoom.moderators = [];
+			if (!state.currentRoom.moderators.includes(userUid)) state.currentRoom.moderators.push(userUid);
 		},
-
 		removeModerator(state, userUid) {
-			if (state.currentRoom && state.currentRoom.moderators) {
-				state.currentRoom.moderators = state.currentRoom.moderators.filter(uid => uid !== userUid);
+			if (state.currentRoom?.moderators) {
+				state.currentRoom.moderators = state.currentRoom.moderators.filter((uid) => uid !== userUid);
 			}
 		},
-
 		removeUser(state, userUid) {
-			state.connectedUsers = state.connectedUsers.filter(user => user.uid !== userUid);
+			state.connectedUsers = state.connectedUsers.filter((user) => user.uid !== userUid);
 		},
-
 		updateModerators(state, moderators) {
-			if (state.currentRoom) {
-				state.currentRoom.moderators = moderators;
-			}
-		}
+			if (state.currentRoom) state.currentRoom.moderators = moderators;
+		},
 	},
 	actions: {
-		async refreshToken({ commit, dispatch }) {
+		async fetchUserData(_, userUids) {
 			try {
-
-				const refreshResponse = await axios.get(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000' }/refresh`, {
-					withCredentials: true,
-				});
-				const { status, access_token } = refreshResponse.data;
-				
-				localStorage.setItem('access_token', access_token);
-
-				return true;
-			} catch (error) {
-				console.error('Ошибка обновления токена:', error);
-				// Если не удалось обновить токен, выполняем выход
-				dispatch('logout');
-				throw error;
-			}
-		},
-		async fetchUserData({ commit }, userUids) {
-			try {
-				await CSRFService.getCSRF();
 				const response = await UsersService.get_users_by_uids(userUids);
-				if (response.data.status === 'ok') {
-					return response.data.users;
-				}
-				return [];
+				return response.data.status === 'ok' ? response.data.users : [];
 			} catch (error) {
-				console.error('Ошибка загрузки данных пользователей:', error);
+				console.error('Не удалось загрузить Persona участников:', error);
 				return [];
 			}
 		},
 
-		async connectSocket({ commit, state, dispatch }, roomId) {
+		async connectSocket({ commit, state, dispatch }, payload) {
+			const roomId = typeof payload === 'string' ? payload : payload?.roomId;
+			const isReconnect = typeof payload === 'object' && payload?.reconnect;
+			if (!roomId) return;
+
+			clearReconnectTimer();
+			clearHeartbeatTimer();
+			roomConnectionGeneration += 1;
+			const generation = roomConnectionGeneration;
+
+			if (state.socket) {
+				try { state.socket.close(1000, 'Replacing connection'); } catch { /* noop */ }
+				commit('setSocket', null);
+			}
+
+			commit('setIntendedRoomId', roomId);
+			commit('setConnectionStatus', false);
+			commit('setConnectionState', isReconnect ? 'reconnecting' : 'connecting');
+			commit('setRealtimeNotice', null);
+
 			try {
-				// Закрываем предыдущее соединение
-				if (state.socket) {
-					state.socket.close();
-					commit('setSocket', null);
-					commit('setConnectionStatus', false);
+				const prepared = await RealtimeService.prepareSocket('room', roomId);
+				if (generation !== roomConnectionGeneration) {
+					prepared.socket.close(1000, 'Stale connection');
+					return;
 				}
 
-				const token = localStorage.getItem('access_token');
-				if (!token) {
-					throw new Error('Токен не найден');
-				}
-
-				const wsServerUrl = import.meta.env.VITE_API_WS_SERVER_URL || 'ws://localhost:9000';
-				const socket = new WebSocket(`${wsServerUrl}/ws/${token}/rooms/${roomId}`);
-
+				const socket = prepared.socket;
 				commit('setSocket', socket);
 
 				socket.onopen = () => {
-					console.log('WebSocket соединение установлено');
-					commit('setConnectionStatus', true);
-				};
-
-				socket.onclose = async (event) => {
-					console.log('WebSocket соединение закрыто', event);
-					commit('setConnectionStatus', false);
-					// Убрали автоматический реконнект
-
-					if (event.code === 1008 || event.code === 1006) {
-						console.log('Токен устарел, пытаемся обновить...');
-						try {
-							// Пытаемся обновить токен
-							await dispatch('chat/refreshToken', null, { root: true });
-							// После успешного обновления переподключаемся
-							await dispatch('connectSocket');
-						} catch (refreshError) {
-							console.error('Не удалось обновить токен:', refreshError);
-							// Если не удалось обновить токен, перенаправляем на страницу входа
-							// dispatch('auth/logout', null, { root: true });
-						}
-					}
-
-					if (event.code === 4001) {
-						alert(`Доступ к комнате запрещен по причине: ${event.reason}`);
-						commit("clearCurrentRoom");
-					}
-				};
-
-				socket.onerror = (error) => {
-					console.error('WebSocket ошибка:', error);
-					commit('setConnectionStatus', false);
+					if (generation !== roomConnectionGeneration) return;
+					commit('setConnectionState', 'authenticating');
+					const lastMessage = state.messages[state.messages.length - 1];
+					socket.send(JSON.stringify({
+						type: 'auth',
+						ticket: prepared.ticket,
+						resume_token: lastMessage?.uid || null,
+					}));
 				};
 
 				socket.onmessage = (event) => {
+					if (generation !== roomConnectionGeneration) return;
 					try {
 						const data = JSON.parse(event.data);
+						if (data.type === 'realtime_ready') {
+							commit('setConnectionStatus', true);
+							commit('setConnectionState', 'connected');
+							commit('setReconnectAttempt', 0);
+							commit('setRealtimeNotice', null);
+							clearHeartbeatTimer();
+							const heartbeatMs = Math.max(10, data.heartbeat_seconds || 25) * 1000;
+							roomHeartbeatTimer = setInterval(() => {
+								if (socket.readyState === WebSocket.OPEN) {
+									socket.send(JSON.stringify({ type: 'heartbeat' }));
+								}
+							}, heartbeatMs);
+							return;
+						}
 						dispatch('handleSocketMessage', data);
 					} catch (error) {
-						console.error('Ошибка обработки сообщения:', error);
+						console.error('Ошибка realtime frame:', error);
 					}
 				};
 
+				socket.onclose = (event) => {
+					if (generation !== roomConnectionGeneration) return;
+					clearHeartbeatTimer();
+					commit('setSocket', null);
+					commit('setConnectionStatus', false);
+
+					if (event.code === 1000) {
+						commit('setConnectionState', 'idle');
+						return;
+					}
+					if (event.code === 4001 || event.code === 1008) {
+						commit('setConnectionState', 'restricted');
+						commit('setRealtimeNotice', {
+							type: 'restricted',
+							message: event.reason || 'Доступ к пространству ограничен.',
+						});
+						return;
+					}
+					dispatch('scheduleReconnect', roomId);
+				};
+
+				socket.onerror = () => {
+					if (generation !== roomConnectionGeneration) return;
+					commit('setConnectionStatus', false);
+				};
 			} catch (error) {
-				console.error('Ошибка подключения WebSocket:', error);
-				commit('setConnectionStatus', false);
-				throw error;
+				console.error('Не удалось подготовить realtime room socket:', error);
+				if (generation === roomConnectionGeneration) dispatch('scheduleReconnect', roomId);
 			}
 		},
 
-		async handleSocketMessage({ commit, dispatch, rootGetters }, data) {
-			const currentRoute = window.location.pathname;
-			const currentUser = rootGetters['getUser']; // Исправляем на полный путь
-			const currentUserId = currentUser?.uid;
+		scheduleReconnect({ commit, state, dispatch }, roomId) {
+			clearReconnectTimer();
+			const attempt = state.reconnectAttempt + 1;
+			commit('setReconnectAttempt', attempt);
+			commit('setConnectionState', navigator.onLine ? 'reconnecting' : 'offline');
+			const baseDelay = Math.min(1000 * (2 ** Math.min(attempt - 1, 5)), 30000);
+			const delay = baseDelay + Math.floor(Math.random() * 400);
+			roomReconnectTimer = setTimeout(() => {
+				dispatch('connectSocket', { roomId, reconnect: true });
+			}, delay);
+		},
 
+		reconnectIfNeeded({ state, dispatch }) {
+			if (!state.intendedRoomId || state.isConnected) return;
+			dispatch('connectSocket', { roomId: state.intendedRoomId, reconnect: true });
+		},
+
+		async handleSocketMessage({ commit, dispatch, rootGetters, state }, data) {
+			const currentUserId = rootGetters.getUser?.uid;
 			switch (data.type) {
-				case 'message':
+				case 'message': {
 					commit('addMessage', data);
-
-					if (currentRoute !== '/') {
-
-						if (data.reply_to?.sender?.uid === currentUserId) {
-							const reply = {
-								uid: data.uid,
-								sender: data.sender,
-								content: data.content,
-								room_uid: data.room_uid,
-								timestamp: new Date(data.created_at || new Date())
-							};
-
-							commit('ADD_UNREAD_REPLY', reply);
-							dispatch('playNotificationSound');
-						}
+					if (window.location.pathname !== '/' && data.reply_to?.sender?.uid === currentUserId) {
+						commit('ADD_UNREAD_REPLY', {
+							uid: data.uid,
+							sender: data.sender,
+							content: data.content,
+							room_uid: data.room_uid,
+							timestamp: new Date(data.created_at || Date.now()),
+						});
+						dispatch('playNotificationSound');
 					}
 					break;
-
-				case 'user_list':
-					try {
-						const usersData = await dispatch('fetchUserData', data.users);
-						commit('setConnectedUsers', usersData);
-					} catch (error) {
-						console.error('Ошибка загрузки пользователей:', error);
-					}
+				}
+				case 'user_list': {
+					const usersData = await dispatch('fetchUserData', data.users || []);
+					commit('setConnectedUsers', usersData);
 					break;
-
-				case 'initial_data':
+				}
+				case 'initial_data': {
 					if (Array.isArray(data.messages)) {
-						commit('clearMessages');
-						data.messages.reverse().forEach(msg => commit('addMessage', msg));
+						commit('mergeMessages', [...data.messages].reverse());
 					}
 					break;
-
+				}
+				case 'room_info':
+					if (data.room) commit('setCurrentRoom', data.room);
+					break;
 				case 'mute_status':
 					commit('setMuteStatus', data);
 					break;
-
 				case 'ping':
-					if (state.socket) {
+					if (state.socket?.readyState === WebSocket.OPEN) {
 						state.socket.send(JSON.stringify({ type: 'pong' }));
 					}
 					break;
-
-				case 'moderators_updated':
-					commit('updateModerators', data.moderators);
+				case 'rate_limited':
+					commit('setRealtimeNotice', {
+						type: 'warning',
+						message: 'Слишком много сообщений подряд. Небольшая пауза поможет разговору оставаться комфортным.',
+					});
 					break;
-
+				case 'moderators_updated':
+					commit('updateModerators', data.moderators || []);
+					break;
 				case 'user_banned':
+					commit('removeUser', data.target_user_uid);
 					if (data.target_user_uid === currentUserId) {
-						// Показать уведомление, что пользователь заблокирован
-						commit('setMuteStatus', {
-							status: 'banned',
-							details: {
-								reason: data.reason,
-								expires_at: data.expires_at
-							}
+						commit('setRealtimeNotice', {
+							type: 'restricted',
+							message: data.reason || 'Доступ к пространству ограничен.',
 						});
 					}
-					commit('removeUser', data.target_user_uid);
 					break;
-
 				case 'moderator_added':
 					commit('addModerator', data.target_user_uid);
-					if (data.target_user_uid === currentUserId) {
-						// Показать уведомление о назначении модератором
-					}
 					break;
-
 				case 'moderator_removed':
 					commit('removeModerator', data.target_user_uid);
-					if (data.target_user_uid === currentUserId) {
-						// Показать уведомление о снятии прав модератора
-					}
 					break;
-
+				case 'error':
+					commit('setRealtimeNotice', {
+						type: 'error',
+						message: 'Действие не выполнено. Попробуйте ещё раз.',
+					});
+					break;
 				default:
-					console.warn('Неизвестный тип сообщения:', data.type);
+					break;
 			}
 		},
 
 		disconnectSocket({ commit, state }) {
+			roomConnectionGeneration += 1;
+			clearReconnectTimer();
+			clearHeartbeatTimer();
 			if (state.socket) {
-				state.socket.close();
-				commit('setSocket', null);
-				commit('setConnectionStatus', false);
-				commit('clearMessages');
-				commit('CLEAR_UNREAD_REPLIES');
+				try { state.socket.close(1000, 'Client disconnect'); } catch { /* noop */ }
 			}
+			commit('setSocket', null);
+			commit('setConnectionStatus', false);
+			commit('setConnectionState', 'idle');
+			commit('setReconnectAttempt', 0);
+			commit('setIntendedRoomId', null);
+			commit('setConnectedUsers', []);
 		},
 
 		sendMessage({ state }, message) {
-			if (state.socket && state.socket.readyState === WebSocket.OPEN) {
-				state.socket.send(JSON.stringify(message));
-			} else {
-				throw new Error('WebSocket не подключен');
+			if (state.socket?.readyState !== WebSocket.OPEN || state.connectionState !== 'connected') {
+				throw new Error('Пространство сейчас переподключается');
 			}
+			state.socket.send(JSON.stringify(message));
 		},
 
 		clearNotifications({ commit }) {
@@ -306,88 +363,43 @@ export default {
 		},
 
 		async switchRoom({ dispatch, commit }, { room, roomId }) {
-			// Очищаем предыдущие данные
+			await dispatch('disconnectSocket');
 			commit('clearMessages');
 			commit('CLEAR_UNREAD_REPLIES');
-
-			// Устанавливаем новую комнату и подключаемся
+			commit('clearMuteStatus');
 			commit('setCurrentRoom', room);
 			await dispatch('connectSocket', roomId);
 		},
 
 		playNotificationSound() {
-			// Используем путь из public, а не из assets
 			const audio = new Audio('/sounds/chat_notification.mp3');
-
-			// Предварительная загрузка и обработка ошибок
 			audio.preload = 'auto';
-
-			// Обработка событий загрузки
-			audio.addEventListener('canplaythrough', () => {
-				// Когда аудио готово к воспроизведению
-				audio.play().catch((e) => {
-					console.error('Ошибка воспроизведения звука:', e);
-				});
-			});
-
-			// Обработка ошибок загрузки
-			audio.addEventListener('error', (e) => {
-				console.error('Ошибка загрузки аудио:', e);
-			});
-
-			// Начинаем загрузку
-			audio.load();
+			audio.play().catch(() => {});
 		},
-		async sendModeratorAction({ commit, state }, { target_user_uid, action }) {
-			try {
-				if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
-					throw new Error('WebSocket не подключен');
-				}
 
-				const message = {
-					type: 'moderator_action',
-					target_user_uid,
-					action, // 'add_moderator' или 'remove_moderator'
-					room_uid: state.currentRoom?.uid,
-					timestamp: new Date().toISOString()
-				};
-
-				state.socket.send(JSON.stringify(message));
-
-				// Локальное обновление для мгновенного отклика
-				if (action === 'add_moderator') {
-					commit('addModerator', target_user_uid);
-				} else {
-					commit('removeModerator', target_user_uid);
-				}
-			} catch (error) {
-				console.error('Ошибка при отправке действия модератора:', error);
-				throw error;
+		sendModeratorAction({ state }, { target_user_uid, action }) {
+			if (state.socket?.readyState !== WebSocket.OPEN || state.connectionState !== 'connected') {
+				throw new Error('Realtime connection is not ready');
 			}
+			state.socket.send(JSON.stringify({
+				type: 'moderator_action',
+				target_user_uid,
+				action,
+				room_uid: state.currentRoom?.uid,
+				timestamp: new Date().toISOString(),
+			}));
 		},
 
-		async sendBanAction({ commit, state }, { target_user_uid, reason }) {
-			try {
-				if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
-					throw new Error('WebSocket не подключен');
-				}
-
-				const message = {
-					type: 'ban_user',
-					target_user_uid,
-					reason,
-					room_uid: state.currentRoom?.uid,
-					timestamp: new Date().toISOString()
-				};
-
-				state.socket.send(JSON.stringify(message));
-
-				// Локальное удаление пользователя
-				commit('removeUser', target_user_uid);
-			} catch (error) {
-				console.error('Ошибка при отправке действия блокировки:', error);
-				throw error;
+		sendBanAction({ state }, { target_user_uid, reason, permanent = false }) {
+			if (state.socket?.readyState !== WebSocket.OPEN || state.connectionState !== 'connected') {
+				throw new Error('Realtime connection is not ready');
 			}
+			state.socket.send(JSON.stringify({
+				type: 'ban_user',
+				target_user_uid,
+				reason,
+				permanent,
+			}));
 		},
-	}
+	},
 };
