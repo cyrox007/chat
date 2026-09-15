@@ -37,11 +37,12 @@
 - [`product-identity-v1.md`](product-identity-v1.md) — Persona/Space appearance и recurring Activities.
 - [`social-engagement-v2.md`](social-engagement-v2.md) — earned achievements и Conversation Rounds.
 - [`activity-occurrences-v1.md`](activity-occurrences-v1.md) — Activity Occurrences, reminders и notification inbox, выпущенные в `0.5.2-alpha.1`.
+- [`creator-support-v1.md`](creator-support-v1.md) — development-contract `0.5.3-alpha.x`: opt-in gifts, append-only ledger и cosmetic entitlements без payments/pay-to-power.
 
 ## Статус документов
 
-`VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md` и domain-документе следующего slice.
+`VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md` и domain-документе текущего slice.
 
 Текущий release: `0.5.2-alpha.1`.
 
-Следующая development-линия: `0.5.3-alpha.0`.
+Активная development-линия: `0.5.3-alpha.0` — Creator Support & Cosmetic Gifts.
