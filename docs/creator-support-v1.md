@@ -1,6 +1,6 @@
 # PubChat Stage 5.4 — Creator Support & Cosmetic Gifts
 
-Development line after `0.5.2-alpha.1`: `0.5.3-alpha.x`.
+Released in `0.5.3-alpha.1`.
 
 ## Зачем нужен этот slice
 
@@ -97,6 +97,7 @@ Scoped owner/moderator может видеть received history своего Spa
 ## Abuse boundaries
 
 - maximum 20 gifts per Account / rolling 24h;
+- sender limit сериализуется Account row lock, поэтому конкурентные sends не обходят count;
 - support disabled отклоняет отправку server-side;
 - inactive/deleted Account не может отправлять gift;
 - blocked Persona pair не может взаимодействовать через support;
@@ -149,15 +150,11 @@ Support ledger не имеет mutation endpoints.
 
 ## Release gate
 
-До `0.5.3-alpha.1`:
+Для `0.5.3-alpha.1` применён двухступенчатый gate:
 
-- additive migration graph и одна Alembic head;
-- support contract regression tests;
-- backend compile/import;
-- frontend production build;
-- abuse/privacy/permissions self-review;
-- docs/UI Kit sync;
-- functional exact-head CI;
-- version bump только после зелёного functional gate;
-- второй exact-head CI на versioned head;
-- squash merge только после второго gate.
+1. additive migration graph, одна Alembic head, contract tests, backend compile/import и frontend production build;
+2. abuse/privacy/permissions self-review + docs/UI Kit sync;
+3. functional exact-head CI на frozen feature head;
+4. version bump;
+5. второй exact-head CI на versioned head;
+6. squash merge только после второго gate.
