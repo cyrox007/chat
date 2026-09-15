@@ -15,6 +15,11 @@ ActivityStatus = Literal["scheduled", "cancelled"]
 RSVPStatus = Literal["interested", "going"]
 
 
+def _require_timezone(value: datetime | None) -> None:
+    if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+        raise ValueError("starts_at must include an explicit timezone")
+
+
 class PersonaAppearanceUpdateRequest(BaseModel):
     accent_preset: Optional[PersonaAccent] = None
     background_preset: Optional[PersonaBackground] = None
@@ -55,6 +60,7 @@ class ActivityCreateRequest(BaseModel):
         self.title = " ".join(self.title.split())
         if self.description is not None:
             self.description = self.description.strip() or None
+        _require_timezone(self.starts_at)
         return self
 
 
@@ -72,6 +78,7 @@ class ActivityUpdateRequest(BaseModel):
             self.title = " ".join(self.title.split())
         if self.description is not None:
             self.description = self.description.strip() or None
+        _require_timezone(self.starts_at)
         return self
 
 
