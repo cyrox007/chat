@@ -1,6 +1,8 @@
-from fastapi import FastAPI, APIRouter, status
+from fastapi import APIRouter, FastAPI, status
 
+from utils.version import PROJECT_VERSION_INFO
 from views.service import handlers
+
 
 def install(app: FastAPI):
     router = APIRouter()
@@ -23,4 +25,9 @@ def install(app: FastAPI):
         status_code=status.HTTP_200_OK,
         endpoint=handlers.check_token
     )
+
+    @router.get('/service/version', status_code=status.HTTP_200_OK)
+    async def project_version():
+        return {"status": "ok", **PROJECT_VERSION_INFO}
+
     app.include_router(router)
