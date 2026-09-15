@@ -1,9 +1,11 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Query, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
+from components.identity.model import Persona
 from components.support.schemas import GiftSendRequest
 from components.support import service
 from database import Database
@@ -19,6 +21,24 @@ def install(app: FastAPI) -> None:
         db: AsyncSession = Depends(Database.session_generator),
     ):
         return {"status": "ok", "gifts": await service.list_gift_catalog(db, target)}
+
+    @router.get("/accounts/{account_uid}/shelf")
+    async def account_shelf(
+        account_uid: UUID,
+        user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        result = await db.execute(
+            select(Persona.uid).where(
+                Persona.account_uid == account_uid,
+                Persona.is_primary.is_(True),
+            ).limit(1)
+        )
+        persona_uid = result.scalar_one_or_none()
+        if not persona_uid:
+            raise HTTPException(status_code=404, detail={"error_type": "persona_not_found"})
+        projection = await service.persona_support_shelf(db, persona_uid, user["user_uid"])
+        return {"status": "ok", "persona_uid": str(persona_uid), **projection}
 
     @router.get("/personas/{persona_uid}/shelf")
     async def persona_shelf(
