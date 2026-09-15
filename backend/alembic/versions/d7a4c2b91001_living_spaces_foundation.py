@@ -157,15 +157,15 @@ def upgrade() -> None:
         SELECT DISTINCT
             r.uid,
             LEFT(
-                TRIM(BOTH '-' FROM regexp_replace(lower(trim(raw_tag)), '[^[:alnum:]_-]+', '-', 'g')),
+                TRIM(BOTH '-' FROM regexp_replace(lower(trim(tag.raw_tag)), '[^[:alnum:]_-]+', '-', 'g')),
                 64
             ) AS slug,
-            LEFT(trim(raw_tag), 64) AS label,
+            LEFT(trim(tag.raw_tag), 64) AS label,
             COALESCE(r.created_at, CURRENT_TIMESTAMP)
         FROM rooms r
-        CROSS JOIN LATERAL regexp_split_to_table(COALESCE(r.tags, ''), ',') AS raw_tag
-        WHERE trim(raw_tag) <> ''
-          AND TRIM(BOTH '-' FROM regexp_replace(lower(trim(raw_tag)), '[^[:alnum:]_-]+', '-', 'g')) <> ''
+        CROSS JOIN LATERAL regexp_split_to_table(COALESCE(r.tags, ''), ',') AS tag(raw_tag)
+        WHERE trim(tag.raw_tag) <> ''
+          AND TRIM(BOTH '-' FROM regexp_replace(lower(trim(tag.raw_tag)), '[^[:alnum:]_-]+', '-', 'g')) <> ''
         ON CONFLICT (room_uid, slug) DO NOTHING
         """
     )
