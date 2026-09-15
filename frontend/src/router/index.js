@@ -35,6 +35,12 @@ const router = createRouter({
 			meta: { title: 'Приглашения — PubChat', requestAuth: true },
 		},
 		{
+			path: '/notifications',
+			name: 'notifications',
+			component: () => import('../views/NotificationsView.vue'),
+			meta: { title: 'Напоминания — PubChat', requestAuth: true },
+		},
+		{
 			path: '/safety',
 			name: 'safety',
 			component: () => import('../views/SafetyCenterView.vue'),
