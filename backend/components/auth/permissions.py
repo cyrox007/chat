@@ -1,7 +1,8 @@
 from fastapi import HTTPException, Request, status
+from sqlalchemy import select
 
 from components.auth.middleware import auth_middle
-from components.user.model import User
+from components.identity.model import Account, AccountRole, PlatformRole
 from database import Database
 from utils.logger import setup_logger
 
@@ -33,29 +34,35 @@ async def _current_user_data(request: Request) -> dict:
 
 
 async def require_admin(request: Request):
-    """Require an active platform administrator based on authoritative DB state."""
+    """Require an active platform administrator from Identity v2 RBAC."""
     user_data = await _current_user_data(request)
     session = await Database.get_session()
     try:
-        user = await User.get_user_by_uid(session, user_data["user_uid"])
-        if not user or user.deleted_at or not user.is_active:
+        account = await session.get(Account, user_data["user_uid"])
+        if not account or account.deleted_at or account.status != "active":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"status": "bad", "error_type": "account_unavailable"},
             )
-        if user.global_role != "admin":
-            logger.warning(
-                "Запрещен доступ к admin API для пользователя %s с ролью %s",
-                user_data["user_uid"],
-                user.global_role,
+
+        role_result = await session.execute(
+            select(PlatformRole.name)
+            .join(AccountRole, AccountRole.role_id == PlatformRole.id)
+            .where(
+                AccountRole.account_uid == account.uid,
+                PlatformRole.name == "admin",
             )
+            .limit(1)
+        )
+        if role_result.scalar_one_or_none() != "admin":
+            logger.warning("Запрещен доступ к admin API для account=%s", account.uid)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"status": "bad", "error_type": "admin_required"},
             )
 
-        request.state.auth_user = user
-        return user
+        request.state.auth_account = account
+        return account
     finally:
         await session.close()
 
@@ -64,8 +71,8 @@ async def validate_profile_update(request: Request):
     """
     Protect the legacy profile endpoint from IDOR and mass assignment.
 
-    Until Account/Profile DTOs are introduced, a user may update only their own
-    public profile fields from a strict allow-list.
+    This dependency exists only while old clients finish migrating to
+    /identity/v2/persona. New code must not add fields to this allow-list.
     """
     user_data = await _current_user_data(request)
 
@@ -99,7 +106,7 @@ async def validate_profile_update(request: Request):
     forbidden_fields = sorted(set(update_data) - SAFE_PROFILE_UPDATE_FIELDS)
     if forbidden_fields:
         logger.warning(
-            "Отклонены запрещенные поля профиля для пользователя %s: %s",
+            "Отклонены запрещенные поля legacy-профиля для пользователя %s: %s",
             user_data["user_uid"],
             forbidden_fields,
         )
