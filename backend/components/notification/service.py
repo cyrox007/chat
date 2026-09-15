@@ -22,7 +22,8 @@ from components.space.service import _get_account
 
 
 NOTIFICATION_KIND_ACTIVITY_REMINDER = "activity_reminder"
-MAX_REMINDER_PREFERENCES_PER_SYNC = 200
+MAX_REMINDERS_PER_ACCOUNT = 200
+MAX_REMINDER_PREFERENCES_PER_SYNC = MAX_REMINDERS_PER_ACCOUNT
 
 
 def reminder_projection(item: ActivityReminderPreference) -> dict:
@@ -69,6 +70,25 @@ async def set_activity_reminder(
     account = await _require_active_member(db, room, viewer_uid)
     item = await db.get(ActivityReminderPreference, (activity.uid, account.uid))
     if item is None:
+        active_count = int(
+            (
+                await db.execute(
+                    select(func.count(ActivityReminderPreference.activity_uid)).where(
+                        ActivityReminderPreference.account_uid == account.uid,
+                        ActivityReminderPreference.enabled.is_(True),
+                    )
+                )
+            ).scalar_one()
+            or 0
+        )
+        if active_count >= MAX_REMINDERS_PER_ACCOUNT:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error_type": "reminder_limit_reached",
+                    "limit": MAX_REMINDERS_PER_ACCOUNT,
+                },
+            )
         item = ActivityReminderPreference(
             activity_uid=activity.uid,
             account_uid=account.uid,
