@@ -23,6 +23,18 @@ const router = createRouter({
 			meta: { title: 'Пространства — PubChat', requestAuth: true },
 		},
 		{
+			path: '/people',
+			name: 'people',
+			component: () => import('../views/PeopleDiscoveryView.vue'),
+			meta: { title: 'Люди — PubChat', requestAuth: true },
+		},
+		{
+			path: '/invitations',
+			name: 'invitations',
+			component: () => import('../views/InvitationsView.vue'),
+			meta: { title: 'Приглашения — PubChat', requestAuth: true },
+		},
+		{
 			path: '/spaces/:uid',
 			name: 'space',
 			component: () => import('../views/MainView.vue'),
