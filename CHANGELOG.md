@@ -2,9 +2,9 @@
 
 Формат версий: `MAJOR.MINOR.PATCH-channel.N` до стабильного `1.0.0`.
 
-## [Unreleased] — 0.5.0-alpha.0
+## [0.5.0-alpha.1] — 2026-09-15
 
-Stage 5: Product Identity & Engagement. Первый slice построен поверх выпущенного `0.4.0-alpha.1` и проходит финальный release gate.
+Stage 5: Product Identity & Engagement. Первый alpha-checkpoint визуальной идентичности и повторных социальных активностей поверх `0.4.0-alpha.1`.
 
 ### Persona Appearance
 - allowlisted accent/background/avatar-frame presets;
@@ -48,16 +48,18 @@ Stage 5: Product Identity & Engagement. Первый slice построен по
 - нет внутренней валюты, loot boxes, marketplace или pay-to-status;
 - recurring rule хранится как шаблон и не материализует бесконечную цепочку строк в БД.
 
-### Release gate
-Перед фиксацией `0.5.0-alpha.1` обязательны:
-- branch синхронизирован с `main@0.4.0-alpha.1`;
+### Quality gate
+До version bump успешно прошли:
+- branch синхронизация с `main@0.4.0-alpha.1`;
 - additive migration graph с одной Alembic head;
-- backend compile/import/contracts;
-- frontend production build;
+- backend dependency install, compile и FastAPI import;
+- realtime security regression guard;
+- backend contract tests;
+- SPA security regression guard и production build;
 - privacy/scoped-role/migration self-review;
-- public appearance/UI Kit polish;
-- canonical `VERSION` bump только после зелёного functional exact-head CI;
-- повторный exact-head CI уже на `0.5.0-alpha.1` перед merge.
+- public appearance/UI Kit polish.
+
+После version bump выполняется повторный exact-head CI уже на `0.5.0-alpha.1`; merge разрешён только после его успешного завершения.
 
 ## [0.4.0-alpha.1] — 2026-09-15
 
