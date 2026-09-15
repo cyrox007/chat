@@ -52,6 +52,12 @@
 							<button v-if="activity.rsvp.viewer" type="button" class="clear" @click="clearRsvp(activity)">Снять</button>
 							<button v-if="canManageActivity(activity)" type="button" class="danger-link" @click="cancelActivity(activity)">Отменить</button>
 						</div>
+						<ConversationRoundsPanel
+							v-if="activity.status !== 'cancelled'"
+							:activity="activity"
+							:can-manage-space="Boolean(space.can_manage)"
+							:current-account-uid="currentUserUid || ''"
+						/>
 					</article>
 				</div>
 				<div v-else class="state-card"><strong>Активностей пока нет</strong><span>Создайте первый регулярный повод встретиться — не обязательно игру, достаточно темы и времени.</span></div>
@@ -86,6 +92,7 @@ import { useStore } from 'vuex';
 
 import EngagementService from '@/API/EngagementService';
 import SpacesService from '@/API/SpacesService';
+import ConversationRoundsPanel from '@/components/Spaces/ConversationRoundsPanel.vue';
 
 const route = useRoute();
 const store = useStore();
