@@ -81,5 +81,7 @@ jobs:
             echo "Credential-like WebSocket URL detected"
             exit 1
           fi
+      - name: PWA cache safety guard
+        run: npm run check:pwa
       - name: Build frontend
         run: npm run build
