@@ -17,6 +17,7 @@ from components.space.service import (
     get_space,
     join_space,
     leave_space,
+    list_space_members,
     list_spaces,
     update_member_role,
     update_space,
@@ -106,6 +107,15 @@ def install(app: FastAPI) -> None:
     ):
         await leave_space(db, space_uid, current_user["user_uid"])
         return {"status": "ok"}
+
+    @router.get("/{space_uid}/members")
+    async def members(
+        space_uid: UUID,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        items = await list_space_members(db, space_uid, current_user["user_uid"])
+        return {"status": "ok", "members": items}
 
     @router.patch("/{space_uid}/members/{account_uid}")
     async def patch_member_role(
