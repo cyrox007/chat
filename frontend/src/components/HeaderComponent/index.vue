@@ -8,6 +8,7 @@
 
 			<nav v-if="isAuthenticated" class="desktop-nav" aria-label="Основная навигация">
 				<RouterLink :to="{ name: 'chats' }">Пространства</RouterLink>
+				<RouterLink :to="{ name: 'people' }">Люди</RouterLink>
 				<RouterLink :to="{ name: 'messenger' }">Сообщения</RouterLink>
 			</nav>
 
@@ -38,6 +39,9 @@
 						<RouterLink role="menuitem" :to="profileRoute" @click="closeDropdown">
 							<i class="fas fa-user-circle" aria-hidden="true"></i><span>Мой образ</span>
 						</RouterLink>
+						<RouterLink role="menuitem" :to="{ name: 'invitations' }" @click="closeDropdown">
+							<i class="fas fa-envelope-open-text" aria-hidden="true"></i><span>Приглашения</span>
+						</RouterLink>
 						<RouterLink v-if="isAdmin" role="menuitem" :to="{ name: 'AdminDashboard' }" @click="closeDropdown">
 							<i class="fas fa-user-shield" aria-hidden="true"></i><span>Управление</span>
 						</RouterLink>
@@ -53,6 +57,9 @@
 	<nav v-if="isAuthenticated" class="mobile-nav" aria-label="Мобильная навигация">
 		<RouterLink :to="{ name: 'chats' }">
 			<i class="fas fa-comments" aria-hidden="true"></i><span>Пространства</span>
+		</RouterLink>
+		<RouterLink :to="{ name: 'people' }">
+			<i class="fas fa-user-group" aria-hidden="true"></i><span>Люди</span>
 		</RouterLink>
 		<RouterLink :to="{ name: 'messenger' }">
 			<i class="fas fa-envelope" aria-hidden="true"></i><span>Сообщения</span>
@@ -149,8 +156,8 @@ onMounted(() => applyTheme(localStorage.getItem('theme') || 'light'));
 	.topbar-inner { min-height: 3.35rem; padding-inline: var(--ui-space-3); }
 	.brand-name, .desktop-nav, .persona-trigger__text, .persona-chevron, .signup-button { display: none; }
 	.persona-trigger { border: 0; padding: 0; }
-	.mobile-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 130; min-height: 4.15rem; display: grid; grid-template-columns: repeat(3, 1fr); padding: 0.35rem max(0.35rem, env(safe-area-inset-right)) calc(0.35rem + env(safe-area-inset-bottom)) max(0.35rem, env(safe-area-inset-left)); border-top: 1px solid var(--ui-border); background: color-mix(in srgb, var(--ui-surface) 95%, transparent); backdrop-filter: blur(18px); }
-	.mobile-nav a { display: grid; place-items: center; align-content: center; gap: 0.2rem; border-radius: var(--ui-radius-md); color: var(--ui-text-subtle); text-decoration: none; font-size: 0.68rem; font-weight: 650; }
+	.mobile-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 130; min-height: 4.15rem; display: grid; grid-template-columns: repeat(4, 1fr); padding: 0.35rem max(0.35rem, env(safe-area-inset-right)) calc(0.35rem + env(safe-area-inset-bottom)) max(0.35rem, env(safe-area-inset-left)); border-top: 1px solid var(--ui-border); background: color-mix(in srgb, var(--ui-surface) 95%, transparent); backdrop-filter: blur(18px); }
+	.mobile-nav a { display: grid; place-items: center; align-content: center; gap: 0.2rem; border-radius: var(--ui-radius-md); color: var(--ui-text-subtle); text-decoration: none; font-size: 0.64rem; font-weight: 650; }
 	.mobile-nav a i { font-size: 1.05rem; }
 	.mobile-nav a.router-link-active { background: var(--ui-primary-soft); color: var(--ui-primary); }
 	.persona-dropdown { position: fixed; top: auto; right: var(--ui-space-3); bottom: calc(4.7rem + env(safe-area-inset-bottom)); left: var(--ui-space-3); width: auto; }
