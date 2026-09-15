@@ -241,7 +241,16 @@ export default {
 				};
 			} catch (error) {
 				console.error('Не удалось подготовить realtime room socket:', error);
-				if (generation === roomConnectionGeneration) dispatch('scheduleReconnect', roomId);
+				if (generation !== roomConnectionGeneration) return;
+				if ([403, 404].includes(error.response?.status)) {
+					commit('setConnectionState', 'restricted');
+					commit('setRealtimeNotice', {
+						type: 'restricted',
+						message: 'Доступ к пространству изменился. Вернитесь в discovery и проверьте участие.',
+					});
+					return;
+				}
+				dispatch('scheduleReconnect', roomId);
 			}
 		},
 
@@ -267,7 +276,8 @@ export default {
 			switch (data.type) {
 				case 'message': {
 					commit('addMessage', data);
-					if (window.location.pathname !== '/' && data.reply_to?.sender?.uid === currentUserId) {
+					const isViewingSpace = window.location.pathname.includes('/spaces/');
+					if (!isViewingSpace && data.reply_to?.sender?.uid === currentUserId) {
 						commit('ADD_UNREAD_REPLY', {
 							uid: data.uid,
 							sender: data.sender,
@@ -291,7 +301,12 @@ export default {
 					break;
 				}
 				case 'room_info':
-					if (data.room) commit('setCurrentRoom', data.room);
+					if (data.room) {
+						// Realtime still receives a legacy room projection during the compatibility
+						// phase. Keep canonical Space fields from REST authoritative while adding
+						// live-only legacy fields such as active restrictions.
+						commit('setCurrentRoom', { ...data.room, ...(state.currentRoom || {}) });
+					}
 					break;
 				case 'mute_status':
 					commit('setMuteStatus', data);
