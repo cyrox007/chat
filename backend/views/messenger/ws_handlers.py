@@ -220,18 +220,26 @@ async def handle_mark_as_read(
     db_session: AsyncSession,
     websocket: WebSocket,
 ) -> None:
-    message_uid = data.get("message_uid")
-    if not message_uid:
+    try:
+        message_uid = UUID(str(data.get("message_uid")))
+    except (TypeError, ValueError):
         return
 
     try:
-        message = await PrivateMessage.mark_as_read(db_session, message_uid)
+        result = await db_session.execute(
+            select(PrivateMessage).where(
+                PrivateMessage.uid == message_uid,
+                PrivateMessage.receiver_uid == user_uid,
+            )
+        )
+        message = result.scalar_one_or_none()
         if not message:
-            return
-        if str(message.receiver_uid) != str(user_uid):
-            await db_session.rollback()
             await websocket.send_json({"type": "error", "error_type": "read_receipt_not_allowed"})
             return
+
+        if not message.is_read:
+            message.is_read = True
+            await db_session.commit()
 
         await private_manager.send_to_user(
             message.sender_uid,
@@ -242,6 +250,7 @@ async def handle_mark_as_read(
             },
         )
     except Exception:
+        await db_session.rollback()
         logger.exception("Ошибка read receipt")
 
 
