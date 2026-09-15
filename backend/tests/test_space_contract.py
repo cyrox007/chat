@@ -81,9 +81,9 @@ class SpaceContractTests(unittest.TestCase):
         self.assertIn("uq_space_invitation_invitee", names)
 
     def test_space_content_tables_share_space_foreign_key(self):
-        self.assertEqual(SpaceRule.__table__.c.room_uid.foreign_keys.pop().target_fullname, "rooms.uid")
-        self.assertEqual(SpaceEvent.__table__.c.room_uid.foreign_keys.pop().target_fullname, "rooms.uid")
-        self.assertEqual(SpaceHistoryEntry.__table__.c.room_uid.foreign_keys.pop().target_fullname, "rooms.uid")
+        for model in (SpaceRule, SpaceEvent, SpaceHistoryEntry):
+            targets = {foreign_key.target_fullname for foreign_key in model.__table__.c.room_uid.foreign_keys}
+            self.assertEqual(targets, {"rooms.uid"})
 
     def test_membership_actions_are_allowlisted(self):
         for action in ("approve", "reject", "remove"):
