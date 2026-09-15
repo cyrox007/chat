@@ -50,7 +50,7 @@
 		</section>
 
 		<section v-else-if="spaces.length" class="space-grid" aria-label="Пространства PubChat">
-			<article v-for="space in spaces" :key="space.uid" class="space-card">
+			<article v-for="space in spaces" :key="space.uid" class="space-card" :class="spaceAppearanceClasses(space)">
 				<div class="space-card__topline">
 					<span class="purpose-badge"><i :class="purposeIcon(space.purpose)" aria-hidden="true"></i>{{ purposeLabel(space.purpose) }}</span>
 					<span v-if="space.visibility !== 'public'" class="visibility-badge">
@@ -60,7 +60,11 @@
 				</div>
 
 				<div class="space-card__body">
-					<h2>{{ space.name }}</h2>
+					<div class="space-card__title">
+						<span v-if="space.appearance?.ambient_icon" class="ambient-icon" aria-hidden="true">{{ space.appearance.ambient_icon }}</span>
+						<h2>{{ space.name }}</h2>
+					</div>
+					<p v-if="space.appearance?.welcome_line" class="welcome-line">{{ space.appearance.welcome_line }}</p>
 					<p>{{ space.description || 'Создатель пока не добавил описание — атмосфера формируется людьми.' }}</p>
 					<div v-if="space.tags?.length" class="tag-row">
 						<button v-for="tag in space.tags.slice(0, 4)" :key="tag" type="button" class="ui-chip" @click="filterByTag(tag)">#{{ tag }}</button>
@@ -111,6 +115,7 @@
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
+import EngagementService from '@/API/EngagementService';
 import SpacesService from '@/API/SpacesService';
 import CreateSpaceModal from '@/components/Spaces/CreateSpaceModal.vue';
 
@@ -135,6 +140,29 @@ const purposeOptions = [
 	{ value: 'community', label: 'Сообщества' },
 ];
 
+const defaultAppearance = (spaceUid) => ({
+	space_uid: spaceUid,
+	theme_preset: 'lounge',
+	cover_preset: 'soft-gradient',
+	ambient_icon: null,
+	welcome_line: null,
+});
+
+const hydrateAppearances = async (items) => {
+	if (!items.length) return items;
+	try {
+		const response = await EngagementService.spaceAppearances(items.map((item) => item.uid));
+		const appearances = new Map((response.data.appearances || []).map((item) => [item.space_uid, item]));
+		return items.map((space) => ({
+			...space,
+			appearance: appearances.get(space.uid) || defaultAppearance(space.uid),
+		}));
+	} catch (error) {
+		console.error('Не удалось загрузить оформление пространств:', error);
+		return items.map((space) => ({ ...space, appearance: defaultAppearance(space.uid) }));
+	}
+};
+
 const loadSpaces = async () => {
 	loading.value = true;
 	errorMessage.value = '';
@@ -145,7 +173,8 @@ const loadSpaces = async () => {
 			tag: tagFilter.value || undefined,
 			limit: 50,
 		});
-		spaces.value = response.data.spaces || [];
+		const listed = response.data.spaces || [];
+		spaces.value = await hydrateAppearances(listed);
 	} catch (error) {
 		console.error('Не удалось загрузить Living Spaces:', error);
 		errorMessage.value = 'Проверьте соединение и попробуйте ещё раз.';
@@ -195,7 +224,7 @@ const enterSpace = async (space) => {
 		const response = await SpacesService.join(space.uid);
 		const updated = response.data.space;
 		const index = spaces.value.findIndex((item) => item.uid === updated.uid);
-		if (index >= 0) spaces.value[index] = updated;
+		if (index >= 0) spaces.value[index] = { ...updated, appearance: spaces.value[index].appearance };
 		if (updated.viewer_membership?.status === 'active') {
 			await router.push({ name: 'space', params: { uid: updated.uid } });
 		}
@@ -236,6 +265,16 @@ const joinPolicyLabel = (value) => ({
 	invite: 'Только по приглашению',
 }[value] || 'Открытый вход');
 
+const spaceAppearanceClasses = (space) => {
+	const theme = ['lounge', 'warm', 'garden', 'studio', 'night'].includes(space.appearance?.theme_preset)
+		? space.appearance.theme_preset
+		: 'lounge';
+	const cover = ['soft-gradient', 'paper', 'mist', 'linen', 'night'].includes(space.appearance?.cover_preset)
+		? space.appearance.cover_preset
+		: 'soft-gradient';
+	return [`space-card--theme-${theme}`, `space-card--cover-${cover}`];
+};
+
 const locationLabel = (space) => [space.region, space.country].filter(Boolean).join(', ');
 const resolveAvatar = (avatar) => /^https?:\/\//.test(avatar) ? avatar : `${apiBaseUrl}${avatar}`;
 const avatarFallback = (value = '?') => String(value || '?').slice(0, 1).toUpperCase();
@@ -261,13 +300,25 @@ onMounted(loadSpaces);
 .space-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ui-space-4); }
 .space-card { min-width: 0; display: flex; flex-direction: column; gap: var(--ui-space-4); padding: var(--ui-space-5); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-xl); background: var(--ui-surface); box-shadow: var(--ui-shadow-sm); transition: transform var(--ui-motion-normal) var(--ui-ease), box-shadow var(--ui-motion-normal) var(--ui-ease); }
 .space-card:hover { transform: translateY(-2px); box-shadow: var(--ui-shadow-md); }
+.space-card--cover-soft-gradient { background: linear-gradient(145deg, var(--ui-surface) 40%, var(--ui-primary-soft) 190%); }
+.space-card--cover-paper { background: color-mix(in srgb, var(--ui-surface) 92%, var(--ui-warning-soft)); }
+.space-card--cover-mist { background: color-mix(in srgb, var(--ui-surface) 91%, var(--ui-info-soft)); }
+.space-card--cover-linen { background: color-mix(in srgb, var(--ui-surface) 92%, var(--ui-surface-muted)); }
+.space-card--cover-night { background: color-mix(in srgb, var(--ui-surface) 82%, var(--ui-text) 18%); }
+.space-card--theme-warm { border-color: color-mix(in srgb, var(--ui-warning) 28%, var(--ui-border)); }
+.space-card--theme-garden { border-color: color-mix(in srgb, var(--ui-success) 28%, var(--ui-border)); }
+.space-card--theme-studio { border-color: color-mix(in srgb, var(--ui-info) 28%, var(--ui-border)); }
+.space-card--theme-night { border-color: color-mix(in srgb, var(--ui-text-muted) 36%, var(--ui-border)); }
 .space-card__topline { display: flex; justify-content: space-between; gap: var(--ui-space-2); }
 .purpose-badge, .visibility-badge { display: inline-flex; align-items: center; gap: var(--ui-space-1); font-size: var(--ui-text-xs); font-weight: 800; }
 .purpose-badge { color: var(--ui-primary); }
 .visibility-badge { color: var(--ui-text-subtle); }
 .space-card__body { min-height: 7rem; }
+.space-card__title { display: flex; align-items: center; gap: var(--ui-space-2); }
+.ambient-icon { width: 2rem; height: 2rem; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: color-mix(in srgb, var(--ui-surface) 82%, transparent); font-size: 1rem; }
 .space-card h2 { margin: 0; font-size: var(--ui-text-xl); letter-spacing: -.02em; }
 .space-card__body p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; margin: var(--ui-space-2) 0 0; color: var(--ui-text-muted); line-height: 1.55; }
+.space-card__body .welcome-line { color: var(--ui-text); font-size: var(--ui-text-sm); font-weight: 700; -webkit-line-clamp: 2; }
 .tag-row { display: flex; flex-wrap: wrap; gap: var(--ui-space-1); margin-top: var(--ui-space-3); }
 .tag-row .ui-chip { border: 0; cursor: pointer; }
 .space-card__meta { display: flex; flex-wrap: wrap; gap: var(--ui-space-3); color: var(--ui-text-subtle); font-size: var(--ui-text-xs); }

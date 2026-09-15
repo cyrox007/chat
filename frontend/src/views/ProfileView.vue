@@ -13,8 +13,8 @@
 		</section>
 
 		<template v-else-if="profile">
-			<section class="profile-card profile-hero">
-				<div class="profile-avatar" aria-hidden="true">
+			<section class="profile-card profile-hero" :class="profileAppearanceClasses">
+				<div class="profile-avatar" :class="avatarFrameClass" aria-hidden="true">
 					<img v-if="profile.avatar" :src="avatarUrl" alt="" />
 					<span v-else>{{ avatarFallback }}</span>
 					<span class="presence-dot" :class="{ 'presence-dot--self': profile.is_self }"></span>
@@ -30,6 +30,7 @@
 					</div>
 
 					<p class="profile-bio">{{ profile.bio || 'Пока ничего о себе не написал.' }}</p>
+					<p v-if="appearance?.status_line" class="persona-status"><i class="fas fa-comment-dots" aria-hidden="true"></i>{{ appearance.status_line }}</p>
 
 					<div class="profile-meta">
 						<span v-if="locationLabel">{{ locationLabel }}</span>
@@ -42,6 +43,7 @@
 					<button v-if="profile.is_self" class="ui-button ui-button--primary" @click="toggleEdit">
 						{{ isEditing ? 'Закрыть настройки' : 'Настроить образ' }}
 					</button>
+					<RouterLink v-if="profile.is_self" class="ui-button ui-button--secondary" :to="{ name: 'persona-style' }">Стиль образа</RouterLink>
 					<button v-else class="ui-button ui-button--primary" :disabled="profile.contact_policy === 'nobody'" @click="openChatWithUser">
 						{{ profile.contact_policy === 'nobody' ? 'Личные сообщения закрыты' : 'Написать' }}
 					</button>
@@ -139,12 +141,14 @@ import { useStore } from 'vuex';
 
 import AuthService from '@/API/AuthService';
 import CSRFService from '@/API/CSRFService';
+import EngagementService from '@/API/EngagementService';
 
 const route = useRoute();
 const router = useRouter();
 const store = useStore();
 
 const profile = ref(null);
+const appearance = ref(null);
 const isLoading = ref(true);
 const errorMessage = ref('');
 const isEditing = ref(false);
@@ -167,6 +171,21 @@ const avatarUrl = computed(() => {
 });
 const avatarFallback = computed(() => (profile.value?.display_name || profile.value?.handle || '?').slice(0, 1).toUpperCase());
 const locationLabel = computed(() => [profile.value?.city, profile.value?.country].filter(Boolean).join(', '));
+const profileAppearanceClasses = computed(() => {
+	const accent = ['plum', 'berry', 'forest', 'ocean', 'sand'].includes(appearance.value?.accent_preset)
+		? appearance.value.accent_preset
+		: 'plum';
+	const background = ['soft', 'paper', 'mist', 'night'].includes(appearance.value?.background_preset)
+		? appearance.value.background_preset
+		: 'soft';
+	return [`profile-hero--accent-${accent}`, `profile-hero--background-${background}`];
+});
+const avatarFrameClass = computed(() => {
+	const frame = ['none', 'soft', 'double', 'badge'].includes(appearance.value?.avatar_frame_preset)
+		? appearance.value.avatar_frame_preset
+		: 'none';
+	return `profile-avatar--frame-${frame}`;
+});
 
 const intentLabel = (intent) => ({
 	open: 'Хочу пообщаться', meet: 'Открыт знакомствам', games: 'Ищу компанию для игры', friends: 'Только знакомые', quiet: 'Спокойный режим',
@@ -197,6 +216,17 @@ const hydrateEditForms = () => {
 	privacyForm.show_location = Boolean(identity.value.privacy?.show_location);
 };
 
+const loadProfileAppearance = async () => {
+	appearance.value = null;
+	if (!profile.value?.persona_uid) return;
+	try {
+		const response = await EngagementService.personaAppearance(profile.value.persona_uid);
+		appearance.value = response.data.appearance || null;
+	} catch (error) {
+		console.error('Не удалось загрузить оформление Persona:', error);
+	}
+};
+
 const loadProfile = async (uid) => {
 	if (!uid) return;
 	isLoading.value = true;
@@ -206,8 +236,10 @@ const loadProfile = async (uid) => {
 		profile.value = response.data.profile;
 		document.title = `${profile.value.display_name} — PubChat`;
 		hydrateEditForms();
+		await loadProfileAppearance();
 	} catch (error) {
 		profile.value = null;
+		appearance.value = null;
 		if (error.response?.status === 403) errorMessage.value = 'Этот образ доступен только выбранному кругу людей.';
 		else if (error.response?.status === 404) errorMessage.value = 'Такого профиля больше нет.';
 		else errorMessage.value = 'Не удалось загрузить профиль.';
@@ -282,9 +314,20 @@ onUnmounted(() => {
 <style scoped>
 .profile-page { width: min(100%, 62rem); margin: 0 auto; padding: var(--ui-space-5) 0 var(--ui-space-10); display: grid; gap: var(--ui-space-4); }
 .profile-card { background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-xl); box-shadow: var(--ui-shadow-sm); padding: clamp(1rem, 3vw, 1.5rem); }
-.profile-hero { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--ui-space-5); }
-.profile-avatar { position: relative; width: clamp(5rem, 12vw, 7rem); aspect-ratio: 1; border-radius: 32%; display: grid; place-items: center; overflow: hidden; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 2rem; font-weight: 800; border: 1px solid var(--ui-border); }
-.profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.profile-hero { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--ui-space-5); overflow: hidden; }
+.profile-hero--background-soft { background: linear-gradient(145deg, var(--ui-surface) 45%, var(--ui-primary-soft) 190%); }
+.profile-hero--background-paper { background: color-mix(in srgb, var(--ui-surface) 92%, var(--ui-warning-soft)); }
+.profile-hero--background-mist { background: color-mix(in srgb, var(--ui-surface) 90%, var(--ui-info-soft)); }
+.profile-hero--background-night { background: color-mix(in srgb, var(--ui-surface) 80%, var(--ui-text) 20%); }
+.profile-hero--accent-berry { border-color: color-mix(in srgb, var(--ui-danger) 30%, var(--ui-border)); }
+.profile-hero--accent-forest { border-color: color-mix(in srgb, var(--ui-success) 30%, var(--ui-border)); }
+.profile-hero--accent-ocean { border-color: color-mix(in srgb, var(--ui-info) 30%, var(--ui-border)); }
+.profile-hero--accent-sand { border-color: color-mix(in srgb, var(--ui-warning) 30%, var(--ui-border)); }
+.profile-avatar { position: relative; width: clamp(5rem, 12vw, 7rem); aspect-ratio: 1; border-radius: 32%; display: grid; place-items: center; overflow: visible; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 2rem; font-weight: 800; border: 1px solid var(--ui-border); }
+.profile-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.profile-avatar--frame-soft { box-shadow: 0 0 0 .35rem color-mix(in srgb, var(--ui-primary) 16%, transparent); }
+.profile-avatar--frame-double { box-shadow: 0 0 0 .2rem var(--ui-surface), 0 0 0 .42rem color-mix(in srgb, var(--ui-primary) 38%, var(--ui-border)); }
+.profile-avatar--frame-badge::before { content: '✦'; position: absolute; top: -.45rem; right: -.45rem; z-index: 2; width: 1.65rem; height: 1.65rem; display: grid; place-items: center; border: 2px solid var(--ui-surface); border-radius: 50%; background: var(--ui-primary); color: var(--ui-primary-contrast); font-size: .72rem; }
 .presence-dot { position: absolute; right: 0.35rem; bottom: 0.35rem; width: 0.9rem; height: 0.9rem; border-radius: 50%; background: var(--ui-success); border: 3px solid var(--ui-surface); }
 .presence-dot--self { background: var(--ui-primary); }
 .profile-main { min-width: 0; }
@@ -293,12 +336,15 @@ onUnmounted(() => {
 h1 { margin: 0.1rem 0 0; font-size: clamp(1.5rem, 4vw, 2rem); line-height: var(--ui-leading-tight); }
 h2 { margin: 0.15rem 0 0; font-size: var(--ui-text-lg); }
 .profile-bio { margin: var(--ui-space-3) 0; color: var(--ui-text-muted); white-space: pre-wrap; }
+.persona-status { display: inline-flex; align-items: center; gap: var(--ui-space-2); margin: 0 0 var(--ui-space-3); padding: .45rem .7rem; border: 1px solid color-mix(in srgb, var(--ui-primary) 22%, var(--ui-border)); border-radius: var(--ui-radius-pill); background: color-mix(in srgb, var(--ui-surface) 82%, transparent); color: var(--ui-text); font-size: var(--ui-text-sm); font-weight: 650; }
+.persona-status i { color: var(--ui-primary); }
 .profile-meta { display: flex; flex-wrap: wrap; gap: var(--ui-space-2); align-items: center; color: var(--ui-text-muted); font-size: var(--ui-text-sm); }
 .intent-chip, .role-chip, .self-chip { display: inline-flex; align-items: center; min-height: 2rem; padding: 0 var(--ui-space-3); border-radius: var(--ui-radius-pill); font-size: var(--ui-text-xs); font-weight: 700; }
 .intent-chip { background: var(--ui-primary-soft); color: var(--ui-primary); }
 .role-chip { background: var(--ui-info-soft); color: var(--ui-info); }
 .self-chip { background: var(--ui-surface-muted); color: var(--ui-text-muted); }
 .profile-actions { display: flex; flex-direction: column; gap: var(--ui-space-2); min-width: 10rem; }
+.profile-actions a { text-decoration: none; }
 .ui-button:disabled { cursor: not-allowed; opacity: 0.55; }
 .contact-context { display: grid; grid-template-columns: minmax(12rem, 0.8fr) 1.2fr; gap: var(--ui-space-5); align-items: center; }
 .contact-context p { margin: 0; color: var(--ui-text-muted); }
@@ -325,7 +371,7 @@ h2 { margin: 0.15rem 0 0; font-size: var(--ui-text-lg); }
 @media (max-width: 760px) {
 	.profile-page { padding: var(--ui-space-3) 0 var(--ui-space-8); }
 	.profile-hero { grid-template-columns: auto 1fr; align-items: start; }
-	.profile-actions { grid-column: 1 / -1; flex-direction: row; min-width: 0; }
+	.profile-actions { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; min-width: 0; }
 	.profile-actions .ui-button { flex: 1; }
 	.profile-title-row { display: block; }
 	.intent-chip { margin-top: var(--ui-space-2); }

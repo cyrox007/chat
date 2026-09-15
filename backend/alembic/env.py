@@ -32,6 +32,7 @@ from components.identity.model import (
     PrivacySettings,
     RolePermission,
 )
+from components.engagement.model import ActivityRSVP, PersonaAppearance, SpaceActivity, SpaceAppearance
 from components.moderation.model import ModerationAction, ModerationAppeal, ModerationReport
 from components.space.model import (
     SpaceEvent,

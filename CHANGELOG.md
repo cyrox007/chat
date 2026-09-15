@@ -2,6 +2,65 @@
 
 Формат версий: `MAJOR.MINOR.PATCH-channel.N` до стабильного `1.0.0`.
 
+## [0.5.0-alpha.1] — 2026-09-15
+
+Stage 5: Product Identity & Engagement. Первый alpha-checkpoint визуальной идентичности и повторных социальных активностей поверх `0.4.0-alpha.1`.
+
+### Persona Appearance
+- allowlisted accent/background/avatar-frame presets;
+- короткая status line;
+- appearance отделён от Account/security/trust/permissions;
+- public appearance подчиняется существующим profile privacy/block rules;
+- профиль деградирует к базовому виду, если cosmetic projection временно недоступен.
+
+### Space Appearance
+- theme/cover presets, ambient icon и welcome line;
+- изменение оформления доступно только scoped owner/moderator;
+- оформление не меняет visibility, membership policy, permissions или discovery power;
+- privacy-aware batch projection до 100 Space UID без HTTP N+1;
+- недоступные private Spaces не раскрываются через appearance batch;
+- Space Discovery показывает атмосферу, но не использует cosmetics в сортировке.
+
+### Recurring Activities
+- versioned `/activities/v1` contract;
+- activity types и recurrence rules из allowlist;
+- `starts_at` требует explicit timezone;
+- API возвращает UTC timestamps с `Z`;
+- recurrence хранится одной canonical записью-шаблоном без бесконечной материализации строк;
+- `next_starts_at` вычисляется при чтении для daily/weekly/monthly;
+- RSVP `interested` / `going`;
+- active membership требуется для RSVP;
+- creator или scoped manager может редактировать/отменять activity;
+- bulk RSVP projection без N+1 на списке.
+
+### SPA / UI/UX
+- экран «Стиль образа»;
+- privacy-aware Persona appearance в обычном профиле;
+- экран «Жизнь пространства»;
+- appearance в Space Discovery;
+- ближайшее occurrence recurring activity;
+- RSVP и отмена activity;
+- routes/context navigation и mobile-first customization/activity surfaces.
+
+### Инварианты первого slice
+- cosmetics != trust/reputation/permissions;
+- Space appearance != discovery ranking power;
+- нет внутренней валюты, loot boxes, marketplace или pay-to-status;
+- recurring rule хранится как шаблон и не материализует бесконечную цепочку строк в БД.
+
+### Quality gate
+До version bump успешно прошли:
+- branch синхронизация с `main@0.4.0-alpha.1`;
+- additive migration graph с одной Alembic head;
+- backend dependency install, compile и FastAPI import;
+- realtime security regression guard;
+- backend contract tests;
+- SPA security regression guard и production build;
+- privacy/scoped-role/migration self-review;
+- public appearance/UI Kit polish.
+
+После version bump выполняется повторный exact-head CI уже на `0.5.0-alpha.1`; merge разрешён только после его успешного завершения.
+
 ## [0.4.0-alpha.1] — 2026-09-15
 
 Stage 4: Living Spaces & Social Core. Первый alpha-checkpoint продуктового социального ядра PubChat.
@@ -70,7 +129,7 @@ Stage 4: Living Spaces & Social Core. Первый alpha-checkpoint продук
 - production Vite build;
 - final privacy/permission/migration self-review.
 
-После version bump выполняется повторный exact-head CI; merge разрешён только после его успешного завершения.
+После version bump выполнен повторный exact-head CI; PR #4 слит только после его успешного завершения.
 
 ### Известный технический долг
 - race вокруг member capacity при конкурентных join/approve будет отдельно harden перед beta;
