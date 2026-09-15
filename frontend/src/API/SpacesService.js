@@ -29,11 +29,15 @@ export default class SpacesService {
 		return $api.delete(`/spaces/v1/${spaceUid}/membership`);
 	}
 
-	static members(spaceUid) {
-		return $api.get(`/spaces/v1/${spaceUid}/members`);
+	static members(spaceUid, params = {}) {
+		return $api.get(`/spaces/v1/${spaceUid}/members`, { params });
 	}
 
 	static updateMemberRole(spaceUid, accountUid, role) {
 		return $api.patch(`/spaces/v1/${spaceUid}/members/${accountUid}`, { role });
+	}
+
+	static manageMembership(spaceUid, accountUid, action) {
+		return $api.patch(`/spaces/v1/${spaceUid}/members/${accountUid}/membership`, { action });
 	}
 }
