@@ -5,7 +5,10 @@ from fastapi import APIRouter, Depends, FastAPI, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
-from components.moderation.consistency import supersede_previous_restrictions
+from components.moderation.consistency import (
+    ensure_report_actionable,
+    supersede_previous_restrictions,
+)
 from components.moderation.schemas import (
     ModerationActionCreateRequest,
     ModerationAppealCreateRequest,
@@ -120,6 +123,12 @@ def install(app: FastAPI) -> None:
         current_user: dict = Depends(auth_middle),
         db: AsyncSession = Depends(Database.session_generator),
     ):
+        await ensure_report_actionable(
+            db,
+            space_uid=space_uid,
+            report_uid=payload.report_uid,
+            target_account_uid=payload.target_account_uid,
+        )
         item = await create_action(db, space_uid, current_user["user_uid"], payload)
         if payload.action_type == "restrict":
             await supersede_previous_restrictions(
