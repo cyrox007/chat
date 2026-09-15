@@ -63,6 +63,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["target_account_uid"], ["accounts.uid"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["legacy_room_ban_id"], ["room_bans.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("uid"),
+        sa.UniqueConstraint("report_uid", name="uq_moderation_action_report"),
     )
     op.create_index("ix_moderation_actions_room_target", "moderation_actions", ["room_uid", "target_account_uid", "created_at"])
     op.create_index("ix_moderation_actions_target_status", "moderation_actions", ["target_account_uid", "status", "created_at"])
