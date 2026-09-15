@@ -40,4 +40,20 @@ export default class SpacesService {
 	static manageMembership(spaceUid, accountUid, action) {
 		return $api.patch(`/spaces/v1/${spaceUid}/members/${accountUid}/membership`, { action });
 	}
+
+	static invite(spaceUid, accountUid) {
+		return $api.post(`/spaces/v1/${spaceUid}/invitations/${accountUid}`);
+	}
+
+	static revokeInvitation(spaceUid, accountUid) {
+		return $api.delete(`/spaces/v1/${spaceUid}/invitations/${accountUid}`);
+	}
+
+	static invitations(params = {}) {
+		return $api.get('/spaces/v1/invitations', { params });
+	}
+
+	static respondInvitation(invitationUid, action) {
+		return $api.patch(`/spaces/v1/invitations/${invitationUid}`, { action });
+	}
 }
