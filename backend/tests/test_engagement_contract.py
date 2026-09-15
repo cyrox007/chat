@@ -3,6 +3,7 @@ import unittest
 from pydantic import ValidationError
 
 from app import app
+from components.engagement.batch import SpaceAppearanceBatchRequest
 from components.engagement.model import ActivityRSVP, PersonaAppearance, SpaceActivity, SpaceAppearance
 from components.engagement.schemas import (
     ActivityCreateRequest,
@@ -23,6 +24,7 @@ class EngagementContractTests(unittest.TestCase):
             ("/appearance/v1/me/persona", "GET"),
             ("/appearance/v1/me/persona", "PATCH"),
             ("/appearance/v1/personas/{persona_uid}", "GET"),
+            ("/appearance/v1/spaces/batch", "POST"),
             ("/appearance/v1/spaces/{space_uid}", "GET"),
             ("/appearance/v1/spaces/{space_uid}", "PATCH"),
             ("/activities/v1/spaces/{space_uid}", "GET"),
@@ -42,6 +44,22 @@ class EngagementContractTests(unittest.TestCase):
         fields = SpaceAppearanceUpdateRequest.model_fields
         for forbidden in ("owner_uid", "member_limit", "join_policy", "visibility", "rating"):
             self.assertNotIn(forbidden, fields)
+
+    def test_space_appearance_batch_is_bounded_and_deduplicated(self):
+        payload = SpaceAppearanceBatchRequest(
+            space_uids=[
+                "00000000-0000-0000-0000-000000000001",
+                "00000000-0000-0000-0000-000000000001",
+                "00000000-0000-0000-0000-000000000002",
+            ]
+        )
+        self.assertEqual(len(payload.space_uids), 2)
+        with self.assertRaises(ValidationError):
+            SpaceAppearanceBatchRequest(space_uids=[])
+        with self.assertRaises(ValidationError):
+            SpaceAppearanceBatchRequest(
+                space_uids=[f"00000000-0000-0000-0000-{index:012d}" for index in range(101)]
+            )
 
     def test_activity_types_and_rsvp_are_allowlisted(self):
         payload = ActivityCreateRequest(
