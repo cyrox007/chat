@@ -1,13 +1,33 @@
 # PubChat release checklist
 
-Before assigning or promoting a version:
+## До version bump
 
-- review merged changes and open P0/P1 blockers;
-- confirm `VERSION` follows `docs/versioning.md`;
-- update `CHANGELOG.md`;
-- backend contract tests pass and `app.version` equals `VERSION`;
-- frontend production build receives the same version;
-- Alembic has one head and migrations are reviewed;
-- security regression guards pass;
-- release head CI is green;
-- alpha → beta or beta → stable promotion satisfies the readiness gate, not just a date or commit count.
+- scope заморожен, P0/P1 blockers отсутствуют;
+- migrations reviewed, `alembic heads` показывает одну head;
+- backend compile/import и contract tests проходят;
+- frontend production build проходит;
+- privacy/permissions/data self-review завершён;
+- пользовательская и техническая документация обновлена;
+- CI зелёный на exact functional head.
+
+## Versioned gate
+
+Только после первого успешного gate:
+
+- обновить `VERSION`;
+- зафиксировать release entry в `CHANGELOG.md`;
+- синхронизировать versioning docs;
+- снова запустить CI на exact versioned head;
+- проверить совпадение backend/frontend версии;
+- только после второго зелёного gate переводить PR в ready и merge.
+
+## Перед deployment
+
+- backup данных;
+- migration rehearsal для рискованных изменений;
+- проверить PostgreSQL/Redis/configuration;
+- собрать frontend;
+- проверить `/health` и `/service/version`;
+- выполнить smoke test login/session, Space realtime и DM.
+
+Переход alpha → beta → stable зависит от readiness gate, а не даты или числа commits.
