@@ -1,7 +1,7 @@
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Query, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
@@ -11,6 +11,7 @@ from components.space.membership_schemas import (
     SpaceMembershipStatusFilter,
 )
 from components.space.membership_service import list_members_page, manage_membership
+from components.space.model import SpaceSettings
 from components.space.schemas import (
     SpaceCreateRequest,
     SpaceMembershipRoleUpdateRequest,
@@ -83,6 +84,18 @@ def install(app: FastAPI) -> None:
         current_user: dict = Depends(auth_middle),
         db: AsyncSession = Depends(Database.session_generator),
     ):
+        changes = payload.model_dump(exclude_unset=True)
+        settings = await db.get(SpaceSettings, space_uid)
+        current_visibility = settings.visibility if settings else "public"
+        current_join_policy = settings.join_policy if settings else "open"
+        next_visibility = changes.get("visibility", current_visibility)
+        next_join_policy = changes.get("join_policy", current_join_policy)
+        if next_visibility == "private" and next_join_policy != "invite":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"error_type": "private_space_must_be_invite_only"},
+            )
+
         space = await update_space(db, space_uid, current_user["user_uid"], payload)
         return {"status": "ok", "space": space}
 
