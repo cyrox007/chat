@@ -5,7 +5,6 @@ import hashlib
 import json
 import secrets
 import time
-from collections import defaultdict
 from typing import Awaitable, Callable, Optional
 from uuid import UUID
 
@@ -29,8 +28,8 @@ class RealtimeService:
     Shared realtime infrastructure for PubChat.
 
     Redis is authoritative in production for one-time socket tickets, cross-worker
-    pub/sub and presence. DEBUG mode has a process-local fallback so developers can
-    run the SPA without Redis while still exercising the v2 protocol.
+    pub/sub, presence, rate limits and idempotency. DEBUG mode has a process-local
+    fallback so developers can exercise the protocol without a Redis service.
     """
 
     CHANNEL = "pubchat:realtime:v2"
@@ -43,6 +42,7 @@ class RealtimeService:
         self._fallback_tickets: dict[str, dict] = {}
         self._fallback_connections: dict[str, dict] = {}
         self._fallback_rate_limits: dict[str, tuple[int, float]] = {}
+        self._fallback_idempotency: dict[str, float] = {}
         self._lock = asyncio.Lock()
 
     @property
@@ -79,16 +79,20 @@ class RealtimeService:
             )
             await client.ping()
             self._redis = client
-            self._pubsub = client.pubsub(ignore_subscribe_messages=True)
-            await self._pubsub.subscribe(self.CHANNEL)
-            self._listener_task = asyncio.create_task(self._listen(), name="pubchat-realtime-listener")
+            await self._subscribe()
             logger.info("Realtime v2 подключен к Redis")
         except Exception as exc:
-            self._redis = None
-            self._pubsub = None
+            await self._reset_redis()
             logger.exception("Не удалось подключить realtime v2 к Redis: %s", exc)
             if not config.DEBUG:
                 logger.error("Production realtime операции будут отклоняться до восстановления Redis")
+
+    async def _subscribe(self) -> None:
+        if not self._redis:
+            return
+        self._pubsub = self._redis.pubsub(ignore_subscribe_messages=True)
+        await self._pubsub.subscribe(self.CHANNEL)
+        self._listener_task = asyncio.create_task(self._listen(), name="pubchat-realtime-listener")
 
     async def stop(self) -> None:
         if self._listener_task:
@@ -110,6 +114,21 @@ class RealtimeService:
             await self._redis.aclose()
             self._redis = None
 
+    async def _reset_redis(self) -> None:
+        if self._pubsub:
+            try:
+                await self._pubsub.aclose()
+            except Exception:
+                pass
+            self._pubsub = None
+        if self._redis:
+            try:
+                await self._redis.aclose()
+            except Exception:
+                pass
+            self._redis = None
+        self._listener_task = None
+
     async def _listen(self) -> None:
         assert self._pubsub is not None
         try:
@@ -124,6 +143,9 @@ class RealtimeService:
         except asyncio.CancelledError:
             raise
         except Exception:
+            # redis-py reconnects commands automatically, but a PubSub iterator can
+            # terminate after a transport failure. Make the failure visible so a
+            # process supervisor/health check can detect the degraded worker.
             logger.exception("Redis realtime listener остановлен из-за ошибки")
 
     async def _dispatch(self, event: dict) -> None:
@@ -140,8 +162,13 @@ class RealtimeService:
     async def publish(self, event: dict) -> None:
         event.setdefault("protocol", 2)
         if self._redis:
-            await self._redis.publish(self.CHANNEL, json.dumps(event, default=str))
-            return
+            try:
+                await self._redis.publish(self.CHANNEL, json.dumps(event, default=str))
+                return
+            except Exception as exc:
+                logger.exception("Redis publish failed: %s", exc)
+                if not config.DEBUG:
+                    raise RealtimeUnavailable("Redis realtime delivery is unavailable") from exc
         if not config.DEBUG:
             raise RealtimeUnavailable("Redis is required for distributed realtime delivery")
         await self._dispatch(event)
@@ -386,6 +413,60 @@ class RealtimeService:
             count += 1
             self._fallback_rate_limits[key] = (count, reset_at)
             return count <= limit
+
+    @staticmethod
+    def _idempotency_key(user_uid: UUID | str, scope: str, event_id: str) -> str:
+        digest = hashlib.sha256(event_id.encode("utf-8")).hexdigest()
+        return f"pubchat:rt:idempotency:{scope}:{user_uid}:{digest}"
+
+    async def claim_event(
+        self,
+        user_uid: UUID | str,
+        scope: str,
+        event_id: str | None,
+        ttl_seconds: Optional[int] = None,
+    ) -> bool:
+        """
+        Claim a client event before persistence.
+
+        Returns False when the same account/scope/event id has already been seen.
+        Call release_event if persistence fails so a safe retry remains possible.
+        """
+        if not event_id:
+            return True
+        normalized_event_id = str(event_id).strip()
+        if not normalized_event_id or len(normalized_event_id) > 128:
+            return False
+
+        ttl = ttl_seconds or config.REALTIME_IDEMPOTENCY_TTL_SECONDS
+        key = self._idempotency_key(user_uid, scope, normalized_event_id)
+        if self._redis:
+            return bool(await self._redis.set(key, "1", ex=ttl, nx=True))
+
+        now = time.time()
+        async with self._lock:
+            expired = [item for item, expires_at in self._fallback_idempotency.items() if expires_at <= now]
+            for item in expired:
+                self._fallback_idempotency.pop(item, None)
+            if key in self._fallback_idempotency:
+                return False
+            self._fallback_idempotency[key] = now + ttl
+            return True
+
+    async def release_event(
+        self,
+        user_uid: UUID | str,
+        scope: str,
+        event_id: str | None,
+    ) -> None:
+        if not event_id:
+            return
+        key = self._idempotency_key(user_uid, scope, str(event_id).strip())
+        if self._redis:
+            await self._redis.delete(key)
+            return
+        async with self._lock:
+            self._fallback_idempotency.pop(key, None)
 
 
 realtime_service = RealtimeService()
