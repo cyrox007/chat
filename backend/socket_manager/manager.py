@@ -8,6 +8,7 @@ from fastapi import WebSocket
 
 from components.realtime import realtime_service
 from components.user.model import User
+from settings import config
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -36,8 +37,6 @@ class ConnectionManager:
 
     @property
     def online_users_count(self) -> int:
-        # Compatibility metric. Distributed totals should be read from Redis-aware
-        # metrics rather than inferred from this process-local property.
         return len(self.user_connections)
 
     def _connection_id(self, websocket: WebSocket) -> str:
@@ -46,6 +45,13 @@ class ConnectionManager:
             connection_id = str(uuid4())
             self.connection_ids[websocket] = connection_id
         return connection_id
+
+    async def _send_json(self, websocket: WebSocket, message: dict) -> None:
+        """Bound per-socket send latency so a slow consumer cannot block fan-out."""
+        await asyncio.wait_for(
+            websocket.send_json(message),
+            timeout=config.REALTIME_SEND_TIMEOUT_SECONDS,
+        )
 
     async def connect_to_room(self, websocket: WebSocket, room_uid: UUID, user_uid: UUID):
         self.room_connections.setdefault(room_uid, []).append((websocket, user_uid))
@@ -152,11 +158,15 @@ class ConnectionManager:
             if exclude_user and user_uid == exclude_user:
                 continue
             sockets.append(websocket)
-            coroutines.append(websocket.send_json(message))
+            coroutines.append(self._send_json(websocket, message))
 
         if coroutines:
             results = await asyncio.gather(*coroutines, return_exceptions=True)
-            stale.extend(websocket for websocket, result in zip(sockets, results) if isinstance(result, Exception))
+            for websocket, result in zip(sockets, results):
+                if isinstance(result, Exception):
+                    stale.append(websocket)
+                    if isinstance(result, asyncio.TimeoutError):
+                        logger.warning("Realtime room consumer exceeded send timeout: room=%s", room_uid)
 
         for websocket in stale:
             await self.disconnect(websocket, room_uid)
@@ -166,11 +176,13 @@ class ConnectionManager:
         if not sockets:
             return
         results = await asyncio.gather(
-            *(websocket.send_json(message) for websocket in sockets),
+            *(self._send_json(websocket, message) for websocket in sockets),
             return_exceptions=True,
         )
         for websocket, result in zip(sockets, results):
             if isinstance(result, Exception):
+                if isinstance(result, asyncio.TimeoutError):
+                    logger.warning("Realtime DM consumer exceeded send timeout: user=%s", user_uid)
                 await self.disconnect(websocket)
 
     async def _handle_bus_event(self, event: dict) -> None:
@@ -221,7 +233,12 @@ class ConnectionManager:
                 if connection_user_uid != user_uid:
                     continue
                 try:
-                    await websocket.close(code=4001, reason=reason)
+                    await asyncio.wait_for(
+                        websocket.close(code=4001, reason=reason),
+                        timeout=config.REALTIME_SEND_TIMEOUT_SECONDS,
+                    )
+                except Exception:
+                    pass
                 finally:
                     await self.disconnect(websocket, room_uid)
 
@@ -233,7 +250,7 @@ class ConnectionManager:
 
     async def send_to_specific_user(self, websocket: WebSocket, message: dict):
         try:
-            await websocket.send_json(message)
+            await self._send_json(websocket, message)
         except Exception:
             logger.exception("Ошибка отправки realtime сообщения на конкретное устройство")
             await self.disconnect(websocket)
