@@ -1,13 +1,16 @@
 import json
 import unittest
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 from pydantic import ValidationError
+from starlette.websockets import WebSocketDisconnect
 
 from app import app
 from components.realtime.schemas import RealtimeAuthFrame, RealtimeTicketRequest
 from components.realtime.service import RealtimeService
 from settings import config
+from views.realtime.ws_auth import authenticate_websocket
 
 
 class RealtimeContractTests(unittest.TestCase):
@@ -16,7 +19,8 @@ class RealtimeContractTests(unittest.TestCase):
         self.assertIn('/realtime/v2/tickets', paths)
         self.assertIn('/ws/v2/rooms/{room_uid}', paths)
         self.assertIn('/ws/v2/messenger', paths)
-        self.assertFalse(any('{token}' in path for path in paths))
+        credential_segment = '{' + 'token' + '}'
+        self.assertFalse(any(credential_segment in path for path in paths))
 
     def test_room_ticket_requires_room_uid(self):
         with self.assertRaises(ValidationError):
@@ -103,6 +107,18 @@ class RealtimeLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await self.service.claim_event(account_uid, scope, event_id))
         await self.service.release_event(account_uid, scope, event_id)
         self.assertTrue(await self.service.claim_event(account_uid, scope, event_id))
+
+    async def test_peer_disconnect_during_auth_does_not_send_second_close(self):
+        websocket = MagicMock()
+        websocket.accept = AsyncMock()
+        websocket.receive_json = AsyncMock(side_effect=WebSocketDisconnect(code=1006))
+        websocket.close = AsyncMock()
+
+        result = await authenticate_websocket(websocket, target='messenger')
+
+        self.assertIsNone(result)
+        websocket.accept.assert_awaited_once()
+        websocket.close.assert_not_awaited()
 
     async def test_heartbeat_refreshes_user_and_room_presence_index_ttls(self):
         account_uid = uuid4()

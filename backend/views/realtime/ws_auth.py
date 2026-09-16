@@ -4,6 +4,7 @@ from uuid import UUID
 
 from fastapi import WebSocket, status
 from pydantic import ValidationError
+from starlette.websockets import WebSocketDisconnect
 
 from components.realtime import realtime_service
 from components.realtime.schemas import RealtimeAuthFrame
@@ -34,6 +35,11 @@ async def authenticate_websocket(
         frame = RealtimeAuthFrame.model_validate(raw_frame)
     except asyncio.TimeoutError:
         await websocket.close(code=4401, reason="Realtime authentication timed out")
+        return None
+    except WebSocketDisconnect:
+        # The peer has already closed the connection. Sending another close frame
+        # would violate the ASGI WebSocket state machine and mask the disconnect
+        # with "Unexpected ASGI message websocket.close".
         return None
     except (ValidationError, ValueError, TypeError):
         await websocket.close(code=4401, reason="Invalid realtime authentication frame")
