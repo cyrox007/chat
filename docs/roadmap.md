@@ -2,11 +2,11 @@
 
 ## Текущий статус
 
-Released: **`0.5.4-alpha.1`**.
+Released: **`0.5.5-alpha.1`**.
 
-Active development line: **`0.5.5-alpha.0`** — Web application maturity.
+Next development line: **`0.6.0-alpha.0`** — Pre-beta hardening.
 
-PubChat остаётся alpha: основные продуктовые контуры сформированы, но production-like hardening, observability/load gates и pre-beta эксплуатационные проверки ещё не завершены.
+PubChat остаётся alpha: основные продуктовые контуры сформированы, но production-like integration, observability, load/security rehearsal и финальные accessibility/operations gates ещё не завершены.
 
 ## Завершённые checkpoints
 
@@ -29,137 +29,115 @@ Persona/Space Appearance, recurring Activities, RSVP, `next_starts_at` и mobile
 Earned achievements и Conversation Rounds без score/winner/prize/stake, интегрированные с block/membership/scoped roles.
 
 ### Stage 5.3 — Activity Occurrences & Notifications ✅ `0.5.2-alpha.1`
+Bounded occurrences, opt-in reminders, private notification inbox, idempotent reconciliation и notification UX.
 
-- bounded `ActivityOccurrence` rows и 45-day horizon;
-- unique Activity+start invariant;
-- monthly recurrence regression без calendar drift после короткого месяца;
-- side-effect-free occurrence GET + explicit POST materialization command;
-- private reminder preferences: 15m / 60m / 1d;
-- максимум 200 активных reminders на Account;
-- private notification inbox, unread/read/read-all;
-- one reminder max per occurrence;
-- explicit idempotent reconciliation/sync;
-- `/activity-occurrences/v1` и `/notifications/v1`;
-- reminder controls в Space Life с одним batch preferences request;
-- `/notifications` screen;
-- спокойный unread bell и periodic in-app sync в app shell;
-- отдельный notification UX contract;
-- полностью реструктурированная документация проекта.
-
-Осознанное ограничение: recurring Activity пока UTC-anchored и не хранит IANA timezone name. DST-correct wall-clock recurrence входит в pre-beta hardening.
+Известное alpha-ограничение: recurring Activity пока UTC-anchored и не хранит IANA timezone name. DST-correct wall-clock recurrence входит в pre-beta hardening.
 
 ### Stage 5.4 — Creator Support & Cosmetic Gifts ✅ `0.5.3-alpha.1`
-
-- opt-in Persona/Space support;
-- allowlisted gifts без price/currency;
-- append-only ledger + cosmetic entitlements;
-- privacy/block/membership enforcement;
-- sender anti-spam row-lock;
-- public aggregate shelf + private received history;
-- support не влияет на trust/permissions/discovery;
-- Persona/Space support UI;
-- no checkout/wallet/payment provider.
+Consent-first internal gifts, append-only support ledger, cosmetic entitlements и Persona/Space support UI без real-money/payment authority.
 
 ### Stage 5.5 — Discovery Quality ✅ `0.5.4-alpha.1`
-
-- `/discovery/v1/spaces` отдельно от стабильного `/spaces/v1` catalog;
-- eligibility/privacy/block до ranking;
-- distinct recent authors вместо raw message volume;
-- upcoming Activity/Event, shared topics/purpose, explicit social intent;
-- private/unlisted upcoming context скрыт без active membership;
-- server-only score, до трёх explainable reasons;
-- bounded candidate pool + diversity pass;
-- legacy rating/gifts/support/payment signals не участвуют в organic ranking.
+Eligibility-first organic discovery, explainable reasons, distinct-author activity signal, privacy-aware upcoming context, bounded candidate pool и no-paid/no-gift ranking boundary.
 
 Известное alpha-ограничение: candidate pool пока начинается с bounded canonical catalog по новизне. До beta candidate generation будет собираться из нескольких bounded источников activity/upcoming/shared context.
 
-## Stage 5.6 — Web application maturity 🚧 `0.5.5-alpha.0`
+### Stage 5.6 — Web Application Maturity ✅ `0.5.5-alpha.1`
 
-Функциональный scope уже реализован и проходит exact-head CI; release gate ещё не завершён.
-
-### PWA / offline shell
-- локальный installable manifest и существующие 192/512 icons;
+#### PWA / offline shell
+- локальный installable manifest и 192/512 icons;
 - production-only service-worker registration;
 - network-first navigation shell;
 - static-only runtime cache;
 - API/auth/realtime/fetch-XHR responses не кэшируются;
-- спокойный install prompt;
-- update notice;
-- PWA cache-safety regression guard.
+- calm install/update UX;
+- PWA cache-safety CI guard.
 
-### Notification delivery foundation
+#### Notification delivery foundation
 - отдельный `python -m workers.notification_reconciler`;
 - scheduler не запускается в FastAPI lifecycle;
-- bounded batch/max-batches;
+- bounded processing;
 - durable `NotificationWorkerState` cursor;
 - `FOR UPDATE SKIP LOCKED` против overlap sweep;
-- cursor продолжает обработку между scheduler runs и сбрасывается после конца списка;
-- crash/retry безопасен благодаря notification DB dedupe.
+- safe retry через existing notification dedupe.
 
-### Frontend lifecycle
-- notification unread/sync/polling вынесен в Vuex module;
+#### Frontend lifecycle
+- notification state/polling вынесен в Vuex module;
 - `App.vue` владеет auth/network lifecycle;
-- Header только отображает unread state;
-- NotificationsView обновляет единый store после read/read-all;
+- Header presentation-only;
+- NotificationsView обновляет единый unread state;
 - authenticated bootstrap защищён от двойного запуска;
 - lifecycle regression guard в CI.
 
-### UX/accessibility
-- install prompt получил named accessible region;
-- update notice использует polite live region и keyboard-visible focus;
-- offline copy не обещает сохранение приватных server data;
-- mobile bottom-nav не расширяется PWA controls.
+#### UX/docs
+- named install region;
+- polite update live region;
+- keyboard-visible focus;
+- operations/system requirements/architecture/PWA UX contracts актуализированы.
 
-### Осталось до `0.5.5-alpha.1`
-- docs/architecture/user guide/UI Kit sync;
-- финальный exact-head CI на frozen feature head;
-- version bump + CHANGELOG/version docs;
-- второй exact-head CI;
-- merge.
+Stage 5.6 не добавляет browser/native push и не обещает offline messaging/private data synchronization.
 
-## Stage 6 — Pre-beta hardening
+## Stage 6 — Pre-beta hardening 🚧 `0.6.0-alpha.0`
 
-Обязательный gate перед beta.
+Следующий обязательный milestone перед beta. Здесь новые social/product mechanics не являются приоритетом: задача — доказать корректность, переносимость и эксплуатационную готовность уже построенных контуров.
 
-### Data/migrations
-- PostgreSQL integration environment;
-- Redis integration tests;
+### 6.1 Data / migrations
+- поднять production-like PostgreSQL integration environment в CI;
 - migration rehearsal на копии legacy schema/data;
 - backup/restore drill;
+- проверить Alembic upgrade from historical baseline до current head;
 - member-capacity concurrency hardening;
 - IANA timezone storage и DST-correct recurring wall-clock semantics.
 
-### Reliability/performance
-- realtime/discovery load tests;
-- DB profiling;
-- Redis failure/recovery;
+### 6.2 Redis / realtime reliability
+- Redis integration tests без development fallback;
+- cross-worker realtime test environment;
+- Redis restart/failure recovery;
+- ticket/idempotency/presence TTL validation;
 - slow-client/backpressure scenarios;
-- notification worker/reconciliation load/idempotency tests;
-- support/gift abuse-rate hardening before monetization;
-- discovery candidate generation beyond newest-catalog bias.
+- reconnect после rolling restart.
 
-### Security/privacy
+### 6.3 Notification worker
+- integration tests с реальным PostgreSQL;
+- concurrent worker/`SKIP LOCKED` validation;
+- cursor recovery/restart tests;
+- load/idempotency profiling;
+- worker metrics/health operational contract;
+- подготовка delivery adapter boundary для browser/native push без включения push по умолчанию.
+
+### 6.4 Discovery / performance
+- multi-source bounded candidate generation вместо newest-catalog bias;
+- query/DB profiling;
+- ranking latency/load tests;
+- privacy/block regression под большим candidate set;
+- отсутствие paid/support influence сохраняется invariant.
+
+### 6.5 Security/privacy
 - session/cookie/CSRF review;
-- upload/media review;
-- moderation/report/appeal review;
+- upload/media validation/storage review;
+- moderation/report/appeal privacy audit;
+- Account block coverage по всем social surfaces;
 - privacy side-channel review;
-- Account block coverage для всех social surfaces;
-- financial threat model before any real payment provider integration.
+- secret/logging review;
+- financial threat model до любых real payment flows.
 
-### Operations
-- structured logs/metrics/error tracking;
-- reminder worker metrics/alerting;
-- status/incident process;
-- deployment/recovery documentation;
-- shared/object storage.
+### 6.6 Operations / observability
+- structured logs;
+- HTTP/realtime/worker metrics;
+- error tracking;
+- alerting;
+- status/incident procedure;
+- deployment/recovery runbook;
+- shared/object storage strategy;
+- конкретная supported PostgreSQL/Redis compatibility matrix.
 
-### UX/accessibility
-- full keyboard/focus audit;
+### 6.7 UX/accessibility
+- полный keyboard/focus audit;
 - contrast/accessibility pass;
 - mobile/narrow viewport pass;
 - error/empty/offline consistency;
 - onboarding usability;
-- terminology audit.
+- terminology audit;
+- PWA install/update flow на Chrome/Edge/Safari-supported paths.
 
 ## Beta
 
