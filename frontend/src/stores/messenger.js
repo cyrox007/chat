@@ -84,6 +84,7 @@ export default {
 				if (shouldNotify) {
 					state.notifications.push({
 						uid: message.uid,
+						surface: 'messenger',
 						sender: message.sender,
 						content: message.content,
 						timestamp: message.timestamp,
@@ -91,6 +92,11 @@ export default {
 					});
 				}
 			}
+		},
+		ADD_SPACE_NOTIFICATION(state, notification) {
+			const key = notification.uid;
+			if (key && state.notifications.some((item) => item.uid === key)) return;
+			state.notifications.push(notification);
 		},
 		MERGE_CONVERSATION(state, { userId, messages }) {
 			if (!state.conversations[userId]) state.conversations[userId] = [];
@@ -275,6 +281,21 @@ export default {
 					if (!isFromCurrentUser && shouldPlaySound) dispatch('playNotificationSound');
 					break;
 				}
+				case 'space_message_notification': {
+					const shouldNotify = data.notification?.notify_in_app ?? true;
+					if (shouldNotify) {
+						commit('ADD_SPACE_NOTIFICATION', {
+							uid: `space:${data.message_uid || `${data.room_uid}:${data.created_at}`}`,
+							surface: 'space',
+							sender: data.sender,
+							content: 'Новое сообщение в чате пространства',
+							timestamp: new Date(data.created_at || Date.now()),
+							roomUid: data.room_uid,
+						});
+					}
+					if (data.notification?.play_sound ?? true) dispatch('playSpaceNotificationSound');
+					break;
+				}
 				case 'message_read':
 					commit('MARK_MESSAGE_AS_READ', data.message_uid);
 					break;
@@ -354,6 +375,12 @@ export default {
 
 		playNotificationSound() {
 			const audio = new Audio('/sounds/private_notification.mp3');
+			audio.preload = 'auto';
+			audio.play().catch(() => {});
+		},
+
+		playSpaceNotificationSound() {
+			const audio = new Audio('/sounds/chat_notification.mp3');
 			audio.preload = 'auto';
 			audio.play().catch(() => {});
 		},
