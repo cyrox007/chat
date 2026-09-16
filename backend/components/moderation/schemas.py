@@ -34,6 +34,19 @@ TrustSafetyResolutionCode = Literal[
     "other",
 ]
 
+PlatformCapability = Literal[
+    "messenger.send",
+    "space.chat.send",
+    "media.upload",
+    "space.create",
+    "space.join",
+    "invitation.send",
+    "profile.edit",
+    "discovery.publish",
+    "account.access",
+]
+PlatformRestrictionScope = Literal["platform", "space"]
+
 
 class ModerationReportCreateRequest(BaseModel):
     target_account_uid: Optional[UUID] = None
@@ -119,4 +132,41 @@ class TrustSafetyDecisionRequest(BaseModel):
             raise ValueError("escalated reports require needs_platform_action")
         if self.status == "dismissed" and self.resolution_code == "needs_platform_action":
             raise ValueError("dismissed reports cannot require platform action")
+        return self
+
+
+class PlatformRestrictionCreateRequest(BaseModel):
+    """Human platform action; authority and permissions are resolved server-side."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    target_account_uid: UUID
+    capability: PlatformCapability
+    scope_type: PlatformRestrictionScope = "platform"
+    scope_uid: Optional[UUID] = None
+    reason_code: str = Field(min_length=2, max_length=48, pattern=r"^[a-z0-9_.-]+$")
+    public_explanation: str = Field(min_length=3, max_length=1000)
+    duration_minutes: Optional[int] = Field(default=None, ge=5, le=525600)
+    report_uid: Optional[UUID] = None
+
+    @model_validator(mode="after")
+    def validate_scope(self):
+        self.public_explanation = " ".join(self.public_explanation.split())
+        if self.scope_type == "platform" and self.scope_uid is not None:
+            raise ValueError("platform scope must not contain scope_uid")
+        if self.scope_type == "space" and self.scope_uid is None:
+            raise ValueError("space scope requires scope_uid")
+        if self.capability == "account.access" and self.scope_type != "platform":
+            raise ValueError("account.access restriction must be platform-scoped")
+        return self
+
+
+class PlatformRestrictionRevokeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=3, max_length=1000)
+
+    @model_validator(mode="after")
+    def clean_reason(self):
+        self.reason = " ".join(self.reason.split())
         return self
