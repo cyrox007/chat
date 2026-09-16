@@ -4,9 +4,9 @@
 
 Released: **`0.5.4-alpha.1`**.
 
-Next development line: **`0.5.5-alpha.0`** — Web application maturity.
+Active development line: **`0.5.5-alpha.0`** — Web application maturity.
 
-PubChat остаётся alpha: основные продуктовые контуры сформированы, но production-like hardening, web/PWA maturity и pre-beta эксплуатационные проверки ещё не завершены.
+PubChat остаётся alpha: основные продуктовые контуры сформированы, но production-like hardening, observability/load gates и pre-beta эксплуатационные проверки ещё не завершены.
 
 ## Завершённые checkpoints
 
@@ -48,62 +48,74 @@ Earned achievements и Conversation Rounds без score/winner/prize/stake, ин
 
 Осознанное ограничение: recurring Activity пока UTC-anchored и не хранит IANA timezone name. DST-correct wall-clock recurrence входит в pre-beta hardening.
 
-Browser/native push не входит в `0.5.2`; domain inbox и reconciliation теперь являются базой для будущего delivery adapter.
-
 ### Stage 5.4 — Creator Support & Cosmetic Gifts ✅ `0.5.3-alpha.1`
 
-- opt-in `CreatorSupportProfile` для Persona;
-- opt-in `SpaceSupportSettings` для Spaces;
-- allowlisted `GiftDefinition` catalog без price/currency;
-- append-only `SupportLedgerEntry` с snapshot labels;
-- `CosmeticEntitlement`, отделённый от permissions/trust/reputation;
-- Persona gifts соблюдают profile privacy + Account-level block;
-- Space gifts требуют active membership;
-- self-gift Persona запрещён;
-- owner не может отправлять gift собственному Space;
-- максимум 20 внутренних gifts с Account за rolling 24h;
-- sender limit сериализован Account row lock против concurrent bypass;
-- публичный shelf показывает только gift + aggregate count;
-- sender/message доступны только recipient/manager private history;
-- historical ledger переживает удаление Persona/Space через `SET NULL` live references + snapshots;
-- `/support/v1` contract;
-- Persona opt-in/history встроены в «Стиль образа»;
-- support shelf + gift picker встроены в Persona profile;
-- отдельный `/spaces/:uid/support` с Space shelf, gift flow и manager settings/history;
-- contract regressions запрещают payment/balance/price/power fields и ledger mutation routes.
-
-`0.5.3` остаётся бесплатным/internal support slice. Реальные payments требуют отдельного financial/security review и transaction/fraud/idempotency модели.
+- opt-in Persona/Space support;
+- allowlisted gifts без price/currency;
+- append-only ledger + cosmetic entitlements;
+- privacy/block/membership enforcement;
+- sender anti-spam row-lock;
+- public aggregate shelf + private received history;
+- support не влияет на trust/permissions/discovery;
+- Persona/Space support UI;
+- no checkout/wallet/payment provider.
 
 ### Stage 5.5 — Discovery Quality ✅ `0.5.4-alpha.1`
 
-- новый `/discovery/v1/spaces`; стабильный `/spaces/v1` catalog не сломан;
-- eligibility/privacy применяется до ranking;
-- Account-level block подавляет новую owner-led публичную рекомендацию;
-- недавняя активность считается по разным авторам, а не raw message volume;
-- учитываются upcoming Activity/Event, shared topics/purpose, explicit social intent, modest freshness/member-count context;
-- private/unlisted Space без active membership не раскрывает внутренний upcoming context;
-- server-only score не входит в API;
-- до трёх объяснимых причин «Почему здесь»;
-- bounded candidate pool до 200 Spaces;
-- diversity pass уменьшает однообразие purpose без обхода filters/privacy;
-- legacy `Room.rating`, gifts/support, price/currency/payment не участвуют в ranking;
-- SPA Discovery переведён на новый endpoint и показывает reasons + nearest allowed upcoming item;
-- отдельные domain и UX contracts для organic discovery.
+- `/discovery/v1/spaces` отдельно от стабильного `/spaces/v1` catalog;
+- eligibility/privacy/block до ranking;
+- distinct recent authors вместо raw message volume;
+- upcoming Activity/Event, shared topics/purpose, explicit social intent;
+- private/unlisted upcoming context скрыт без active membership;
+- server-only score, до трёх explainable reasons;
+- bounded candidate pool + diversity pass;
+- legacy rating/gifts/support/payment signals не участвуют в organic ranking.
 
-Известное alpha-ограничение organic-v1: candidate pool пока начинается с bounded canonical catalog, отсортированного по новизне. Очень старый Space вне первых 200 кандидатов может не попасть в персонализированный ranking даже при новой активности. До beta candidate generation будет собираться из нескольких bounded источников (recent activity/upcoming/shared context), а не через unbounded scan.
+Известное alpha-ограничение: candidate pool пока начинается с bounded canonical catalog по новизне. До beta candidate generation будет собираться из нескольких bounded источников activity/upcoming/shared context.
 
 ## Stage 5.6 — Web application maturity 🚧 `0.5.5-alpha.0`
 
-Следующий продуктово-технический slice:
+Функциональный scope уже реализован и проходит exact-head CI; release gate ещё не завершён.
 
-- PWA manifest/installability и offline shell;
-- service-worker strategy без кеширования security-sensitive API/auth responses;
-- notification worker adapter foundation и reusable delivery contracts;
-- frontend state/testing cleanup;
-- route/error/loading/offline consistency;
-- дальнейшее удаление legacy styles/components;
-- accessibility pass для новых Stage 5 surfaces;
-- подготовка SPA contracts к future Android/iOS clients без browser-only business logic.
+### PWA / offline shell
+- локальный installable manifest и существующие 192/512 icons;
+- production-only service-worker registration;
+- network-first navigation shell;
+- static-only runtime cache;
+- API/auth/realtime/fetch-XHR responses не кэшируются;
+- спокойный install prompt;
+- update notice;
+- PWA cache-safety regression guard.
+
+### Notification delivery foundation
+- отдельный `python -m workers.notification_reconciler`;
+- scheduler не запускается в FastAPI lifecycle;
+- bounded batch/max-batches;
+- durable `NotificationWorkerState` cursor;
+- `FOR UPDATE SKIP LOCKED` против overlap sweep;
+- cursor продолжает обработку между scheduler runs и сбрасывается после конца списка;
+- crash/retry безопасен благодаря notification DB dedupe.
+
+### Frontend lifecycle
+- notification unread/sync/polling вынесен в Vuex module;
+- `App.vue` владеет auth/network lifecycle;
+- Header только отображает unread state;
+- NotificationsView обновляет единый store после read/read-all;
+- authenticated bootstrap защищён от двойного запуска;
+- lifecycle regression guard в CI.
+
+### UX/accessibility
+- install prompt получил named accessible region;
+- update notice использует polite live region и keyboard-visible focus;
+- offline copy не обещает сохранение приватных server data;
+- mobile bottom-nav не расширяется PWA controls.
+
+### Осталось до `0.5.5-alpha.1`
+- docs/architecture/user guide/UI Kit sync;
+- финальный exact-head CI на frozen feature head;
+- version bump + CHANGELOG/version docs;
+- второй exact-head CI;
+- merge.
 
 ## Stage 6 — Pre-beta hardening
 
@@ -122,7 +134,7 @@ Browser/native push не входит в `0.5.2`; domain inbox и reconciliation
 - DB profiling;
 - Redis failure/recovery;
 - slow-client/backpressure scenarios;
-- notification reconciliation load/idempotency tests;
+- notification worker/reconciliation load/idempotency tests;
 - support/gift abuse-rate hardening before monetization;
 - discovery candidate generation beyond newest-catalog bias.
 
@@ -136,12 +148,13 @@ Browser/native push не входит в `0.5.2`; domain inbox и reconciliation
 
 ### Operations
 - structured logs/metrics/error tracking;
+- reminder worker metrics/alerting;
 - status/incident process;
 - deployment/recovery documentation;
 - shared/object storage.
 
 ### UX/accessibility
-- keyboard/focus audit;
+- full keyboard/focus audit;
 - contrast/accessibility pass;
 - mobile/narrow viewport pass;
 - error/empty/offline consistency;
@@ -165,6 +178,8 @@ Beta назначается только когда launch-critical journeys р�
 - Account block нельзя обойти другой Persona.
 - Discovery ranking не расширяет eligibility/privacy.
 - Organic discovery нельзя купить через gift/support.
+- Service worker не является storage для auth/private API data.
+- Background scheduler не запускается внутри каждого web worker.
 - Communication quality first.
 - Никакой тюремной терминологии.
 - SPA — первый клиент, contracts reusable для Android/iOS.
