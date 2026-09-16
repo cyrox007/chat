@@ -1,0 +1,23 @@
+[Unit]
+Description=PubChat Backend
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+WorkingDirectory=/home/projects/pubchat/backend
+EnvironmentFile=/home/projects/pubchat/backend/.env
+Environment=WEB_CONCURRENCY=2
+Environment=UVICORN_GRACEFUL_SHUTDOWN_SECONDS=30
+ExecStart=/home/projects/pubchat/backend/venv/bin/python3 /home/projects/pubchat/backend/run_server.py
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=2
+KillMode=mixed
+TimeoutStopSec=45
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
