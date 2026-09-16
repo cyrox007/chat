@@ -11,6 +11,7 @@ const router = createRouter({
 		{ path: '/invitations', name: 'invitations', component: () => import('../views/InvitationsView.vue'), meta: { title: 'Приглашения — PubChat', requestAuth: true } },
 		{ path: '/notifications', name: 'notifications', component: () => import('../views/NotificationsView.vue'), meta: { title: 'Напоминания — PubChat', requestAuth: true } },
 		{ path: '/safety', name: 'safety', component: () => import('../views/SafetyCenterView.vue'), meta: { title: 'Безопасность — PubChat', requestAuth: true } },
+		{ path: '/trust-safety', name: 'trust-safety-queue', component: () => import('../views/TrustSafetyQueueView.vue'), meta: { title: 'Trust & Safety — PubChat', requestAuth: true, requiresPlatformModerator: true } },
 		{ path: '/persona-style', name: 'persona-style', component: () => import('../views/PersonaStyleView.vue'), meta: { title: 'Стиль образа — PubChat', requestAuth: true } },
 		{ path: '/achievements', name: 'achievements', component: () => import('../views/AchievementsView.vue'), meta: { title: 'Достижения — PubChat', requestAuth: true } },
 		{ path: '/spaces/:uid', name: 'space', component: () => import('../views/MainView.vue'), meta: { title: 'Разговор — PubChat', requestAuth: true } },
@@ -49,6 +50,9 @@ router.beforeEach((to, from, next) => {
 		if (!isAuthenticated) return next({ name: 'login' });
 		if (to.matched.some((record) => record.meta.requiresAdmin)) {
 			if (userRole !== 'admin' && userRole !== 'superadmin') return next({ name: 'chats' });
+		}
+		if (to.matched.some((record) => record.meta.requiresPlatformModerator)) {
+			if (!['moderator', 'admin', 'superadmin'].includes(userRole)) return next({ name: 'chats' });
 		}
 	}
 	next();
