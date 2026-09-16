@@ -81,6 +81,17 @@ jobs:
         env:
           PUBCHAT_POSTGRES_INTEGRATION: "1"
         run: python -m unittest tests.test_postgres_integration
+      - name: Rehearse revival migrations with legacy data
+        env:
+          PUBCHAT_LEGACY_DB_NAME: chat_legacy_ci
+        run: |
+          python tests/legacy_migration_fixture.py create-db
+          DB_NAME=chat_legacy_ci alembic upgrade 4f3d66790cd3
+          python tests/legacy_migration_fixture.py seed
+          DB_NAME=chat_legacy_ci alembic upgrade head
+          DB_NAME=chat_legacy_ci alembic current | grep '(head)'
+          DB_NAME=chat_legacy_ci alembic check
+          PUBCHAT_LEGACY_MIGRATION_INTEGRATION=1 python -m unittest tests.test_legacy_migration_integration
 
   frontend-build:
     runs-on: ubuntu-latest
