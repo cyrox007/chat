@@ -34,6 +34,22 @@ export default class NotificationService {
 		return $api.patch('/notifications/v1/message-preferences', payload);
 	}
 
+	static webPushConfig() {
+		return $api.get('/notifications/v1/web-push/config');
+	}
+
+	static webPushStatus() {
+		return $api.get('/notifications/v1/web-push/subscriptions/status');
+	}
+
+	static registerWebPushSubscription(payload) {
+		return $api.post('/notifications/v1/web-push/subscriptions', payload);
+	}
+
+	static removeWebPushSubscription(endpoint) {
+		return $api.post('/notifications/v1/web-push/subscriptions/remove', { endpoint });
+	}
+
 	static remindersForSpace(spaceUid) {
 		return withUtc($api.get(`/notifications/v1/spaces/${spaceUid}/reminders`));
 	}
