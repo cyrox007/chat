@@ -8,7 +8,14 @@ from components.engagement.occurrence_service import (
     list_activity_occurrences,
     sync_activity_occurrences,
 )
-from components.notification.schemas import ActivityReminderUpdateRequest
+from components.notification.message_delivery import (
+    get_message_notification_preferences,
+    update_message_notification_preferences,
+)
+from components.notification.schemas import (
+    ActivityReminderUpdateRequest,
+    MessageNotificationPreferenceUpdateRequest,
+)
 from components.notification.service import (
     delete_activity_reminder,
     list_notifications,
@@ -72,6 +79,30 @@ def install(app: FastAPI) -> None:
     ):
         unread = await unread_notification_count(db, current_user["user_uid"])
         return {"status": "ok", "unread": unread}
+
+    @notifications.get("/message-preferences")
+    async def message_notification_preferences(
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        preferences = await get_message_notification_preferences(
+            db,
+            current_user["user_uid"],
+        )
+        return {"status": "ok", "preferences": preferences}
+
+    @notifications.patch("/message-preferences")
+    async def patch_message_notification_preferences(
+        payload: MessageNotificationPreferenceUpdateRequest,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        preferences = await update_message_notification_preferences(
+            db,
+            current_user["user_uid"],
+            payload,
+        )
+        return {"status": "ok", "preferences": preferences}
 
     @notifications.get("")
     async def notification_list(
