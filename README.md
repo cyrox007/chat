@@ -6,11 +6,11 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Текущий выпущенный checkpoint: `0.6.5-alpha.1`.
+Текущий выпущенный checkpoint: `0.6.5-alpha.2`.
 
 Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 
-Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery baseline, Redis 7.2 distributed realtime и restart/recovery baselines, real multi-process Uvicorn/WebSocket rehearsal с rolling restart и bounded per-socket backpressure. Production outage не маскируется process-local fallback; Uvicorn workers используют общий Redis transport/presence, а медленный WebSocket consumer изолируется собственной outbound queue и не блокирует fan-out другим клиентам.
+Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery baseline, Redis 7.2 distributed realtime и restart/recovery baselines, real multi-process Uvicorn/WebSocket rehearsal с rolling restart и bounded per-socket backpressure. Production backend теперь запускается за постоянным systemd-owned listener, routine deploy меняет workers rolling reload без намеренного `502` окна, а frontend публикуется staged/asset-first. Production outage не маскируется process-local fallback; Uvicorn workers используют общий Redis transport/presence, а медленный WebSocket consumer изолируется собственной outbound queue и не блокирует fan-out другим клиентам.
 
 До beta всё ещё нужны rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, Redis failover/capacity tests, observability, security и финальные accessibility/operations gates.
 
@@ -30,6 +30,7 @@ Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery bas
 - [`docs/security-and-privacy.md`](docs/security-and-privacy.md) — security/privacy model;
 - [`docs/development.md`](docs/development.md) — разработка, миграции, тесты и CI;
 - [`docs/operations.md`](docs/operations.md) — эксплуатация и reminder worker;
+- [`docs/production-deploy-v1.md`](docs/production-deploy-v1.md) — persistent listener, staged SPA publish и health-gated rolling deploy;
 - [`docs/prebeta-hardening-v1.md`](docs/prebeta-hardening-v1.md) — Stage 6 PostgreSQL/migration hardening baseline;
 - [`docs/database-recovery-v1.md`](docs/database-recovery-v1.md) — PostgreSQL backup/restore contract;
 - [`docs/redis-realtime-integration-v1.md`](docs/redis-realtime-integration-v1.md) — Redis distributed realtime baseline;
@@ -63,6 +64,8 @@ SPA является первым клиентом; backend API и realtime cont
 - Redis outage должен быть видимым, а recovery — происходить без обязательного process restart.
 - Ticket/presence/rate-limit/idempotency/pub-sub semantics проверяются на настоящем Redis при `DEBUG=False`.
 - Multi-process WebSocket/rolling-restart semantics проверяются на реальных Uvicorn process в CI.
+- Production listener принадлежит systemd socket unit и не должен исчезать при routine application deploy/restart.
+- Routine backend deploy использует rolling worker reload; frontend build публикуется только после успешной staged сборки.
 - Realtime fan-out не ждёт медленный socket write: каждый WebSocket имеет bounded outbound queue, а slow consumer изолированно отключается.
 - Clean migration correctness проверяется на реальной PostgreSQL в CI; `create_all()` не заменяет Alembic rehearsal.
 - Backup не считается рабочим, пока restore не проверен отдельной БД, schema-drift gate и semantic data assertions.
