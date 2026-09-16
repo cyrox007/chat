@@ -155,3 +155,92 @@ class TrustSafetyAuditEvent(Database.Base):
         Index("ix_trust_safety_audit_report_created", "report_uid", "created_at"),
         Index("ix_trust_safety_audit_actor_created", "actor_account_uid", "created_at"),
     )
+
+
+class PlatformRestriction(Database.Base):
+    """Durable Account-level capability restriction issued by platform Trust & Safety."""
+
+    __tablename__ = "platform_restrictions"
+
+    uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    report_uid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("trust_safety_reports.uid", ondelete="SET NULL"),
+        nullable=True,
+    )
+    actor_account_uid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.uid", ondelete="SET NULL"),
+        nullable=True,
+    )
+    target_account_uid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.uid", ondelete="CASCADE"),
+        nullable=False,
+    )
+    capability = Column(String(64), nullable=False)
+    scope_type = Column(String(16), nullable=False, default="platform")
+    scope_uid = Column(UUID(as_uuid=True), nullable=True)
+    reason_code = Column(String(48), nullable=False)
+    public_explanation = Column(Text, nullable=False)
+    origin = Column(String(24), nullable=False, default="human")
+    status = Column(String(24), nullable=False, default="active")
+    actor_authority_level = Column(Integer, nullable=False)
+    target_authority_level = Column(Integer, nullable=False)
+    starts_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+    revoked_by_account_uid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.uid", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index(
+            "ix_platform_restrictions_target_active",
+            "target_account_uid",
+            "status",
+            "capability",
+            "expires_at",
+        ),
+        Index("ix_platform_restrictions_report", "report_uid", "created_at"),
+        Index("ix_platform_restrictions_actor", "actor_account_uid", "created_at"),
+        Index("ix_platform_restrictions_scope", "scope_type", "scope_uid", "capability"),
+    )
+
+
+class PlatformRestrictionAuditEvent(Database.Base):
+    """Append-only history for issue/revoke/review events of platform restrictions."""
+
+    __tablename__ = "platform_restriction_audit_events"
+
+    uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    restriction_uid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("platform_restrictions.uid", ondelete="CASCADE"),
+        nullable=False,
+    )
+    actor_account_uid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.uid", ondelete="SET NULL"),
+        nullable=True,
+    )
+    event_type = Column(String(48), nullable=False)
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index(
+            "ix_platform_restriction_audit_restriction_created",
+            "restriction_uid",
+            "created_at",
+        ),
+        Index(
+            "ix_platform_restriction_audit_actor_created",
+            "actor_account_uid",
+            "created_at",
+        ),
+    )
