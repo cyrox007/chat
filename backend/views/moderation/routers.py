@@ -1,10 +1,12 @@
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
+from components.auth.permissions import require_platform_moderator
+from components.identity.model import Account
 from components.moderation.consistency import (
     ensure_report_actionable,
     supersede_previous_restrictions,
@@ -16,6 +18,11 @@ from components.moderation.schemas import (
     ModerationReportCreateRequest,
     ModerationReportStatusRequest,
     ReportStatus,
+    TrustSafetyCategory,
+    TrustSafetyDecisionRequest,
+    TrustSafetyPriority,
+    TrustSafetyReportCreateRequest,
+    TrustSafetyStatus,
 )
 from components.moderation.service import (
     create_action,
@@ -30,11 +37,22 @@ from components.moderation.service import (
     resolve_appeal,
     update_report_status,
 )
+from components.moderation.trust_safety import (
+    claim_trust_safety_report,
+    create_trust_safety_report,
+    decide_trust_safety_report,
+    list_my_trust_safety_reports,
+    list_trust_safety_audit,
+    list_trust_safety_queue,
+    release_trust_safety_report,
+    trust_safety_evidence,
+)
 from database import Database
 
 
 def install(app: FastAPI) -> None:
     router = APIRouter(prefix="/moderation/v1", tags=["moderation-v1"])
+    trust_safety = APIRouter(prefix="/trust-safety/v1", tags=["trust-safety-v1"])
 
     @router.get("/me/reports")
     async def my_reports(
@@ -173,4 +191,108 @@ def install(app: FastAPI) -> None:
         item = await resolve_appeal(db, space_uid, appeal_uid, current_user["user_uid"], payload)
         return {"status": "ok", "appeal": item}
 
+    # Platform Trust & Safety is intentionally separate from Space-local moderation.
+    @trust_safety.post("/reports", status_code=status.HTTP_201_CREATED)
+    async def create_platform_report(
+        payload: TrustSafetyReportCreateRequest,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        item = await create_trust_safety_report(db, current_user["user_uid"], payload)
+        return {"status": "ok", "report": item}
+
+    @trust_safety.get("/me/reports")
+    async def my_platform_reports(
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        items, total = await list_my_trust_safety_reports(
+            db,
+            current_user["user_uid"],
+            limit=limit,
+            offset=offset,
+        )
+        return {
+            "status": "ok",
+            "reports": items,
+            "pagination": {"limit": limit, "offset": offset, "count": len(items), "total": total},
+        }
+
+    @trust_safety.get("/queue")
+    async def platform_queue(
+        queue_status: Optional[TrustSafetyStatus] = Query(default=None, alias="status"),
+        priority: Optional[TrustSafetyPriority] = Query(default=None),
+        category: Optional[TrustSafetyCategory] = Query(default=None),
+        assigned: Literal["any", "mine", "unassigned"] = Query(default="any"),
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        moderator: Account = Depends(require_platform_moderator),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        items, total = await list_trust_safety_queue(
+            db,
+            queue_status=queue_status,
+            priority=priority,
+            category=category,
+            assigned_to_account_uid=moderator.uid if assigned == "mine" else None,
+            only_unassigned=assigned == "unassigned",
+            limit=limit,
+            offset=offset,
+        )
+        return {
+            "status": "ok",
+            "reports": items,
+            "pagination": {"limit": limit, "offset": offset, "count": len(items), "total": total},
+        }
+
+    @trust_safety.post("/reports/{report_uid}/claim")
+    async def claim_platform_report(
+        report_uid: UUID,
+        moderator: Account = Depends(require_platform_moderator),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        item = await claim_trust_safety_report(db, report_uid, moderator.uid)
+        return {"status": "ok", "report": item}
+
+    @trust_safety.post("/reports/{report_uid}/release")
+    async def release_platform_report(
+        report_uid: UUID,
+        moderator: Account = Depends(require_platform_moderator),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        item = await release_trust_safety_report(db, report_uid, moderator.uid)
+        return {"status": "ok", "report": item}
+
+    @trust_safety.get("/reports/{report_uid}/evidence")
+    async def platform_report_evidence(
+        report_uid: UUID,
+        moderator: Account = Depends(require_platform_moderator),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        evidence = await trust_safety_evidence(db, report_uid, moderator.uid)
+        return {"status": "ok", "evidence": evidence}
+
+    @trust_safety.patch("/reports/{report_uid}")
+    async def decide_platform_report(
+        report_uid: UUID,
+        payload: TrustSafetyDecisionRequest,
+        moderator: Account = Depends(require_platform_moderator),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        item = await decide_trust_safety_report(db, report_uid, moderator.uid, payload)
+        return {"status": "ok", "report": item}
+
+    @trust_safety.get("/reports/{report_uid}/audit")
+    async def platform_report_audit(
+        report_uid: UUID,
+        limit: int = Query(default=100, ge=1, le=250),
+        _: Account = Depends(require_platform_moderator),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        events = await list_trust_safety_audit(db, report_uid, limit=limit)
+        return {"status": "ok", "events": events}
+
     app.include_router(router)
+    app.include_router(trust_safety)
