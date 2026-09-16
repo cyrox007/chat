@@ -102,6 +102,10 @@ jobs:
           PUBCHAT_REDIS_RECOVERY_INTEGRATION=1 \
             PUBCHAT_REDIS_CONTAINER_ID="$REDIS_CONTAINER_ID" \
             python -m unittest tests.test_redis_recovery_integration
+      - name: Rehearse multi-process WebSocket rolling restart
+        env:
+          PUBCHAT_REALTIME_MULTIPROCESS_INTEGRATION: "1"
+        run: python -m unittest tests.test_realtime_multiprocess_integration
       - name: Rehearse revival migrations with legacy data
         env:
           PUBCHAT_LEGACY_DB_NAME: chat_legacy_ci

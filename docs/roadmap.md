@@ -2,11 +2,11 @@
 
 ## Текущий статус
 
-Released: **`0.6.3-alpha.1`**.
+Released: **`0.6.4-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
-PubChat остаётся alpha: PostgreSQL migration/recovery и Redis distributed/restart recovery baselines уже закреплены CI. До beta всё ещё нужны production-like snapshot rehearsal, member-capacity/DST hardening, реальные multi-process WebSocket/rolling-restart scenarios, slow-client/backpressure, observability, load/security и финальные accessibility/operations gates.
+PubChat остаётся alpha: PostgreSQL migration/recovery, Redis distributed/restart recovery и real multi-process Uvicorn/WebSocket rolling-restart baselines уже закреплены CI. До beta всё ещё нужны production-like snapshot rehearsal, member-capacity/DST hardening, slow-client/backpressure, Redis failover/capacity, observability, load/security и финальные accessibility/operations gates.
 
 ## Завершённые checkpoints
 
@@ -58,6 +58,14 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - test cleanup гарантированно возвращает Redis в рабочее состояние;
 - PostgreSQL migration/recovery и frontend gates продолжают проходить в том же pipeline.
 
+### Stage 6 checkpoint 5 — Multi-process WebSocket / rolling restart ✅ `0.6.4-alpha.1`
+- CI поднимает два отдельных Uvicorn/FastAPI process против общих PostgreSQL и Redis;
+- one-time tickets consume-ятся worker process через production WebSocket auth path;
+- distributed presence и Redis pub/sub проверяются между process boundaries;
+- один worker останавливается, пока второй продолжает обслуживать realtime traffic;
+- replacement worker принимает reconnect с новым one-time ticket;
+- существующие PostgreSQL/Redis recovery и frontend gates остаются зелёными.
+
 ## Stage 6 — Pre-beta hardening 🚧 `0.6.x-alpha`
 
 ### 6.1 Data / migrations 🚧
@@ -77,8 +85,8 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - ✅ Redis restart/failure visibility без process-local fallback;
 - ✅ command-path recovery на тех же service objects;
 - ✅ automatic pub/sub resubscription после Redis restart;
-- ⏳ реальные multi-process Uvicorn/WebSocket scenarios;
-- ⏳ rolling-restart client reconnect;
+- ✅ реальные multi-process Uvicorn/WebSocket scenarios;
+- ✅ rolling-restart client reconnect baseline;
 - ⏳ slow-client/backpressure под нагрузкой;
 - ⏳ Redis failover topology/capacity tests.
 
