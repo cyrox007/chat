@@ -37,6 +37,8 @@ def upgrade() -> None:
         sa.Column("failed_at", sa.DateTime(), nullable=True),
         sa.Column("provider_message_id", sa.String(length=180), nullable=True),
         sa.Column("failure_class", sa.String(length=80), nullable=True),
+        sa.Column("claim_token", sa.String(length=64), nullable=True),
+        sa.Column("claim_expires_at", sa.DateTime(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.ForeignKeyConstraint(["account_uid"], ["accounts.uid"], ondelete="CASCADE"),
@@ -47,6 +49,12 @@ def upgrade() -> None:
         "ix_external_delivery_pending",
         "external_delivery_ledger",
         ["channel", "status", "next_attempt_at", "created_at"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_external_delivery_claim",
+        "external_delivery_ledger",
+        ["channel", "status", "claim_expires_at"],
         unique=False,
     )
     op.create_index(
@@ -69,5 +77,6 @@ def downgrade() -> None:
         .bindparams(worker_name=WORKER_NAME)
     )
     op.drop_index("ix_external_delivery_account_created", table_name="external_delivery_ledger")
+    op.drop_index("ix_external_delivery_claim", table_name="external_delivery_ledger")
     op.drop_index("ix_external_delivery_pending", table_name="external_delivery_ledger")
     op.drop_table("external_delivery_ledger")
