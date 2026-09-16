@@ -6,13 +6,13 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Текущий выпущенный checkpoint: `0.6.5-alpha.2`.
+Текущий выпущенный checkpoint: `0.6.6-alpha.1`.
 
 Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 
-Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery baseline, Redis 7.2 distributed realtime и restart/recovery baselines, real multi-process Uvicorn/WebSocket rehearsal с rolling restart и bounded per-socket backpressure. Production backend теперь запускается за постоянным systemd-owned listener, routine deploy меняет workers rolling reload без намеренного `502` окна, а frontend публикуется staged/asset-first. Production outage не маскируется process-local fallback; Uvicorn workers используют общий Redis transport/presence, а медленный WebSocket consumer изолируется собственной outbound queue и не блокирует fan-out другим клиентам.
+Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery baseline, Redis 7.2 distributed realtime, restart/recovery и real Sentinel master-promotion baseline, real multi-process Uvicorn/WebSocket rehearsal с rolling restart и bounded per-socket backpressure. Production backend запускается за постоянным systemd-owned listener, routine deploy меняет workers rolling reload без намеренного `502` окна, а frontend публикуется staged/asset-first. Production outage не маскируется process-local fallback; direct Redis и Sentinel topology используют общий failover-aware realtime transport, а медленный WebSocket consumer изолируется собственной outbound queue и не блокирует fan-out другим клиентам.
 
-До beta всё ещё нужны rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, Redis failover/capacity tests, observability, security и финальные accessibility/operations gates.
+До beta всё ещё нужны rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, notification/message-delivery hardening, observability, security и финальные accessibility/browser/operations gates.
 
 Канонический номер версии находится в `VERSION`, история выпусков — в `CHANGELOG.md`.
 
@@ -31,10 +31,13 @@ Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery bas
 - [`docs/development.md`](docs/development.md) — разработка, миграции, тесты и CI;
 - [`docs/operations.md`](docs/operations.md) — эксплуатация и reminder worker;
 - [`docs/production-deploy-v1.md`](docs/production-deploy-v1.md) — persistent listener, staged SPA publish и health-gated rolling deploy;
+- [`docs/message-notification-delivery-v1.md`](docs/message-notification-delivery-v1.md) — online/offline message routing, email nudge и Web Push plan;
+- [`docs/browser-compatibility-v1.md`](docs/browser-compatibility-v1.md) — browser launch matrix и Safari registration audit;
 - [`docs/prebeta-hardening-v1.md`](docs/prebeta-hardening-v1.md) — Stage 6 PostgreSQL/migration hardening baseline;
 - [`docs/database-recovery-v1.md`](docs/database-recovery-v1.md) — PostgreSQL backup/restore contract;
 - [`docs/redis-realtime-integration-v1.md`](docs/redis-realtime-integration-v1.md) — Redis distributed realtime baseline;
 - [`docs/redis-recovery-v1.md`](docs/redis-recovery-v1.md) — Redis restart/recovery contract;
+- [`docs/redis-failover-v1.md`](docs/redis-failover-v1.md) — Redis Sentinel topology, promotion и failover recovery contract;
 - [`docs/realtime-multiprocess-v1.md`](docs/realtime-multiprocess-v1.md) — real Uvicorn multi-process / rolling-restart contract;
 - [`docs/realtime-backpressure-v1.md`](docs/realtime-backpressure-v1.md) — bounded per-socket outbound queues и slow-consumer isolation;
 - [`docs/web-application-maturity-v1.md`](docs/web-application-maturity-v1.md) — PWA/offline shell и client lifecycle;
@@ -61,8 +64,10 @@ SPA является первым клиентом; backend API и realtime cont
 - Числовой discovery score не является публичным API и не показывается пользователю.
 - PostgreSQL — источник истины; Redis — ephemeral realtime слой.
 - Production realtime не должен молча переходить в process-local fallback.
-- Redis outage должен быть видимым, а recovery — происходить без обязательного process restart.
+- Redis outage/failover должен быть видимым, а recovery — происходить без обязательного process restart.
+- Direct `REDIS_URL` остаётся поддерживаемым; production HA может использовать Redis Sentinel без изменения realtime domain contract.
 - Ticket/presence/rate-limit/idempotency/pub-sub semantics проверяются на настоящем Redis при `DEBUG=False`.
+- Sentinel promotion проверяется на реальных Redis master/replica/Sentinel process, включая PubSub recovery и bounded concurrency после promotion.
 - Multi-process WebSocket/rolling-restart semantics проверяются на реальных Uvicorn process в CI.
 - Production listener принадлежит systemd socket unit и не должен исчезать при routine application deploy/restart.
 - Routine backend deploy использует rolling worker reload; frontend build публикуется только после успешной staged сборки.
@@ -75,5 +80,6 @@ SPA является первым клиентом; backend API и realtime cont
 - PWA service worker кэширует только shell/static assets и не является хранилищем auth/private API data.
 - Reminder worker запускается внешним scheduler'ом и не живёт внутри FastAPI web-worker lifecycle.
 - Standalone backend processes явно инициализируют ORM model registry.
-- Activity reminders остаются opt-in; browser/native push появится отдельным delivery adapter позже.
+- Offline external message re-engagement относится только к Messenger; Space chat не создаёт фоновый spam отсутствующему Account.
+- Activity reminders остаются opt-in; browser/native push добавляется отдельным delivery adapter.
 - Creator support — бесплатные internal cosmetic gestures; реальные payments требуют отдельного financial/security review.
