@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 const manifest = JSON.parse(readFileSync(new URL('../public/favicons/site.webmanifest', import.meta.url), 'utf8'));
 const worker = readFileSync(new URL('../public/service-worker.js', import.meta.url), 'utf8');
 const registration = readFileSync(new URL('../src/pwa/registerServiceWorker.js', import.meta.url), 'utf8');
+const webPush = readFileSync(new URL('../src/pwa/webPush.js', import.meta.url), 'utf8');
+const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
 
 const fail = (message) => {
   console.error(`PWA guard failed: ${message}`);
@@ -30,9 +32,27 @@ if (!worker.includes("request.mode === 'navigate'")) {
 if (!worker.includes("STATIC_DESTINATIONS")) {
   fail('runtime caching must be constrained by browser destination');
 }
+if (!worker.includes("addEventListener('push'") || !worker.includes("addEventListener('notificationclick'")) {
+  fail('service worker must own push display and click navigation');
+}
+if (!worker.includes('safePushUrl')) {
+  fail('push click navigation must reject arbitrary external URLs');
+}
 if (!registration.includes("import.meta.env.PROD")) {
   fail('service worker must only register in production builds');
 }
+if (!webPush.includes('Notification.requestPermission()')) {
+  fail('Web Push opt-in must explicitly request browser permission');
+}
+if (!webPush.includes('userVisibleOnly: true')) {
+  fail('PushSubscription must require user-visible notifications');
+}
+if (main.includes('enableMessengerWebPush') || main.includes('Notification.requestPermission')) {
+  fail('application bootstrap must never auto-request Web Push permission');
+}
+if (webPush.includes('WEB_PUSH_VAPID_PRIVATE_KEY')) {
+  fail('VAPID private key must never be referenced by frontend code');
+}
 
 if (process.exitCode) process.exit(process.exitCode);
-console.log('PWA manifest/service-worker guard passed');
+console.log('PWA manifest/service-worker/Web Push guard passed');
