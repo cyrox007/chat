@@ -80,13 +80,16 @@ export default {
 			state.conversations[userId].push(message);
 			if (state.activeDialog !== userId && !message.isCurrentUser) {
 				state.unreadCounts[userId] = (state.unreadCounts[userId] || 0) + 1;
-				state.notifications.push({
-					uid: message.uid,
-					sender: message.sender,
-					content: message.content,
-					timestamp: message.timestamp,
-					userId,
-				});
+				const shouldNotify = message.notification?.notify_in_app ?? true;
+				if (shouldNotify) {
+					state.notifications.push({
+						uid: message.uid,
+						sender: message.sender,
+						content: message.content,
+						timestamp: message.timestamp,
+						userId,
+					});
+				}
 			}
 		},
 		MERGE_CONVERSATION(state, { userId, messages }) {
@@ -267,7 +270,9 @@ export default {
 							timestamp: new Date(data.created_at || Date.now()),
 						},
 					});
-					if (!isFromCurrentUser && state.activeDialog !== otherUserId) dispatch('playNotificationSound');
+					const shouldPlaySound = data.notification?.play_sound
+						?? (!isFromCurrentUser && state.activeDialog !== otherUserId);
+					if (!isFromCurrentUser && shouldPlaySound) dispatch('playNotificationSound');
 					break;
 				}
 				case 'message_read':
