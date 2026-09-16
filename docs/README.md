@@ -47,6 +47,7 @@
 
 - [`identity-v2.md`](identity-v2.md) — Account/Persona/Credential/Session/Privacy.
 - [`realtime-v2.md`](realtime-v2.md) — tickets, Redis pub/sub, presence, reconnect.
+- [`trust-safety-v1.md`](trust-safety-v1.md) — иерархическая platform moderation, capability restrictions, audit/appeals и AI-copilot boundaries.
 - [`product-identity-v1.md`](product-identity-v1.md) — Persona/Space appearance и recurring Activities.
 - [`social-engagement-v2.md`](social-engagement-v2.md) — earned achievements и Conversation Rounds.
 - [`activity-occurrences-v1.md`](activity-occurrences-v1.md) — occurrences/reminders/inbox.
@@ -60,4 +61,4 @@
 
 Текущий release: `0.6.9-alpha.1`.
 
-Текущая development-линия: `0.6.x-alpha` — Web Push/PWA Messenger delivery завершён; следующий launch-critical workstream — production-grade moderation / Trust & Safety, параллельно с browser/security/observability gates и unit-economics/monetization planning.
+Текущая development-линия: `0.6.x-alpha` — Web Push/PWA Messenger delivery завершён; следующий launch-critical workstream — production-grade moderation / Trust & Safety, включая platform report intake, authority hierarchy, capability restrictions и последующий AI-copilot layer. Параллельно идут browser/security/observability gates и unit-economics/monetization planning.
