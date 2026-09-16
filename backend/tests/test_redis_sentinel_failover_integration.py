@@ -71,6 +71,19 @@ class RedisSentinelFailoverIntegrationTests(unittest.TestCase):
                     await asyncio.sleep(0.25)
                 self.fail(f"ticket path did not recover after Sentinel promotion: {last_error!r}")
 
+            async def run_ticket_burst(total: int = 60, concurrency: int = 15) -> None:
+                semaphore = asyncio.Semaphore(concurrency)
+
+                async def round_trip(index: int) -> int:
+                    async with semaphore:
+                        ticket, _ = await service_a.issue_ticket(account_uid, "messenger")
+                        payload = await service_b.consume_ticket(ticket, "messenger")
+                        self.assertIsNotNone(payload, f"ticket {index} was not consumed")
+                        return index
+
+                completed = await asyncio.gather(*(round_trip(index) for index in range(total)))
+                self.assertEqual(len(completed), total)
+
             try:
                 config.DEBUG = False
                 config.REDIS_URL = ""
@@ -90,6 +103,7 @@ class RedisSentinelFailoverIntegrationTests(unittest.TestCase):
 
                 baseline_ticket, _ = await service_a.issue_ticket(account_uid, "messenger")
                 self.assertIsNotNone(await service_b.consume_ticket(baseline_ticket, "messenger"))
+                await run_ticket_burst()
 
                 received = asyncio.Event()
                 received_payloads = []
@@ -112,6 +126,7 @@ class RedisSentinelFailoverIntegrationTests(unittest.TestCase):
 
                 await wait_for_master_port(6381)
                 await issue_and_consume_after_failover()
+                await run_ticket_burst()
 
                 # PubSub may have held a connection to the old master. The listener
                 # must recreate that subscription through Sentinel and deliver an
