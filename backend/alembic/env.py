@@ -13,7 +13,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option('sqlalchemy.url', cfg.database_url())
+config.set_main_option('sqlalchemy.url', cfg.alembic_database_url())
 
 # Import all model modules so Alembic sees one shared Database.Base metadata.
 from components.user.model import User, Penalty, UserRelationship
