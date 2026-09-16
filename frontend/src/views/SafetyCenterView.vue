@@ -61,6 +61,18 @@
 			<div v-if="!actions.length" class="state-block state-block--compact"><i class="fas fa-shield"></i><strong>Решений модерации нет</strong><span>Здесь появятся только действия, которые относятся лично к вашему аккаунту.</span></div>
 		</section>
 
+		<section v-else-if="activeTab === 'restrictions'" class="record-list">
+			<article v-for="restriction in restrictions" :key="restriction.uid" class="record-card record-card--action">
+				<div class="record-icon"><i class="fas fa-user-shield"></i></div>
+				<div>
+					<div class="record-title"><strong>{{ capabilityLabel(restriction.capability) }}</strong><span :class="`status status--${restriction.status}`">{{ restrictionStatusLabel(restriction.status) }}</span></div>
+					<p>{{ restriction.public_explanation }}</p>
+					<small>{{ restriction.scope_type === 'space' ? 'Только выбранное пространство' : 'Вся платформа' }} · {{ restriction.expires_at ? `до ${formatDate(restriction.expires_at)}` : 'без установленного срока' }}</small>
+				</div>
+			</article>
+			<div v-if="!restrictions.length" class="state-block state-block--compact"><i class="fas fa-user-shield"></i><strong>Ограничений возможностей нет</strong><span>Здесь будут видны platform-level ограничения вашего Account, их причина и срок.</span></div>
+		</section>
+
 		<section v-else class="record-list">
 			<article v-for="appeal in appeals" :key="appeal.uid" class="record-card">
 				<div class="record-icon"><i class="fas fa-scale-balanced"></i></div>
@@ -82,6 +94,7 @@ const store = useStore();
 const loading = ref(true);
 const reports = ref([]);
 const actions = ref([]);
+const restrictions = ref([]);
 const appeals = ref([]);
 const memberSpaces = ref([]);
 const members = ref([]);
@@ -98,7 +111,8 @@ const currentUserUid = computed(() => store.getters.getUser?.uid);
 const reportableMembers = computed(() => members.value.filter((item) => item.account_uid !== currentUserUid.value));
 const tabs = computed(() => [
 	{ value: 'reports', label: 'Мои жалобы', count: reports.value.length },
-	{ value: 'actions', label: 'Решения', count: actions.value.length },
+	{ value: 'actions', label: 'Решения Space', count: actions.value.length },
+	{ value: 'restrictions', label: 'Ограничения', count: restrictions.value.length },
 	{ value: 'appeals', label: 'Апелляции', count: appeals.value.length },
 ]);
 const appealByAction = computed(() => new Set(appeals.value.map((item) => item.action_uid)));
@@ -108,11 +122,16 @@ const flash = (message, type = 'success') => { notice.value = { message, type };
 const loadSafety = async () => {
 	loading.value = true;
 	try {
-		const [reportsResponse, actionsResponse, appealsResponse, spacesResponse] = await Promise.all([
-			ModerationService.myReports({ limit: 100 }), ModerationService.myActions({ limit: 100 }), ModerationService.myAppeals({ limit: 100 }), SpacesService.list({ limit: 50 }),
+		const [reportsResponse, actionsResponse, restrictionsResponse, appealsResponse, spacesResponse] = await Promise.all([
+			ModerationService.myReports({ limit: 100 }),
+			ModerationService.myActions({ limit: 100 }),
+			ModerationService.myRestrictions({ include_inactive: true, limit: 100 }),
+			ModerationService.myAppeals({ limit: 100 }),
+			SpacesService.list({ limit: 50 }),
 		]);
 		reports.value = reportsResponse.data.reports || [];
 		actions.value = actionsResponse.data.actions || [];
+		restrictions.value = restrictionsResponse.data.restrictions || [];
 		appeals.value = appealsResponse.data.appeals || [];
 		memberSpaces.value = (spacesResponse.data.spaces || []).filter((space) => space.viewer_membership?.status === 'active' || space.viewer_membership?.role === 'owner');
 	} catch (error) { console.error(error); flash('Не удалось загрузить центр безопасности.', 'error'); } finally { loading.value = false; }
@@ -155,6 +174,8 @@ const categoryLabel = (value) => ({ spam: 'Спам', harassment: 'Оскорб�
 const reportStatusLabel = (value) => ({ open: 'Открыта', reviewing: 'На рассмотрении', resolved: 'Решена', dismissed: 'Закрыта без действия' }[value] || value);
 const actionLabel = (value) => ({ warning: 'Предупреждение', restrict: 'Ограничение доступа' }[value] || value);
 const actionStatusLabel = (value) => ({ active: 'Активно', expired: 'Завершено', revoked: 'Отменено' }[value] || value);
+const restrictionStatusLabel = (value) => ({ active: 'Активно', expired: 'Завершено', revoked: 'Снято' }[value] || value);
+const capabilityLabel = (value) => ({ 'messenger.send': 'Отправка личных сообщений', 'space.chat.send': 'Сообщения в пространствах', 'media.upload': 'Загрузка медиа', 'space.create': 'Создание пространств', 'space.join': 'Вступление в пространства', 'invitation.send': 'Отправка приглашений', 'profile.edit': 'Изменение профиля', 'discovery.publish': 'Публикация в discovery', 'account.access': 'Доступ к Account' }[value] || value);
 const appealStatusLabel = (value) => ({ pending: 'На рассмотрении', upheld: 'Решение оставлено', overturned: 'Решение отменено' }[value] || value);
 const formatDate = (value) => new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 
