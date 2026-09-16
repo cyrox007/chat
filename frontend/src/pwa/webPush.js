@@ -25,8 +25,10 @@ const serializeSubscription = (subscription) => {
 	};
 };
 
-const currentRegistration = async () => {
+const currentRegistration = async ({ waitUntilReady = false } = {}) => {
 	if (!isPushApiSupported()) return null;
+	const existing = await navigator.serviceWorker.getRegistration('/');
+	if (existing || !waitUntilReady) return existing;
 	return navigator.serviceWorker.ready;
 };
 
@@ -81,7 +83,7 @@ export const enableMessengerWebPush = async () => {
 		: await Notification.requestPermission();
 	if (permission !== 'granted') throw new Error(permission === 'denied' ? 'web_push_denied' : 'web_push_not_granted');
 
-	const registration = await currentRegistration();
+	const registration = await currentRegistration({ waitUntilReady: true });
 	if (!registration) throw new Error('service_worker_unavailable');
 	let subscription = await registration.pushManager.getSubscription();
 	if (!subscription) {
