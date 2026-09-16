@@ -2,6 +2,34 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.0-alpha.1] — 2026-09-16
+
+Stage 6 — Pre-beta hardening, checkpoint 1: PostgreSQL migration/integration baseline.
+
+### PostgreSQL / migrations
+- backend CI поднимает реальный PostgreSQL 16 service;
+- clean-database `alembic upgrade head` проходит через всю historical migration chain;
+- `alembic current` подтверждает единственную current head;
+- `alembic check` закрепляет отсутствие model/schema drift;
+- historical Identity v2 credential backfill исправлен через raw driver SQL без изменения salts/deterministic UUID formula;
+- ORM metadata reconciled с уже выпущенной schema для Persona handle, refresh-token hash и Activity RSVP uniqueness;
+- DB URL строится через SQLAlchemy `URL.create()`, поэтому credentials со спецсимволами корректно кодируются.
+
+### Standalone process / worker integration
+- добавлен единый ORM model registry bootstrap для non-web processes;
+- standalone reminder worker больше не зависит от случайных import side effects FastAPI composition root;
+- real async PostgreSQL smoke проверяет migrated core tables, durable `NotificationWorkerState` и row lock worker cursor;
+- backend contract tests выполняются после migration rehearsal на той же CI базе.
+
+### Documentation / release gates
+- добавлен `docs/prebeta-hardening-v1.md`;
+- development/release checklist требуют real PostgreSQL migration/schema-drift gates для DB-sensitive slices;
+- roadmap отдельно показывает доказанные пункты и оставшийся Stage 6.1 scope.
+
+Известные ограничения: этот checkpoint проверяет clean-database path. Representative legacy-data rehearsal, backup/restore drill, member-capacity concurrency hardening и IANA/DST recurrence остаются активными задачами Stage 6.1.
+
+Quality gate: functional exact-head backend/frontend CI с PostgreSQL 16 → version/docs sync → повторный exact-head CI перед merge.
+
 ## [0.5.5-alpha.1] — 2026-09-16
 
 Stage 5.6 — Web Application Maturity.
