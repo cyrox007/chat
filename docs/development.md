@@ -45,7 +45,21 @@ PUBCHAT_POSTGRES_INTEGRATION=1 python -m unittest tests.test_postgres_integratio
 - standalone process обязан явно инициализировать ORM model registry, а не зависеть от import side effects FastAPI routers;
 - `create_all()` не заменяет migration rehearsal.
 
-Этот CI gate проверяет clean-database path. Rehearsal на репрезентативных legacy data, backup/restore и data assertions остаются отдельными pre-beta задачами.
+### Synthetic legacy migration rehearsal
+
+В том же CI создаётся отдельная rehearsal database. Она мигрируется до pre-revival revision `4f3d66790cd3`, после чего туда загружается synthetic representative legacy fixture и выполняется upgrade до current head.
+
+Gate проверяет:
+
+- Account/Persona/Credential backfill;
+- platform role mapping;
+- Space settings и canonical memberships;
+- legacy moderator dedupe/role semantics;
+- active legacy ban exclusion из canonical active membership;
+- normalized Space tags;
+- final Alembic head и zero schema drift.
+
+Этот fixture полезен как детерминированный regression contract, но не заменяет rehearsal на anonymized production-like snapshot и backup/restore drill перед реальным deployment.
 
 ## Frontend
 
@@ -72,7 +86,7 @@ npm run build
 - Для конкурентных инвариантов используются DB constraints/indexes.
 - Новая пользовательская функция выпускается вместе с mobile/loading/empty/error/permission состояниями.
 - Legacy домены мигрируют постепенно через versioned contract и compatibility bridge, а не big-bang rewrite.
-- Историческая migration может быть технически исправлена только если сохраняется её исходная data/business semantics; такие исправления должны проходить clean migration rehearsal.
+- Историческая migration может быть технически исправлена только если сохраняется её исходная data/business semantics; такие исправления должны проходить clean и legacy-fixture migration rehearsal.
 
 ## PR
 
