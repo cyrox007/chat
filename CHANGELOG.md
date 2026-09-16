@@ -2,6 +2,26 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.6-alpha.1] — 2026-09-16
+
+Stage 6 pre-beta hardening checkpoint 7 — Redis Sentinel failover/capacity baseline.
+
+- добавлен backward-compatible Redis topology layer: direct `REDIS_URL` и Redis Sentinel master discovery;
+- Sentinel mode поддерживает отдельные master/Sentinel credentials, DB, timeout и peer-validation settings;
+- `RealtimeService` больше не привязан к фиксированному master host и создаёт command/PubSub connections через failover-aware pool;
+- production deploy preflight принимает direct или complete Sentinel configuration и отклоняет частично заданную topology config;
+- CI поднимает реальный Redis master + replica + три Sentinel process с quorum `2`;
+- текущий master реально останавливается, Sentinel promotes replica, а те же `RealtimeService` objects восстанавливают ticket issue/consume без restart application process;
+- PubSub subscription автоматически пересоздаётся через promoted master и снова принимает события;
+- bounded concurrent ticket bursts проверяются до и после promotion как correctness/capacity baseline без искусственных throughput-обещаний;
+- restart recovery, multi-process WebSocket, rolling deploy, PostgreSQL migration/recovery и frontend gates остаются зелёными.
+
+Redis остаётся ephemeral realtime слоем: failover не делает one-time tickets, presence или pub/sub durable. Durable message/history/membership state остаётся в PostgreSQL.
+
+Следующий активный Stage 6 workstream: notification/message delivery hardening (online/offline policy, active-context suppression, unread-Messenger email nudge и Web Push), параллельно с observability/security/browser gates.
+
+Quality gate: real Sentinel promotion CI → main sync → version/docs sync → повторный exact-head CI перед merge.
+
 ## [0.6.5-alpha.2] — 2026-09-16
 
 Stage 6 parallel stabilization checkpoint — production deploy reliability + messaging UX polish.

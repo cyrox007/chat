@@ -22,14 +22,15 @@ echo "==> Backend dependencies"
 echo "==> Production configuration preflight"
 cd "$BACKEND_DIR"
 "$BACKEND_DIR/venv/bin/python" - <<'PY'
+from components.realtime.redis_client import redis_topology_mode
 from settings import config
+
 config.ensure_security_settings()
-if not config.REDIS_URL:
-    raise SystemExit("REDIS_URL is required in production")
+config.ensure_realtime_settings()
 print("Security settings: OK")
 print(f"DEBUG={config.DEBUG}")
 print(f"DB={config.DB_HOST}:{config.DB_PORT}/{config.DB_NAME}")
-print("Redis configured=True")
+print(f"Redis topology={redis_topology_mode()}")
 PY
 
 echo "==> Database migrations"

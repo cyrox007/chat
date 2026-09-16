@@ -8,9 +8,9 @@ import time
 from typing import Awaitable, Callable, Optional
 from uuid import UUID
 
-import redis.asyncio as redis
 from redis.asyncio import Redis
 
+from components.realtime.redis_client import RedisClientHandle, create_redis_client
 from settings import config
 from utils.logger import setup_logger
 
@@ -30,12 +30,16 @@ class RealtimeService:
     Redis is authoritative in production for one-time socket tickets, cross-worker
     pub/sub, presence, rate limits and idempotency. DEBUG mode has a process-local
     fallback so developers can exercise the protocol without a Redis service.
+
+    Redis transport is topology-agnostic: direct REDIS_URL remains supported,
+    while Sentinel mode discovers the current master and reconnects after failover.
     """
 
     CHANNEL = "pubchat:realtime:v2"
 
     def __init__(self) -> None:
         self._redis: Optional[Redis] = None
+        self._redis_handle: Optional[RedisClientHandle] = None
         self._listener_task: Optional[asyncio.Task] = None
         self._pubsub = None
         self._callbacks: list[RealtimeCallback] = []
@@ -53,6 +57,10 @@ class RealtimeService:
     def distributed(self) -> bool:
         return self._redis is not None
 
+    @property
+    def redis_mode(self) -> str | None:
+        return self._redis_handle.mode if self._redis_handle else None
+
     def register_callback(self, callback: RealtimeCallback) -> None:
         if callback not in self._callbacks:
             self._callbacks.append(callback)
@@ -61,27 +69,40 @@ class RealtimeService:
         if self._redis is not None or self._listener_task is not None:
             return
 
-        if not config.REDIS_URL:
-            if config.DEBUG:
-                logger.warning("REDIS_URL не задан: realtime v2 работает в process-local DEBUG fallback")
+        try:
+            config.ensure_realtime_settings()
+        except RuntimeError as exc:
+            if config.DEBUG and not config.redis_configured():
+                logger.warning(
+                    "Redis не настроен: realtime v2 работает в process-local DEBUG fallback"
+                )
                 return
-            logger.error("REDIS_URL обязателен для production realtime v2")
+            logger.error("Некорректная Redis/realtime конфигурация: %s", exc)
             return
 
+        if not config.redis_configured():
+            if config.DEBUG:
+                logger.warning(
+                    "Redis не настроен: realtime v2 работает в process-local DEBUG fallback"
+                )
+                return
+            logger.error("Redis обязателен для production realtime v2")
+            return
+
+        handle: RedisClientHandle | None = None
         try:
-            client = redis.from_url(
-                config.REDIS_URL,
-                decode_responses=True,
-                max_connections=config.REDIS_MAX_CONNECTIONS,
-                socket_connect_timeout=5,
-                socket_timeout=5,
-                retry_on_timeout=True,
-            )
-            await client.ping()
-            self._redis = client
+            handle = create_redis_client()
+            await handle.client.ping()
+            self._redis_handle = handle
+            self._redis = handle.client
             await self._subscribe()
-            logger.info("Realtime v2 подключен к Redis")
+            logger.info("Realtime v2 подключен к Redis (topology=%s)", handle.mode)
         except Exception as exc:
+            if handle is not None and self._redis_handle is None:
+                try:
+                    await handle.aclose()
+                except Exception:
+                    pass
             await self._reset_redis()
             logger.exception("Не удалось подключить realtime v2 к Redis: %s", exc)
             if not config.DEBUG:
@@ -110,9 +131,19 @@ class RealtimeService:
             finally:
                 self._pubsub = None
 
-        if self._redis:
-            await self._redis.aclose()
-            self._redis = None
+        await self._close_redis()
+
+    async def _close_redis(self) -> None:
+        handle = self._redis_handle
+        client = self._redis
+        self._redis_handle = None
+        self._redis = None
+
+        if handle is not None:
+            await handle.aclose()
+            return
+        if client is not None:
+            await client.aclose()
 
     async def _reset_redis(self) -> None:
         if self._pubsub:
@@ -121,12 +152,10 @@ class RealtimeService:
             except Exception:
                 pass
             self._pubsub = None
-        if self._redis:
-            try:
-                await self._redis.aclose()
-            except Exception:
-                pass
-            self._redis = None
+        try:
+            await self._close_redis()
+        except Exception:
+            pass
         self._listener_task = None
 
     async def _recreate_pubsub(self) -> bool:
@@ -138,6 +167,9 @@ class RealtimeService:
             except Exception:
                 pass
         try:
+            # In Sentinel mode this creates a fresh PubSub connection through the
+            # SentinelConnectionPool, which resolves the current master after a
+            # promotion instead of pinning the old master address.
             self._pubsub = self._redis.pubsub(ignore_subscribe_messages=True)
             await self._pubsub.subscribe(self.CHANNEL)
             return True
@@ -244,7 +276,7 @@ class RealtimeService:
         # If Redis was unavailable during application startup, allow a production
         # worker to recover on the next normal ticket request instead of requiring
         # a process restart. DEBUG deliberately keeps its cheap local fallback.
-        if not self._redis and not config.DEBUG and config.REDIS_URL:
+        if not self._redis and not config.DEBUG and config.redis_configured():
             await self.start()
         if not self._redis and not config.DEBUG:
             raise RealtimeUnavailable("Redis is required to issue production realtime tickets")
@@ -518,6 +550,7 @@ class RealtimeService:
         if self._redis:
             await self._redis.delete(key)
             return
+
         async with self._lock:
             self._fallback_idempotency.pop(key, None)
 

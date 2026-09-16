@@ -2,13 +2,13 @@
 
 ## Текущий статус
 
-Released: **`0.6.5-alpha.2`**.
+Released: **`0.6.6-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
-PubChat остаётся alpha: PostgreSQL migration/recovery, Redis distributed/restart recovery, real multi-process Uvicorn/WebSocket rolling-restart, bounded slow-consumer backpressure и production deploy continuity уже закреплены CI. До beta всё ещё нужны production-like snapshot rehearsal, member-capacity/DST hardening, Redis failover/capacity, observability, load/security, message delivery hardening и финальные accessibility/browser/operations gates.
+PubChat остаётся alpha: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel master promotion, real multi-process Uvicorn/WebSocket rolling-restart, bounded slow-consumer backpressure и production deploy continuity уже закреплены CI. До beta всё ещё нужны production-like snapshot rehearsal, member-capacity/DST hardening, observability, load/security, message delivery hardening и финальные accessibility/browser/operations gates.
 
-UX-polish коммуникационных поверхностей выполняется параллельно внутри **6.7 UX/accessibility** и не заменяет следующий инфраструктурный checkpoint **6.2 Redis failover/capacity**. Production deploy hardening выполняется внутри **6.6 Operations / observability** и также не меняет порядок realtime checkpoint. Message notification delivery развивается в **6.3 Notification worker** поверх уже существующих notification/realtime contracts.
+Redis failover/capacity baseline завершён checkpoint `0.6.6-alpha.1`. Следующий активный product/infrastructure workstream — **6.3 Notification worker / message delivery**: online/offline notification policy, active-context suppression, unread-Messenger email nudge и затем Web Push. UX/browser/security work идёт параллельно внутри 6.5–6.7.
 
 ## Завершённые checkpoints
 
@@ -86,6 +86,18 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - authenticated bootstrap повторяет transient network/`502`/`503`/`504` ошибки;
 - Space chat/Messenger получили compact composer, attachment shelf и первый density/interaction polish pass.
 
+### Stage 6 checkpoint 7 — Redis Sentinel failover/capacity baseline ✅ `0.6.6-alpha.1`
+- direct `REDIS_URL` mode сохранён backward-compatible;
+- добавлен Redis Sentinel topology mode с discovery актуального master;
+- master и Sentinel authentication/configuration разделены;
+- production realtime не включает local fallback при failover;
+- CI поднимает master, replica и три Sentinel process с quorum `2`;
+- master реально останавливается, replica автоматически promotes;
+- те же `RealtimeService` objects восстанавливают ticket issue/consume без restart application process;
+- PubSub listener пересоздаёт subscription через promoted master;
+- bounded concurrent ticket bursts проходят до и после promotion;
+- restart recovery, multiprocess WebSocket, rolling deploy, PostgreSQL migration/recovery и frontend gates остаются зелёными.
+
 ## Stage 6 — Pre-beta hardening 🚧 `0.6.x-alpha`
 
 ### 6.1 Data / migrations 🚧
@@ -98,7 +110,7 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - ⏳ member-capacity concurrency hardening;
 - ⏳ IANA timezone storage и DST-correct recurring wall-clock semantics.
 
-### 6.2 Redis / realtime reliability 🚧
+### 6.2 Redis / realtime reliability ✅ baseline complete
 - ✅ Redis 7.2 integration tests без development fallback;
 - ✅ distributed ticket/presence/rate-limit/idempotency semantics;
 - ✅ cross-instance pub/sub delivery;
@@ -108,10 +120,12 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - ✅ реальные multi-process Uvicorn/WebSocket scenarios;
 - ✅ rolling-restart client reconnect baseline;
 - ✅ slow-client/backpressure isolation;
-- 🚧 direct/Sentinel topology abstraction с backward-compatible `REDIS_URL` mode;
-- ⏳ real Redis Sentinel master/replica promotion rehearsal без restart application process;
-- ⏳ PubSub resubscription и ticket/presence semantics после promotion;
-- ⏳ connection-pool/capacity tests до и после failover.
+- ✅ direct/Sentinel topology abstraction с backward-compatible `REDIS_URL` mode;
+- ✅ real Redis Sentinel master/replica promotion rehearsal без restart application process;
+- ✅ PubSub resubscription и ticket semantics после promotion;
+- ✅ bounded connection/ticket concurrency до и после failover.
+
+Дальнейшие large-scale throughput/load benchmarks относятся к 6.4/6.6 performance/observability и не блокируют сам failover correctness checkpoint.
 
 ### 6.3 Notification worker / message delivery 🚧
 - ✅ baseline PostgreSQL integration smoke;
@@ -131,7 +145,8 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - multi-source bounded candidate generation вместо newest-catalog bias;
 - query/DB profiling;
 - ranking latency/load tests;
-- privacy/block regression под большим candidate set.
+- privacy/block regression под большим candidate set;
+- production-like realtime/Redis pool saturation profiling сверх bounded failover correctness test.
 
 ### 6.5 Security/privacy
 - session/cookie/CSRF review, включая явный CSRF proof contract вместо неявной зависимости от browser cookie behavior;
@@ -151,6 +166,7 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - ✅ health-gated deploy script и отдельный one-time installer для перехода с legacy service;
 - ✅ staged SPA publish не очищает текущий live build и переключает `index.html` последним;
 - ✅ CI rehearsal подтверждает HTTP continuity при SIGHUP и при полном supervisor replacement за persistent socket;
+- ⏳ Sentinel topology/promotion/pool metrics и alerting;
 - ⏳ email delivery scheduler/service unit и provider health/metrics;
 - ⏳ structured logs/metrics/error tracking;
 - ⏳ alerting/status/incident procedure;
@@ -199,7 +215,8 @@ Beta назначается только когда launch-critical journeys р�
 - Migration correctness проверяется реальной PostgreSQL.
 - Backup correctness включает restore + data assertions.
 - Production realtime не должен молча использовать process-local fallback.
-- Redis recovery не требует process restart; ephemeral state восстанавливается протоколом, а не становится durable.
+- Redis recovery/failover не требует process restart; ephemeral state восстанавливается протоколом, а не становится durable.
+- Redis Sentinel promotion не превращает async-replicated ephemeral keys/pub-sub в durable delivery guarantee.
 - Slow realtime consumer не должен блокировать fan-out другим соединениям.
 - Production HTTP listener принадлежит process manager/systemd и не должен исчезать при routine application deploy/restart.
 - Routine production deploy обновляет workers rolling reload; full application supervisor replacement не должен приводить к connection-refused на listener.
