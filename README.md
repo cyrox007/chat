@@ -6,9 +6,11 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Текущий выпущенный checkpoint: `0.5.5-alpha.1`.
+Текущий выпущенный checkpoint: `0.6.0-alpha.1`.
 
-Следующая development-линия: `0.6.0-alpha.0` — Pre-beta hardening.
+Текущая development-линия: `0.6.0-alpha.x` — Pre-beta hardening продолжается.
+
+Первый Stage 6 checkpoint закрепил production-like PostgreSQL 16 CI, clean historical `alembic upgrade head`, zero `alembic check` drift и real async PostgreSQL smoke. Stage 6.1 ещё не завершён: остаются representative legacy-data rehearsal, backup/restore, concurrency и DST-correct recurrence.
 
 Канонический номер версии находится в `VERSION`, история выпусков — в `CHANGELOG.md`.
 
@@ -26,6 +28,7 @@ PubChat — SPA-приложение для свободного общения 
 - [`docs/security-and-privacy.md`](docs/security-and-privacy.md) — security/privacy model;
 - [`docs/development.md`](docs/development.md) — разработка, миграции, тесты и CI;
 - [`docs/operations.md`](docs/operations.md) — эксплуатация и reminder worker;
+- [`docs/prebeta-hardening-v1.md`](docs/prebeta-hardening-v1.md) — первый Stage 6 PostgreSQL/migration hardening checkpoint;
 - [`docs/web-application-maturity-v1.md`](docs/web-application-maturity-v1.md) — PWA/offline shell и client lifecycle;
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — типовые проблемы;
 - [`docs/roadmap.md`](docs/roadmap.md) — актуальная дорожная карта;
@@ -49,9 +52,11 @@ SPA является первым клиентом; backend API и realtime cont
 - Organic discovery сначала применяет privacy/eligibility, а затем ranking.
 - Числовой discovery score не является публичным API и не показывается пользователю.
 - PostgreSQL — источник истины; Redis — ephemeral realtime слой.
+- Clean migration correctness проверяется на реальной PostgreSQL в CI; `create_all()` не заменяет Alembic rehearsal.
 - Access JWT браузера хранится только в памяти; долговременная сессия — HttpOnly refresh-cookie.
 - Credentials не передаются в WebSocket URL.
 - PWA service worker кэширует только shell/static assets и не является хранилищем auth/private API data.
 - Reminder worker запускается внешним scheduler'ом и не живёт внутри FastAPI web-worker lifecycle.
+- Standalone backend processes явно инициализируют ORM model registry.
 - Activity reminders остаются opt-in; browser/native push появится отдельным delivery adapter позже.
 - Creator support — бесплатные internal cosmetic gestures; реальные payments требуют отдельного financial/security review.
