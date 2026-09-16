@@ -2,7 +2,7 @@
 
 ## Current release
 
-`0.6.2-alpha.1`
+`0.6.3-alpha.1`
 
 Current development milestone remains `0.6.x-alpha` — Pre-beta hardening.
 
@@ -17,8 +17,8 @@ Before `1.0.0`, PubChat uses Semantic Versioning with an explicit readiness chan
 `MAJOR.MINOR.PATCH` for stable releases.
 
 Examples:
-- `0.6.2-alpha.1` — validated compatible hardening checkpoint inside milestone 0.6;
-- `0.6.3-alpha.0` — next compatible development slice inside the same milestone;
+- `0.6.3-alpha.1` — validated compatible hardening checkpoint inside milestone 0.6;
+- `0.6.4-alpha.0` — next compatible development slice inside the same milestone;
 - `0.9.0-beta.1` — core product flows complete and entering stabilization;
 - `1.0.0` — first stable public release.
 
@@ -33,11 +33,17 @@ After `1.0.0`, normal SemVer rules apply.
 
 ## Alpha
 
-Alpha is used while launch-critical hardening or product domains are incomplete. Schema/API contracts may still evolve, although data-preserving migrations are preferred. Every recorded alpha checkpoint must pass CI on the exact versioned head.
+Alpha is used while launch-critical hardening or product domains are incomplete. Every recorded alpha checkpoint must pass CI on the exact versioned head.
 
-PubChat remains alpha because Stage 6 still requires production-like legacy snapshot rehearsal, concurrency/DST work, Redis restart/recovery and real multi-process WebSocket coverage, observability, accessibility, load testing, legacy compatibility reduction and final security review.
+PubChat remains alpha because Stage 6 still requires production-like legacy snapshot rehearsal, member-capacity/DST work, real multi-process WebSocket and rolling-restart coverage, load/backpressure, observability, accessibility and final security review.
 
-`0.6.0-alpha.1` proved the clean PostgreSQL migration/schema-drift/async integration baseline. `0.6.1-alpha.1` added executable PostgreSQL recovery. `0.6.2-alpha.1` adds a Redis 7.2 production-semantics integration baseline for distributed realtime primitives at `DEBUG=False`. These checkpoints do not declare Stage 6 complete.
+Checkpoint progression:
+- `0.6.0-alpha.1` — PostgreSQL migration/schema-drift/async integration baseline;
+- `0.6.1-alpha.1` — PostgreSQL backup/restore recovery drill;
+- `0.6.2-alpha.1` — Redis 7.2 distributed realtime production-semantics baseline;
+- `0.6.3-alpha.1` — real Redis restart/outage recovery without Python process restart, including pub/sub resubscription.
+
+These checkpoints do not declare Stage 6 complete.
 
 ## Beta
 
@@ -49,13 +55,13 @@ Stable begins at `1.0.0` only after beta launch gate and absence of known P0/P1 
 
 ## Release workflow
 
-1. Review actual feature scope and blockers.
+1. Review actual scope and blockers.
 2. Freeze candidate head.
 3. Run functional CI on that exact head.
 4. Update `VERSION` and release documentation only after success.
 5. Run CI again on the exact versioned head.
 6. Merge only after the second gate succeeds.
-7. Continue the same milestone on the next compatible alpha checkpoint or open a new milestone development line when the roadmap advances.
+7. Continue the same milestone on the next compatible alpha checkpoint or open a new milestone when roadmap advances.
 
 Version number is a readiness statement, not commit count.
 
@@ -72,6 +78,7 @@ Version number is a readiness statement, not commit count.
 - `0.5.3-alpha.1` — consent-first internal gifts + cosmetic support ledger/entitlements;
 - `0.5.4-alpha.1` — explainable organic Space discovery;
 - `0.5.5-alpha.1` — installable PWA shell + external reminder worker + centralized notification lifecycle;
-- `0.6.0-alpha.1` — PostgreSQL migration/schema-drift/async integration baseline + synthetic legacy-data rehearsal;
-- `0.6.1-alpha.1` — PostgreSQL backup/restore recovery drill with schema/data verification;
-- `0.6.2-alpha.1` — Redis 7.2 distributed realtime integration baseline.
+- `0.6.0-alpha.1` — PostgreSQL integration + legacy migration rehearsal;
+- `0.6.1-alpha.1` — PostgreSQL backup/restore recovery;
+- `0.6.2-alpha.1` — Redis distributed realtime integration;
+- `0.6.3-alpha.1` — Redis restart/recovery without process restart.
