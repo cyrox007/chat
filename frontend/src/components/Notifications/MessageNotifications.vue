@@ -1,20 +1,25 @@
 <template>
 	<div class="message-notifications">
-		<button @click="toggleNotifications">
+		<button type="button" aria-label="Уведомления о сообщениях" @click="toggleNotifications">
 			<i class="icon-bell"></i>
 			<span v-if="hasUnreadNotifications" class="badge">{{ unreadNotifications.length }}</span>
 		</button>
 
 		<div v-if="shouldShowNotifications" class="dropdown">
-			<div v-for="notification in unreadNotifications" :key="notification.uid" class="notification-item"
-				@click="openMessenger(notification)">
-				<img :src="notification.sender?.avatar || '/default-avatar.png'" class="avatar" />
-				<div class="content">
-					<strong>{{ notification.sender?.username || 'User' }}</strong>
-					<p>{{ notification.content }}</p>
+			<button
+				v-for="notification in unreadNotifications"
+				:key="notification.uid"
+				type="button"
+				class="notification-item"
+				@click="openNotification(notification)"
+			>
+				<img :src="notification.sender?.avatar || '/default-avatar.png'" class="avatar" alt="" />
+				<span class="content">
+					<strong>{{ notification.sender?.display_name || notification.sender?.username || 'Новое сообщение' }}</strong>
+					<span class="notification-text">{{ notification.content }}</span>
 					<small>{{ formatDate(notification.timestamp) }}</small>
-				</div>
-			</div>
+				</span>
+			</button>
 		</div>
 	</div>
 </template>
@@ -28,28 +33,33 @@ const store = useStore();
 const router = useRouter();
 const showNotifications = ref(false);
 
-// Геттеры
 const unreadNotifications = computed(() => store.getters['messenger/getNotifications']);
 const hasUnreadNotifications = computed(() => store.getters['messenger/hasUnreadNotifications']);
-
-// Условие для отображения
 const shouldShowNotifications = computed(() => showNotifications.value && hasUnreadNotifications.value);
 
-// Методы
 const toggleNotifications = () => {
 	showNotifications.value = !showNotifications.value;
 };
 
-const openMessenger = (notification) => {
-	store.commit('messenger/SET_ACTIVE_DIALOG', notification.userId); // Устанавливаем активный диалог
-	store.commit('messenger/CLEAR_NOTIFICATIONS'); // Очищаем уведомления
-	router.push('/messenger'); // Переходим на страницу мессенджера
+const openNotification = async (notification) => {
+	store.commit('messenger/CLEAR_NOTIFICATIONS');
 	showNotifications.value = false;
+
+	if (notification.surface === 'space' && notification.roomUid) {
+		await router.push({ name: 'space', params: { uid: notification.roomUid } });
+		return;
+	}
+
+	if (notification.userId) {
+		store.commit('messenger/SET_ACTIVE_DIALOG', notification.userId);
+	}
+	await router.push({ name: 'messenger' });
 };
 
-const formatDate = (timestamp) => {
-	return new Date(timestamp).toLocaleTimeString();
-};
+const formatDate = (timestamp) => new Date(timestamp).toLocaleTimeString([], {
+	hour: '2-digit',
+	minute: '2-digit',
+});
 </script>
 
 <style scoped>
@@ -59,16 +69,18 @@ const formatDate = (timestamp) => {
 	display: inline-block;
 }
 
-.message-notifications button {
+.message-notifications > button {
 	background: transparent;
-	border: transparent;
+	border: 0;
+	color: inherit;
+	cursor: pointer;
 }
 
 .badge {
-	background: red;
-	color: white;
-	border-radius: 50%;
-	padding: 2px 6px;
+	background: var(--ui-primary);
+	color: var(--ui-primary-contrast);
+	border-radius: 999px;
+	padding: 1px 6px;
 	font-size: 12px;
 	position: absolute;
 	top: -5px;
@@ -77,44 +89,55 @@ const formatDate = (timestamp) => {
 
 .dropdown {
 	position: absolute;
-	right: 0; left: 0;
-	width: 300px;
+	top: calc(100% + 8px);
+	left: 0;
+	width: min(320px, calc(100vw - 24px));
 	max-height: 400px;
 	overflow-y: auto;
-	background: white;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-	border-radius: 4px;
+	background: var(--ui-surface-raised);
+	border: 1px solid var(--ui-border);
+	box-shadow: var(--ui-shadow-lg);
+	border-radius: var(--ui-radius-lg);
 	z-index: 1000;
 }
 
 .notification-item {
+	width: 100%;
 	padding: 10px;
-	border-bottom: 1px solid #eee;
+	border: 0;
+	border-bottom: 1px solid var(--ui-border);
 	display: flex;
+	gap: 10px;
+	text-align: left;
+	background: transparent;
+	color: var(--ui-text);
 	cursor: pointer;
 }
 
-.notification-item:hover {
-	background: #f5f5f5;
-}
+.notification-item:last-child { border-bottom: 0; }
+.notification-item:hover { background: var(--ui-surface-soft); }
 
 .avatar {
 	width: 40px;
 	height: 40px;
 	border-radius: 50%;
-	margin-right: 10px;
+	object-fit: cover;
+	flex: 0 0 auto;
 }
 
 .content {
+	min-width: 0;
 	flex: 1;
+	display: grid;
+	gap: 3px;
 }
 
-.content p {
-	margin: 5px 0;
-	color: #666;
+.notification-text {
+	color: var(--ui-text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
-.content small {
-	color: #999;
-}
+.content small { color: var(--ui-text-subtle); }
 </style>
