@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.decorators.db import get_session
 from components.message.model import Message
+from components.notification.space_message_delivery import notify_online_space_members
 from components.realtime import realtime_service
 from components.room.model import Room, RoomBan, RoomMember
 from components.user.model import Penalty
@@ -142,6 +143,23 @@ async def _release_client_event(room_uid: UUID, user_uid: UUID, front_id: str | 
     )
 
 
+async def _notify_online_members(
+    db_session: AsyncSession,
+    room_uid: UUID,
+    user_uid: UUID,
+    formatted_message: dict,
+) -> None:
+    # Secondary alerts are deliberately best-effort. The canonical room message
+    # has already been persisted and broadcast; notification failure must never
+    # turn a successful send into a client-visible retry/duplicate situation.
+    await notify_online_space_members(
+        db_session,
+        room_uid=room_uid,
+        sender_uid=user_uid,
+        formatted_message=formatted_message,
+    )
+
+
 async def process_incoming_messages(
     websocket: WebSocket,
     room_uid: UUID,
@@ -222,6 +240,7 @@ async def handle_text_message(
         )
         formatted_message["frontId"] = front_id
         await manager.broadcast_to_room(room_uid, formatted_message)
+        await _notify_online_members(db_session, room_uid, user_uid, formatted_message)
     except Exception:
         await _release_client_event(room_uid, user_uid, front_id)
         raise
@@ -310,6 +329,7 @@ async def handle_file_message(
         )
         formatted_message["frontId"] = front_id
         await manager.broadcast_to_room(room_uid, formatted_message)
+        await _notify_online_members(db_session, room_uid, user_uid, formatted_message)
 
         if errors:
             await websocket.send_json(
@@ -371,6 +391,7 @@ async def handle_audio_message(
         )
         formatted_message["frontId"] = front_id
         await manager.broadcast_to_room(room_uid, formatted_message)
+        await _notify_online_members(db_session, room_uid, user_uid, formatted_message)
     except Exception as exc:
         await _release_client_event(room_uid, user_uid, front_id)
         logger.warning("Не удалось обработать audio frame: %s", exc)

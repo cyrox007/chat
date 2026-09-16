@@ -36,7 +36,12 @@ from components.achievement.model import AccountAchievement, AchievementDefiniti
 from components.engagement.model import ActivityRSVP, PersonaAppearance, SpaceActivity, SpaceAppearance
 from components.engagement.occurrence_model import ActivityOccurrence
 from components.engagement.round_model import ConversationRound, ConversationRoundResponse
-from components.notification.model import ActivityReminderPreference, NotificationWorkerState, UserNotification
+from components.notification.model import (
+    ActivityReminderPreference,
+    MessageNotificationPreference,
+    NotificationWorkerState,
+    UserNotification,
+)
 from components.moderation.model import ModerationAction, ModerationAppeal, ModerationReport
 from components.support.model import (
     CosmeticEntitlement,

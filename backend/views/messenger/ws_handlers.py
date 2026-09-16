@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from components.decorators.db import get_session
 from components.identity.model import AccountRelationship, Persona, PrivacySettings
 from components.message.model import PrivateMessage
+from components.notification.message_delivery import (
+    SURFACE_MESSENGER,
+    get_message_notification_preferences,
+    message_delivery_policy,
+)
 from components.realtime import realtime_service
+from components.realtime.active_context import active_context_service
 from components.room.model import RoomMember
 from components.user.model import User
 from settings import config
@@ -128,6 +134,35 @@ def _dm_event_scope(receiver_uid: UUID) -> str:
     return f"direct-message:{receiver_uid}"
 
 
+async def _set_active_dialog_context(
+    websocket: WebSocket,
+    user_uid: UUID,
+    dialog_uid: UUID,
+) -> None:
+    connection_id = private_manager.connection_ids.get(websocket)
+    previous = private_manager.get_active_dialog(websocket)
+    if connection_id and previous and previous != dialog_uid:
+        await active_context_service.clear_messenger(connection_id, user_uid, previous)
+    private_manager.set_active_dialog(websocket, dialog_uid)
+    if connection_id:
+        await active_context_service.set_messenger(connection_id, user_uid, dialog_uid)
+
+
+async def _clear_active_dialog_context(websocket: WebSocket, user_uid: UUID) -> None:
+    connection_id = private_manager.connection_ids.get(websocket)
+    previous = private_manager.get_active_dialog(websocket)
+    if connection_id and previous:
+        await active_context_service.clear_messenger(connection_id, user_uid, previous)
+    private_manager.active_dialogs.pop(websocket, None)
+
+
+async def _refresh_active_dialog_context(websocket: WebSocket, user_uid: UUID) -> None:
+    connection_id = private_manager.connection_ids.get(websocket)
+    dialog_uid = private_manager.get_active_dialog(websocket)
+    if connection_id and dialog_uid:
+        await active_context_service.set_messenger(connection_id, user_uid, dialog_uid)
+
+
 async def handle_private_messages(
     websocket: WebSocket,
     user_uid: UUID,
@@ -140,6 +175,7 @@ async def handle_private_messages(
 
         if frame_type in {"heartbeat", "pong"} or action == "heartbeat":
             await private_manager.touch_connection(websocket)
+            await _refresh_active_dialog_context(websocket, user_uid)
             continue
 
         await private_manager.touch_connection(websocket)
@@ -151,6 +187,15 @@ async def handle_private_messages(
             await handle_mark_as_read(data, user_uid, db_session, websocket)
         elif action == "get_conversation":
             await handle_get_conversation(data, user_uid, db_session, websocket)
+        elif action == "set_active_dialog":
+            try:
+                dialog_uid = UUID(str(data.get("other_user_uid")))
+            except (TypeError, ValueError):
+                await websocket.send_json({"type": "error", "error_type": "invalid_active_dialog"})
+                continue
+            await _set_active_dialog_context(websocket, user_uid, dialog_uid)
+        elif action == "clear_active_dialog":
+            await _clear_active_dialog_context(websocket, user_uid)
         elif action == "subscribe_status":
             target_uids = [UUID(uid) for uid in data.get("userIds", [])]
             await private_manager.subscribe_to_status(user_uid, target_uids)
@@ -221,9 +266,35 @@ async def handle_send_private_message(
         )
         formatted_message["frontId"] = front_id
 
-        await private_manager.send_to_user(sender_uid, formatted_message)
+        sender_message = {
+            **formatted_message,
+            "notification": {
+                "surface": SURFACE_MESSENGER,
+                "notify_in_app": False,
+                "play_sound": False,
+                "active_context": True,
+            },
+        }
+        await private_manager.send_to_user(sender_uid, sender_message)
+
         if receiver_uid != sender_uid:
-            await private_manager.send_to_user(receiver_uid, formatted_message)
+            preferences = await get_message_notification_preferences(db_session, receiver_uid)
+            receiver_online = await realtime_service.is_online(receiver_uid)
+            receiver_active = await active_context_service.is_active(
+                receiver_uid,
+                SURFACE_MESSENGER,
+                sender_uid,
+            )
+            policy = message_delivery_policy(
+                SURFACE_MESSENGER,
+                online=receiver_online,
+                active_context=receiver_active,
+                preferences=preferences,
+            )
+            await private_manager.send_to_user(
+                receiver_uid,
+                {**formatted_message, "notification": policy},
+            )
     except Exception:
         await realtime_service.release_event(sender_uid, scope, front_id)
         logger.exception("Ошибка отправки private message")
@@ -284,6 +355,7 @@ async def handle_get_conversation(
 ) -> None:
     try:
         other_user_uid = UUID(str(data.get("other_user_uid")))
+        await _set_active_dialog_context(websocket, user_uid, other_user_uid)
         messages = await PrivateMessage.get_conversation(
             db_session,
             user1_uid=user_uid,
@@ -334,4 +406,5 @@ async def handle_messenger_connection(
             pass
     finally:
         if connected:
+            await _clear_active_dialog_context(websocket, user_uid)
             await private_manager.disconnect(websocket)

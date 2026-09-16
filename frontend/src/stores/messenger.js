@@ -80,14 +80,23 @@ export default {
 			state.conversations[userId].push(message);
 			if (state.activeDialog !== userId && !message.isCurrentUser) {
 				state.unreadCounts[userId] = (state.unreadCounts[userId] || 0) + 1;
-				state.notifications.push({
-					uid: message.uid,
-					sender: message.sender,
-					content: message.content,
-					timestamp: message.timestamp,
-					userId,
-				});
+				const shouldNotify = message.notification?.notify_in_app ?? true;
+				if (shouldNotify) {
+					state.notifications.push({
+						uid: message.uid,
+						surface: 'messenger',
+						sender: message.sender,
+						content: message.content,
+						timestamp: message.timestamp,
+						userId,
+					});
+				}
 			}
+		},
+		ADD_SPACE_NOTIFICATION(state, notification) {
+			const key = notification.uid;
+			if (key && state.notifications.some((item) => item.uid === key)) return;
+			state.notifications.push(notification);
 		},
 		MERGE_CONVERSATION(state, { userId, messages }) {
 			if (!state.conversations[userId]) state.conversations[userId] = [];
@@ -267,7 +276,24 @@ export default {
 							timestamp: new Date(data.created_at || Date.now()),
 						},
 					});
-					if (!isFromCurrentUser && state.activeDialog !== otherUserId) dispatch('playNotificationSound');
+					const shouldPlaySound = data.notification?.play_sound
+						?? (!isFromCurrentUser && state.activeDialog !== otherUserId);
+					if (!isFromCurrentUser && shouldPlaySound) dispatch('playNotificationSound');
+					break;
+				}
+				case 'space_message_notification': {
+					const shouldNotify = data.notification?.notify_in_app ?? true;
+					if (shouldNotify) {
+						commit('ADD_SPACE_NOTIFICATION', {
+							uid: `space:${data.message_uid || `${data.room_uid}:${data.created_at}`}`,
+							surface: 'space',
+							sender: data.sender,
+							content: 'Новое сообщение в чате пространства',
+							timestamp: new Date(data.created_at || Date.now()),
+							roomUid: data.room_uid,
+						});
+					}
+					if (data.notification?.play_sound ?? true) dispatch('playSpaceNotificationSound');
 					break;
 				}
 				case 'message_read':
@@ -349,6 +375,12 @@ export default {
 
 		playNotificationSound() {
 			const audio = new Audio('/sounds/private_notification.mp3');
+			audio.preload = 'auto';
+			audio.play().catch(() => {});
+		},
+
+		playSpaceNotificationSound() {
+			const audio = new Audio('/sounds/chat_notification.mp3');
 			audio.preload = 'auto';
 			audio.play().catch(() => {});
 		},
