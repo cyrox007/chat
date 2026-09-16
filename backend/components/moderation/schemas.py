@@ -1,13 +1,38 @@
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 ReportCategory = Literal["spam", "harassment", "sexual", "violence", "privacy", "other"]
 ReportStatus = Literal["open", "reviewing", "resolved", "dismissed"]
 ModerationActionType = Literal["warning", "restrict"]
 AppealResolution = Literal["uphold", "overturn"]
+
+TrustSafetySourceType = Literal["persona", "messenger_message", "space_message"]
+TrustSafetyCategory = Literal[
+    "spam",
+    "harassment",
+    "sexual",
+    "violence",
+    "privacy",
+    "impersonation",
+    "fraud",
+    "hate",
+    "self_harm",
+    "minor_safety",
+    "other",
+]
+TrustSafetyStatus = Literal["triage", "in_review", "escalated", "resolved", "dismissed"]
+TrustSafetyPriority = Literal["high", "normal", "low"]
+TrustSafetyResolutionCode = Literal[
+    "no_violation",
+    "handled",
+    "needs_platform_action",
+    "duplicate",
+    "insufficient_context",
+    "other",
+]
 
 
 class ModerationReportCreateRequest(BaseModel):
@@ -60,4 +85,38 @@ class ModerationAppealResolveRequest(BaseModel):
     @model_validator(mode="after")
     def clean_resolution(self):
         self.resolution = self.resolution.strip()
+        return self
+
+
+class TrustSafetyReportCreateRequest(BaseModel):
+    """User-submitted platform report. Target/priority are always server-derived."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_type: TrustSafetySourceType
+    source_uid: UUID
+    category: TrustSafetyCategory
+    description: Optional[str] = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def clean_description(self):
+        if self.description is not None:
+            self.description = self.description.strip() or None
+        return self
+
+
+class TrustSafetyDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["resolved", "dismissed", "escalated"]
+    resolution_code: TrustSafetyResolutionCode
+    public_explanation: str = Field(min_length=3, max_length=1000)
+
+    @model_validator(mode="after")
+    def clean_explanation(self):
+        self.public_explanation = " ".join(self.public_explanation.split())
+        if self.status == "escalated" and self.resolution_code != "needs_platform_action":
+            raise ValueError("escalated reports require needs_platform_action")
+        if self.status == "dismissed" and self.resolution_code == "needs_platform_action":
+            raise ValueError("dismissed reports cannot require platform action")
         return self
