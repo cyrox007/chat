@@ -5,11 +5,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.decorators.db import get_session
 from components.message.model import Message
+from components.moderation.policy import assert_allowed
 from components.notification.space_message_delivery import notify_online_space_members
 from components.realtime import realtime_service
 from components.room.model import Room, RoomBan, RoomMember
@@ -107,6 +108,29 @@ async def _rate_limit_message(websocket: WebSocket, user_uid: UUID) -> bool:
     return False
 
 
+async def _enforce_capability(
+    websocket: WebSocket,
+    db_session: AsyncSession,
+    user_uid: UUID,
+    capability: str,
+    room_uid: UUID,
+    front_id: str | None,
+) -> bool:
+    try:
+        await assert_allowed(
+            db_session,
+            user_uid,
+            capability,
+            scope_type="space",
+            scope_uid=room_uid,
+        )
+        return True
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {"error_type": "capability_restricted"}
+        await websocket.send_json({"type": "error", "frontId": front_id, **detail})
+        return False
+
+
 def _event_scope(room_uid: UUID) -> str:
     return f"space-message:{room_uid}"
 
@@ -189,10 +213,32 @@ async def process_incoming_messages(
             await manager.update_user_activity(db_session, user_uid)
             continue
 
-        if not await _rate_limit_message(websocket, user_uid):
+        front_id = data.get("frontId")
+        if not await _enforce_capability(
+            websocket,
+            db_session,
+            user_uid,
+            "space.chat.send",
+            room_uid,
+            front_id,
+        ):
             continue
 
         content_type = data.get("content_type", "text")
+        if content_type in {"file", "image", "video", "voice", "audio"}:
+            if not await _enforce_capability(
+                websocket,
+                db_session,
+                user_uid,
+                "media.upload",
+                room_uid,
+                front_id,
+            ):
+                continue
+
+        if not await _rate_limit_message(websocket, user_uid):
+            continue
+
         if content_type == "text":
             await handle_text_message(data, room_uid, user_uid, db_session, websocket)
         elif content_type in {"file", "image", "video"}:
@@ -204,7 +250,7 @@ async def process_incoming_messages(
                 {
                     "type": "error",
                     "error_type": "unsupported_content_type",
-                    "frontId": data.get("frontId"),
+                    "frontId": front_id,
                 }
             )
 
