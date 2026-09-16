@@ -2,6 +2,23 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.4-alpha.1] — 2026-09-16
+
+Stage 6 pre-beta hardening checkpoint 5 — real multi-process WebSocket / rolling-restart baseline.
+
+- CI поднимает два отдельных Uvicorn/FastAPI process против общих PostgreSQL и Redis;
+- one-time realtime ticket выдаётся вне worker process и consume-ится внутри конкретного WebSocket worker;
+- distributed presence виден между процессами через Redis;
+- Redis pub/sub доставляет user event в worker, который владеет process-local WebSocket object;
+- один Uvicorn process останавливается как часть rolling restart, в то время как второй продолжает обслуживать realtime traffic;
+- после запуска replacement process клиент подключается заново с новым one-time ticket и снова получает realtime события;
+- существующие PostgreSQL migration/recovery, Redis restart/recovery и frontend gates продолжают проходить в том же pipeline;
+- добавлен `docs/realtime-multiprocess-v1.md`.
+
+Остаются Stage 6.2 задачи: slow-client/backpressure под нагрузкой и Redis failover topology/capacity tests.
+
+Quality gate: functional exact-head CI → version/docs sync → повторный exact-head CI перед merge.
+
 ## [0.6.3-alpha.1] — 2026-09-16
 
 Stage 6 pre-beta hardening checkpoint 4 — Redis restart/recovery.
