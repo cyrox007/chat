@@ -44,4 +44,36 @@ export default class ModerationService {
 	static resolveAppeal(spaceUid, appealUid, payload) {
 		return $api.patch(`/moderation/v1/spaces/${spaceUid}/appeals/${appealUid}`, payload);
 	}
+
+	static createTrustSafetyReport(payload) {
+		return $api.post('/trust-safety/v1/reports', payload);
+	}
+
+	static myTrustSafetyReports(params = {}) {
+		return $api.get('/trust-safety/v1/me/reports', { params });
+	}
+
+	static trustSafetyQueue(params = {}) {
+		return $api.get('/trust-safety/v1/queue', { params });
+	}
+
+	static claimTrustSafetyReport(reportUid) {
+		return $api.post(`/trust-safety/v1/reports/${reportUid}/claim`);
+	}
+
+	static releaseTrustSafetyReport(reportUid) {
+		return $api.post(`/trust-safety/v1/reports/${reportUid}/release`);
+	}
+
+	static trustSafetyEvidence(reportUid) {
+		return $api.get(`/trust-safety/v1/reports/${reportUid}/evidence`);
+	}
+
+	static decideTrustSafetyReport(reportUid, payload) {
+		return $api.patch(`/trust-safety/v1/reports/${reportUid}`, payload);
+	}
+
+	static trustSafetyAudit(reportUid, params = {}) {
+		return $api.get(`/trust-safety/v1/reports/${reportUid}/audit`, { params });
+	}
 }
