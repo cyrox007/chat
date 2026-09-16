@@ -11,6 +11,10 @@ BANNED_UID = UUID("33333333-3333-3333-3333-333333333333")
 ROOM_UID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 
 
+def as_uuid(value) -> UUID:
+    return value if isinstance(value, UUID) else UUID(str(value))
+
+
 def connection_kwargs() -> dict:
     return {
         "host": os.getenv("DB_HOST", "127.0.0.1"),
@@ -36,14 +40,15 @@ class LegacyMigrationIntegrationTests(unittest.TestCase):
                     "SELECT legacy_user_uid, status FROM accounts WHERE uid = %s::uuid",
                     (str(OWNER_UID),),
                 )
-                self.assertEqual(cursor.fetchone(), (OWNER_UID, "active"))
+                legacy_user_uid, status = cursor.fetchone()
+                self.assertEqual((as_uuid(legacy_user_uid), status), (OWNER_UID, "active"))
 
                 cursor.execute(
                     "SELECT account_uid, handle, display_name, is_primary FROM personas WHERE uid = %s::uuid",
                     (str(OWNER_UID),),
                 )
                 account_uid, handle, display_name, is_primary = cursor.fetchone()
-                self.assertEqual(account_uid, OWNER_UID)
+                self.assertEqual(as_uuid(account_uid), OWNER_UID)
                 self.assertEqual(handle, "legacy_owner")
                 self.assertEqual(display_name, "Alex Owner")
                 self.assertTrue(is_primary)
@@ -89,7 +94,10 @@ class LegacyMigrationIntegrationTests(unittest.TestCase):
                     """,
                     (str(ROOM_UID),),
                 )
-                memberships = {account_uid: (role, status) for account_uid, role, status in cursor.fetchall()}
+                memberships = {
+                    as_uuid(account_uid): (role, status)
+                    for account_uid, role, status in cursor.fetchall()
+                }
                 self.assertEqual(memberships[OWNER_UID], ("owner", "active"))
                 self.assertEqual(memberships[MEMBER_UID], ("moderator", "active"))
                 self.assertNotIn(BANNED_UID, memberships)
