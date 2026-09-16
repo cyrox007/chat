@@ -121,7 +121,7 @@ class ProductionReloadIntegrationTest(unittest.TestCase):
             # complete after the replacement process starts, rather than seeing
             # connection-refused/502 at the reverse proxy.
             _stop_server(process)
-            self.assertIsNone(listener.getsockname()[0]) if False else None  # keep listener referenced and open
+            self.assertEqual(listener.getsockname()[1], port, "persistent listener closed with the supervisor")
 
             queued_probe = {}
 
