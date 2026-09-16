@@ -2,6 +2,7 @@ import CSRFService from "@/API/CSRFService";
 import UsersServices from "@/API/UsersService";
 import AuthService from "@/API/AuthService";
 import { clearAccessToken, setAccessToken } from "@/API/session";
+import { detachWebPushDeviceBeforeLogout } from "@/pwa/webPush";
 
 const readJSON = (key) => {
 	try {
@@ -85,6 +86,7 @@ export default {
 		},
 		async logout({ dispatch }) {
 			try {
+				await detachWebPushDeviceBeforeLogout().catch(() => null);
 				await AuthService.logout();
 			} finally {
 				await dispatch('messenger/disconnectMessenger', null, { root: true });
