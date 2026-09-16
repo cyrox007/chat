@@ -8,6 +8,8 @@ Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжает
 
 PubChat остаётся alpha: PostgreSQL migration/recovery, Redis distributed/restart recovery, real multi-process Uvicorn/WebSocket rolling-restart и bounded slow-consumer backpressure baselines уже закреплены CI. До beta всё ещё нужны production-like snapshot rehearsal, member-capacity/DST hardening, Redis failover/capacity, observability, load/security и финальные accessibility/operations gates.
 
+UX-polish коммуникационных поверхностей выполняется параллельно внутри **6.7 UX/accessibility** и не заменяет следующий инфраструктурный checkpoint **6.2 Redis failover/capacity**. Цель — улучшать основной пользовательский сценарий общения без изменения realtime/data contracts.
+
 ## Завершённые checkpoints
 
 ### Stage 1 — Foundation & Security ✅ `0.1.0-alpha.1`
@@ -130,12 +132,14 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - expanded PostgreSQL/Redis compatibility matrix.
 
 ### 6.7 UX/accessibility
-- полный keyboard/focus audit;
-- contrast/mobile/narrow viewport pass;
-- error/empty/offline consistency;
-- onboarding usability;
-- terminology audit;
-- PWA install/update browser matrix.
+- 🚧 messaging surfaces polish v1: единый compact composer для Space chat и Messenger, встроенная attachment shelf, меньше постоянного visual chrome, desktop/mobile responsive density;
+- 🚧 desktop information panels: overlay-only close controls и более компактная secondary navigation;
+- ⏳ полный keyboard/focus audit;
+- ⏳ contrast/mobile/narrow viewport pass;
+- ⏳ error/empty/offline consistency;
+- ⏳ onboarding usability;
+- ⏳ terminology audit;
+- ⏳ PWA install/update browser matrix.
 
 ## Beta
 
