@@ -1,7 +1,7 @@
 from fastapi import APIRouter, FastAPI, status
 
 from utils.version import PROJECT_VERSION_INFO
-from views.service import handlers
+from views.service import handlers, health
 
 
 def install(app: FastAPI):
@@ -12,6 +12,17 @@ def install(app: FastAPI):
         methods=['GET'],
         status_code=status.HTTP_200_OK,
         endpoint=handlers.get_server
+    )
+    router.add_api_route(
+        '/health/live',
+        methods=['GET'],
+        status_code=status.HTTP_200_OK,
+        endpoint=health.liveness,
+    )
+    router.add_api_route(
+        '/health/ready',
+        methods=['GET'],
+        endpoint=health.readiness,
     )
     router.add_api_route(
         '/refresh',
