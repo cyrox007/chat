@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from sqlalchemy.engine import URL
 
 load_dotenv()
 
@@ -71,10 +72,14 @@ class Config:
 
     def database_url(self, async_mode=False):
         driver = "postgresql+asyncpg" if async_mode else "postgresql"
-        return (
-            f"{driver}://{self.DB_USER}:{self.DB_PASSWORD}"
-            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
-        )
+        return URL.create(
+            drivername=driver,
+            username=self.DB_USER,
+            password=self.DB_PASSWORD,
+            host=self.DB_HOST,
+            port=int(self.DB_PORT),
+            database=self.DB_NAME,
+        ).render_as_string(hide_password=False)
 
     # File storage
     UPLOADS_BASE_URL = f"{SERVER_HTTP_PROTOCOL}{SERVER_ADDR}/uploads/"
