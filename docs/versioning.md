@@ -35,9 +35,9 @@ After `1.0.0`, normal SemVer rules apply.
 
 Alpha is used while launch-critical hardening or product domains are incomplete. Schema/API contracts may still evolve, although data-preserving migrations are preferred. Every recorded alpha checkpoint must pass CI on the exact versioned head.
 
-PubChat remains alpha because Stage 6 still requires representative legacy-data migration rehearsal, backup/restore, PostgreSQL concurrency/DST work, Redis/realtime integration coverage, observability, accessibility, load testing, legacy compatibility reduction and final security review.
+PubChat remains alpha because Stage 6 still requires rehearsal on an anonymized production-like legacy snapshot, backup/restore, PostgreSQL concurrency/DST work, Redis/realtime integration coverage, observability, accessibility, load testing, legacy compatibility reduction and final security review.
 
-`0.6.0-alpha.1` proves the clean PostgreSQL migration/integration baseline only; it does not declare Stage 6 or Stage 6.1 complete.
+`0.6.0-alpha.1` proves the clean PostgreSQL migration/schema-drift/async integration baseline plus a synthetic representative pre-revival data rehearsal with semantic assertions. It does not declare Stage 6 or Stage 6.1 complete.
 
 ## Beta
 
@@ -72,4 +72,4 @@ Version number is a readiness statement, not commit count.
 - `0.5.3-alpha.1` — consent-first internal gifts + cosmetic support ledger/entitlements;
 - `0.5.4-alpha.1` — explainable organic Space discovery;
 - `0.5.5-alpha.1` — installable PWA shell + external reminder worker + centralized notification lifecycle;
-- `0.6.0-alpha.1` — first Pre-beta hardening checkpoint: clean PostgreSQL migration/schema-drift/async integration baseline.
+- `0.6.0-alpha.1` — first Pre-beta hardening checkpoint: clean PostgreSQL migration/schema-drift/async integration baseline + synthetic legacy-data rehearsal.
