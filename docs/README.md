@@ -34,6 +34,7 @@
 - [`redis-realtime-integration-v1.md`](redis-realtime-integration-v1.md) — Redis distributed realtime baseline (`0.6.2-alpha.1`).
 - [`redis-recovery-v1.md`](redis-recovery-v1.md) — real Redis restart/outage recovery (`0.6.3-alpha.1`).
 - [`realtime-multiprocess-v1.md`](realtime-multiprocess-v1.md) — real Uvicorn multi-process/rolling-restart baseline (`0.6.4-alpha.1`).
+- [`realtime-backpressure-v1.md`](realtime-backpressure-v1.md) — bounded outbound queues и slow-consumer isolation (`0.6.5-alpha.1`).
 - [`release-checklist.md`](release-checklist.md) — release gate.
 
 ## Доменные документы
@@ -51,6 +52,6 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Текущий release: `0.6.4-alpha.1`.
+Текущий release: `0.6.5-alpha.1`.
 
-Текущая development-линия: `0.6.x-alpha` — следующий realtime slice: slow-client/backpressure и Redis failover/capacity hardening.
+Текущая development-линия: `0.6.x-alpha` — следующий realtime slice: Redis failover/capacity hardening.
