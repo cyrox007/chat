@@ -2,11 +2,11 @@
 
 ## Текущий статус
 
-Released: **`0.5.5-alpha.1`**.
+Released: **`0.6.0-alpha.1`**.
 
-Next development line: **`0.6.0-alpha.0`** — Pre-beta hardening.
+Current development line: **`0.6.0-alpha.x`** — Pre-beta hardening продолжается.
 
-PubChat остаётся alpha: основные продуктовые контуры сформированы, но production-like integration, observability, load/security rehearsal и финальные accessibility/operations gates ещё не завершены.
+PubChat остаётся alpha: основные продуктовые контуры сформированы, а clean PostgreSQL migration/integration baseline уже доказан CI. До beta всё ещё нужны representative legacy-data rehearsal, backup/restore, concurrency/DST hardening, Redis/realtime reliability, observability, load/security и финальные accessibility/operations gates.
 
 ## Завершённые checkpoints
 
@@ -76,17 +76,32 @@ Eligibility-first organic discovery, explainable reasons, distinct-author activi
 
 Stage 5.6 не добавляет browser/native push и не обещает offline messaging/private data synchronization.
 
-## Stage 6 — Pre-beta hardening 🚧 `0.6.0-alpha.0`
+### Stage 6 checkpoint 1 — PostgreSQL migration/integration baseline ✅ `0.6.0-alpha.1`
 
-Следующий обязательный milestone перед beta. Здесь новые social/product mechanics не являются приоритетом: задача — доказать корректность, переносимость и эксплуатационную готовность уже построенных контуров.
+- PostgreSQL 16 service в backend CI;
+- clean-database `alembic upgrade head` через всю historical migration chain;
+- `alembic current` достигает единственной current head;
+- `alembic check` закрепляет zero model/schema drift;
+- исправлен historical identity credential backfill без изменения deterministic UUID semantics;
+- identity/engagement metadata reconciled с уже выпущенной DB schema;
+- DB URLs строятся через SQLAlchemy `URL.create()` и безопасны для спецсимволов credentials;
+- standalone worker получил explicit ORM model registry/bootstrap вместо зависимости от web import side effects;
+- real async PostgreSQL smoke проверяет migrated core tables и durable notification worker cursor/lock.
 
-### 6.1 Data / migrations
-- поднять production-like PostgreSQL integration environment в CI;
-- migration rehearsal на копии legacy schema/data;
-- backup/restore drill;
-- проверить Alembic upgrade from historical baseline до current head;
-- member-capacity concurrency hardening;
-- IANA timezone storage и DST-correct recurring wall-clock semantics.
+Этот checkpoint не означает завершение Stage 6.1: подробнее `prebeta-hardening-v1.md`.
+
+## Stage 6 — Pre-beta hardening 🚧 `0.6.0-alpha.x`
+
+Обязательный milestone перед beta. Новые social/product mechanics не являются приоритетом: задача — доказать корректность, переносимость и эксплуатационную готовность уже построенных контуров.
+
+### 6.1 Data / migrations 🚧
+- ✅ production-like PostgreSQL 16 integration environment в CI;
+- ✅ Alembic upgrade from historical clean baseline до current head;
+- ✅ zero model/schema drift через `alembic check`;
+- ⏳ migration rehearsal на репрезентативной копии legacy schema/data с data assertions;
+- ⏳ backup/restore drill;
+- ⏳ member-capacity concurrency hardening;
+- ⏳ IANA timezone storage и DST-correct recurring wall-clock semantics.
 
 ### 6.2 Redis / realtime reliability
 - Redis integration tests без development fallback;
@@ -96,8 +111,8 @@ Stage 5.6 не добавляет browser/native push и не обещает off
 - slow-client/backpressure scenarios;
 - reconnect после rolling restart.
 
-### 6.3 Notification worker
-- integration tests с реальным PostgreSQL;
+### 6.3 Notification worker 🚧
+- ✅ baseline integration smoke с реальным PostgreSQL и durable worker state;
 - concurrent worker/`SKIP LOCKED` validation;
 - cursor recovery/restart tests;
 - load/idempotency profiling;
@@ -158,6 +173,7 @@ Beta назначается только когда launch-critical journeys р�
 - Organic discovery нельзя купить через gift/support.
 - Service worker не является storage для auth/private API data.
 - Background scheduler не запускается внутри каждого web worker.
+- Migration correctness проверяется реальной PostgreSQL, а не только импортом моделей.
 - Communication quality first.
 - Никакой тюремной терминологии.
 - SPA — первый клиент, contracts reusable для Android/iOS.
