@@ -6,11 +6,13 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Текущий выпущенный checkpoint: `0.6.0-alpha.1`.
+Текущий выпущенный checkpoint: `0.6.1-alpha.1`.
 
-Текущая development-линия: `0.6.0-alpha.x` — Pre-beta hardening продолжается.
+Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 
-Первый Stage 6 checkpoint закрепил PostgreSQL 16 CI, clean historical `alembic upgrade head`, zero `alembic check` drift, real async PostgreSQL smoke и synthetic representative legacy-data rehearsal с data assertions. Stage 6.1 ещё не завершён: остаются rehearsal на anonymized production-like snapshot, backup/restore, concurrency и DST-correct recurrence.
+Stage 6 уже закрепил PostgreSQL 16 CI, clean historical `alembic upgrade head`, zero `alembic check` drift, real async PostgreSQL smoke, synthetic representative legacy-data rehearsal и исполняемый PostgreSQL backup/restore recovery drill с повторными semantic data assertions.
+
+До beta всё ещё нужны rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, Redis/realtime reliability, observability, load/security и финальные accessibility/operations gates.
 
 Канонический номер версии находится в `VERSION`, история выпусков — в `CHANGELOG.md`.
 
@@ -28,7 +30,8 @@ PubChat — SPA-приложение для свободного общения 
 - [`docs/security-and-privacy.md`](docs/security-and-privacy.md) — security/privacy model;
 - [`docs/development.md`](docs/development.md) — разработка, миграции, тесты и CI;
 - [`docs/operations.md`](docs/operations.md) — эксплуатация и reminder worker;
-- [`docs/prebeta-hardening-v1.md`](docs/prebeta-hardening-v1.md) — первый Stage 6 PostgreSQL/migration hardening checkpoint;
+- [`docs/prebeta-hardening-v1.md`](docs/prebeta-hardening-v1.md) — Stage 6 PostgreSQL/migration hardening baseline;
+- [`docs/database-recovery-v1.md`](docs/database-recovery-v1.md) — проверяемый backup/restore contract;
 - [`docs/web-application-maturity-v1.md`](docs/web-application-maturity-v1.md) — PWA/offline shell и client lifecycle;
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — типовые проблемы;
 - [`docs/roadmap.md`](docs/roadmap.md) — актуальная дорожная карта;
@@ -53,7 +56,8 @@ SPA является первым клиентом; backend API и realtime cont
 - Числовой discovery score не является публичным API и не показывается пользователю.
 - PostgreSQL — источник истины; Redis — ephemeral realtime слой.
 - Clean migration correctness проверяется на реальной PostgreSQL в CI; `create_all()` не заменяет Alembic rehearsal.
-- Synthetic legacy fixture закрепляет backfill semantics, но не заменяет rehearsal на production-like snapshot.
+- Backup не считается рабочим, пока restore не проверен отдельной БД, schema-drift gate и semantic data assertions.
+- Synthetic legacy/recovery fixtures не заменяют rehearsal на production-like snapshot.
 - Access JWT браузера хранится только в памяти; долговременная сессия — HttpOnly refresh-cookie.
 - Credentials не передаются в WebSocket URL.
 - PWA service worker кэширует только shell/static assets и не является хранилищем auth/private API data.
