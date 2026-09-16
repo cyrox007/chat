@@ -35,8 +35,10 @@ wait_exec() {
 
 write_sentinel_config() {
   local port="$1"
-  local path="$2"
-  cat > "$path" <<EOF
+  local directory="$2"
+  mkdir -p "$directory"
+  chmod 777 "$directory"
+  cat > "$directory/sentinel.conf" <<EOF
 port $port
 bind 127.0.0.1
 protected-mode no
@@ -47,12 +49,12 @@ sentinel down-after-milliseconds pubchat-master 1000
 sentinel failover-timeout pubchat-master 5000
 sentinel parallel-syncs pubchat-master 1
 EOF
-  chmod 666 "$path"
+  chmod 666 "$directory/sentinel.conf"
 }
 
-write_sentinel_config 26379 "$TMP_DIR/sentinel-1.conf"
-write_sentinel_config 26380 "$TMP_DIR/sentinel-2.conf"
-write_sentinel_config 26381 "$TMP_DIR/sentinel-3.conf"
+write_sentinel_config 26379 "$TMP_DIR/s1"
+write_sentinel_config 26380 "$TMP_DIR/s2"
+write_sentinel_config 26381 "$TMP_DIR/s3"
 
 # All topology containers use the runner's network namespace so Sentinel can
 # announce/reach stable 127.0.0.1 ports without Docker bridge address rewriting.
@@ -64,13 +66,15 @@ docker run -d --name "$REPLICA_CONTAINER" --network host "$IMAGE" \
   --replicaof 127.0.0.1 6380 --save '' --appendonly no >/dev/null
 
 for spec in \
-  "$S1_CONTAINER:$TMP_DIR/sentinel-1.conf:26379" \
-  "$S2_CONTAINER:$TMP_DIR/sentinel-2.conf:26380" \
-  "$S3_CONTAINER:$TMP_DIR/sentinel-3.conf:26381"
+  "$S1_CONTAINER:$TMP_DIR/s1:26379" \
+  "$S2_CONTAINER:$TMP_DIR/s2:26380" \
+  "$S3_CONTAINER:$TMP_DIR/s3:26381"
 do
-  IFS=: read -r container config port <<< "$spec"
+  IFS=: read -r container directory port <<< "$spec"
+  # Mount the directory, not only the file: Sentinel persists failover state by
+  # atomically rewriting/renaming its config and therefore needs directory writes.
   docker run -d --name "$container" --network host \
-    -v "$config:/data/sentinel.conf" \
+    -v "$directory:/data" \
     "$IMAGE" redis-server /data/sentinel.conf --sentinel >/dev/null
   wait_exec "$container" redis-cli -p "$port" ping
 done
