@@ -2,6 +2,25 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.7-alpha.1] — 2026-09-16
+
+Stage 6 checkpoint 8 — message notification policy / active-context baseline.
+
+- добавлены account-level настройки Messenger/Space in-app уведомлений и звуков, а также opt-in flags для будущих email/Web Push adapters;
+- Messenger active context хранится как connection-scoped TTL state в Redis и обновляется heartbeat/reconnect;
+- Space active context использует уже существующий distributed room presence contract;
+- server-side delivery policy подавляет дублирующий toast/sound, когда получатель уже смотрит тот же conversation/Space, не меняя authorization/message delivery;
+- offline external re-engagement разрешён только для Messenger и только по opt-in; Space chat для offline Account не создаёт background notification pressure;
+- Space alert fan-out ограничен active membership, online presence и Account block boundaries;
+- SPA объединяет Messenger/Space message alerts и использует существующие `private_notification.mp3` / `chat_notification.mp3`;
+- добавлена Alembic migration `k0a6d4f88004` и API для чтения/изменения message notification preferences;
+- deterministic tests фиксируют online/offline/active-context policy и active-context lifecycle;
+- Redis Sentinel/restart recovery, multi-process WebSocket, production rolling deploy, PostgreSQL migration/recovery и frontend gates остаются зелёными.
+
+Durable email delivery ledger, scheduled unread-DM nudge worker, provider retry/backoff и Web Push остаются следующими Stage 6.3 slices.
+
+Quality gate: functional CI → version/docs sync → повторный exact-head CI перед merge.
+
 ## [0.6.6-alpha.1] — 2026-09-16
 
 Stage 6 pre-beta hardening checkpoint 7 — Redis Sentinel failover/capacity baseline.
@@ -45,7 +64,7 @@ Quality gate: production-deploy/realtime/frontend functional CI → version/docs
 
 Stage 6 pre-beta hardening checkpoint 6 — bounded WebSocket backpressure.
 
-- каждый process-local WebSocket получил отдельную bounded outbound queue;
+- каждый process-local WebSocket имеет отдельную bounded outbound queue;
 - Redis/pub-sub fan-out больше не ждёт socket write каждого клиента и только ставит frame в локальную очередь;
 - один sender task на socket сохраняет порядок кадров;
 - переполнение очереди изолированно отключает только медленного клиента с WebSocket code `1013`;
@@ -79,7 +98,7 @@ Quality gate: functional exact-head CI → version/docs sync → повторн�
 
 Stage 6 pre-beta hardening checkpoint 4 — Redis restart/recovery.
 
-- CI намеренно останавливает реальный Redis 7.2 service container;
+- CI намеренно останавливает Redis 7.2 service container;
 - при `DEBUG=False` outage обязан проявляться как `RealtimeUnavailable`, process-local fallback запрещён;
 - Redis запускается снова в том же CI job;
 - те же, уже созданные `RealtimeService` objects восстанавливают ticket issue/consume без restart Python process;
