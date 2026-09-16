@@ -27,7 +27,7 @@ class TrustSafetyPostgresIntegrationTests(unittest.TestCase):
             persona_uid = uuid4()
             report_uid = uuid4()
 
-            async with Database.sessionmaker() as setup_db:
+            async with Database.sessionmaker()() as setup_db:
                 for account_uid in [reporter_uid, target_uid, *moderator_uids]:
                     setup_db.add(Account(uid=account_uid, status="active", trust_level="new"))
                 setup_db.add(
@@ -56,7 +56,7 @@ class TrustSafetyPostgresIntegrationTests(unittest.TestCase):
                 await setup_db.commit()
 
             async def try_claim(moderator_uid):
-                async with Database.sessionmaker() as db:
+                async with Database.sessionmaker()() as db:
                     try:
                         item = await claim_trust_safety_report(db, report_uid, moderator_uid)
                         return ("claimed", moderator_uid, item)
@@ -75,13 +75,13 @@ class TrustSafetyPostgresIntegrationTests(unittest.TestCase):
                 )
 
                 owner_uid = claimed[0][1]
-                async with Database.sessionmaker() as evidence_db:
+                async with Database.sessionmaker()() as evidence_db:
                     evidence = await trust_safety_evidence(evidence_db, report_uid, owner_uid)
                     self.assertTrue(evidence["available"])
                     self.assertEqual(evidence["source_type"], "persona")
                     self.assertEqual(evidence["persona"]["uid"], str(persona_uid))
 
-                async with Database.sessionmaker() as verify_db:
+                async with Database.sessionmaker()() as verify_db:
                     report = await verify_db.get(TrustSafetyReport, report_uid)
                     self.assertEqual(report.status, "in_review")
                     self.assertEqual(report.assigned_to_account_uid, owner_uid)
@@ -99,7 +99,7 @@ class TrustSafetyPostgresIntegrationTests(unittest.TestCase):
                         ["report_claimed", "evidence_viewed"],
                     )
             finally:
-                async with Database.sessionmaker() as cleanup_db:
+                async with Database.sessionmaker()() as cleanup_db:
                     await cleanup_db.execute(
                         delete(TrustSafetyAuditEvent).where(TrustSafetyAuditEvent.report_uid == report_uid)
                     )
