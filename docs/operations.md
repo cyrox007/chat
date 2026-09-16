@@ -11,7 +11,7 @@
 - Redis для production realtime/distributed presence/context.
 - Собранный Vue SPA/PWA shell.
 - Reverse proxy с HTTPS и WebSocket support.
-- Внешние scheduler units для background workers, если reminder/email функции включены.
+- Внешние scheduler units для background workers, если reminder/email/Web Push функции включены.
 
 ## Environment
 
@@ -30,6 +30,8 @@ Backend использует `backend/.env.example` как перечень ос
 
 Для unread-Messenger email worker дополнительно нужны `MESSAGE_EMAIL_SMTP_HOST` и `MESSAGE_EMAIL_FROM_EMAIL`; SMTP username/password задаются только парой. STARTTLS и implicit SSL взаимоисключающие. Сам внешний канал всё равно остаётся opt-in на уровне Account preference.
 
+Для Messenger Web Push дополнительно нужны VAPID settings: `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_VAPID_SUBJECT`. Private key backend-only и не должен попадать в frontend build/logs. Сам Web Push остаётся opt-in на уровне Account preference и browser permission.
+
 Frontend:
 
 - `VITE_API_BASE_URL` — HTTP API origin;
@@ -37,17 +39,17 @@ Frontend:
 
 ## HTTPS, cookies и PWA
 
-Production должен работать через HTTPS. Refresh session использует HttpOnly cookie, realtime — `wss://`, а service worker/PWA installability требуют secure context. `localhost` остаётся standard browser exception для development.
+Production должен работать через HTTPS. Refresh session использует HttpOnly cookie, realtime — `wss://`, а service worker/PWA installability и Web Push требуют secure context. `localhost` остаётся standard browser exception для development.
 
 Proxy должен корректно передавать WebSocket Upgrade/Connection headers и не логировать credentials. Realtime v2 не помещает credential в WebSocket URL.
 
-Service worker обслуживает application shell/static assets и не должен кэшировать API/auth/realtime responses или credentials.
+Service worker обслуживает application shell/static assets и не должен кэшировать API/auth/realtime responses или credentials. Web Push добавляет `push`/`notificationclick`, но не меняет это cache boundary.
 
 ## Redis
 
 В production Redis обязателен. Он обслуживает one-time socket tickets, pub/sub, distributed presence, active context, heartbeat state, rate limiting и idempotency.
 
-Если Redis недоступен, production realtime/message external-delivery policy не должен молча переходить в process-local режим. Offline email worker fail-closed, потому что без distributed presence нельзя безопасно утверждать, что Account отсутствует.
+Если Redis недоступен, production realtime/message external-delivery policy не должен молча переходить в process-local режим. Offline email/Web Push workers fail-closed, потому что без distributed presence нельзя безопасно утверждать, что Account отсутствует.
 
 ## PostgreSQL и migrations
 
@@ -119,11 +121,45 @@ SMTP не даёт абсолютный exactly-once на границе «relay
 
 Подробности: [`message-email-delivery-v1.md`](message-email-delivery-v1.md).
 
+## Messenger Web Push worker
+
+Checkpoint `0.6.9-alpha.1` добавляет standards-based Web Push только для offline Messenger re-engagement. Offline Space chat push queue не создаёт.
+
+Ручной запуск:
+
+```bash
+cd backend
+python -m workers.web_push_delivery
+```
+
+Production units устанавливаются только после настройки VAPID:
+
+```bash
+cd /home/projects/pubchat
+bash ops/install-web-push-worker.sh
+```
+
+Installer выполняет security/realtime/VAPID preflight, устанавливает `pubchat-web-push.service` + `.timer`, включает timer и выполняет bounded first run. Tracked timer запускает worker примерно каждые 30 секунд с небольшим randomized delay; фактический provider pressure дополнительно ограничен queue cooldown/batch/retry settings.
+
+Delivery contract:
+
+- browser/device subscription создаётся только после явного user opt-in и browser permission;
+- VAPID private key остаётся server-side; public key можно отдавать SPA;
+- push payload не содержит private message body или sender identity;
+- queueing только offline Messenger + opt-in + registered device + current block/privacy eligibility;
+- Redis presence, preference, unread state и block/privacy повторно проверяются непосредственно перед provider call;
+- durable `external_delivery_ledger` использует per-conversation cooldown/dedupe, `FOR UPDATE SKIP LOCKED`, expiring lease и bounded retry/backoff;
+- terminal provider responses `404/410` удаляют протухший endpoint;
+- logout/session teardown отвязывает local subscription best-effort, чтобы shared browser не сохранил push предыдущего Account;
+- service worker click ограничен same-origin route и не является authorization bypass.
+
+Подробности: [`web-push-delivery-v1.md`](web-push-delivery-v1.md).
+
 ## PWA/offline contract
 
 Offline mode пока означает application shell, а не offline private messaging. Не кэшируются messages, API projections, notification inbox, auth/session responses и другие приватные fetch/XHR данные.
 
-Web Push является следующим отдельным delivery adapter и не должен менять этот cache contract.
+Web Push работает через service worker как отдельный external delivery adapter и не меняет этот cache contract.
 
 ## Uploads
 
@@ -142,7 +178,7 @@ Web Push является следующим отдельным delivery adapter
 
 Полный observability stack пока не завершён. До beta необходимы structured logs, HTTP/realtime/Redis/PostgreSQL metrics, email/Web Push worker/provider metrics, error tracking, dashboards/alerting и incident/status procedures.
 
-Нельзя логировать access/refresh tokens, WebSocket tickets, SMTP credentials, destination email из delivery attempts или private message body.
+Нельзя логировать access/refresh tokens, WebSocket tickets, SMTP credentials, VAPID private key, push endpoint/key material, destination email из delivery attempts или private message body.
 
 ## Backup
 
@@ -159,13 +195,15 @@ Web Push является следующим отдельным delivery adapter
 7. `/health/live`, `/health/ready`, `/service/version` проверены.
 8. Login/refresh, Space realtime, DM и notification smoke tests пройдены.
 9. Если email nudge включается — SMTP preflight + `ops/install-message-email-worker.sh` + timer status проверены отдельно.
+10. Если Web Push включается — VAPID preflight + `ops/install-web-push-worker.sh` + timer status и browser permission/subscription smoke проверены отдельно.
 
 ## Пока не заявлено как готовое
 
 - Docker Compose/Kubernetes production manifests;
 - shared object storage;
-- Web Push/native push;
+- native mobile push;
 - offline messaging/private data cache;
 - production-like load test results;
+- formal Web Push Safari/iOS device-matrix results;
 - формальная PostgreSQL/Redis compatibility matrix;
 - fully automated rollback.
