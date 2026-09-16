@@ -26,6 +26,14 @@ export default class NotificationService {
 		return $api.get('/notifications/v1/unread-count');
 	}
 
+	static messagePreferences() {
+		return $api.get('/notifications/v1/message-preferences');
+	}
+
+	static updateMessagePreferences(payload) {
+		return $api.patch('/notifications/v1/message-preferences', payload);
+	}
+
 	static remindersForSpace(spaceUid) {
 		return withUtc($api.get(`/notifications/v1/spaces/${spaceUid}/reminders`));
 	}
