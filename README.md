@@ -6,13 +6,13 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Текущий выпущенный checkpoint: `0.6.2-alpha.1`.
+Текущий выпущенный checkpoint: `0.6.3-alpha.1`.
 
 Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 
-Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery baseline и Redis 7.2 production-semantics integration baseline: one-time tickets, distributed presence, cross-worker rate limiting/idempotency и pub/sub проверяются на реальных сервисах в CI.
+Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery baseline, Redis 7.2 distributed realtime baseline и реальный Redis restart/recovery drill. Production outage не маскируется process-local fallback, а те же `RealtimeService` objects восстанавливают command path и pub/sub subscription после возврата Redis без перезапуска Python-процесса.
 
-До beta всё ещё нужны rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, Redis restart/recovery и multi-process WebSocket tests, observability, load/security и финальные accessibility/operations gates.
+До beta всё ещё нужны rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, реальные multi-process WebSocket/rolling-restart scenarios, backpressure/load tests, observability, security и финальные accessibility/operations gates.
 
 Канонический номер версии находится в `VERSION`, история выпусков — в `CHANGELOG.md`.
 
@@ -31,8 +31,9 @@ Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery bas
 - [`docs/development.md`](docs/development.md) — разработка, миграции, тесты и CI;
 - [`docs/operations.md`](docs/operations.md) — эксплуатация и reminder worker;
 - [`docs/prebeta-hardening-v1.md`](docs/prebeta-hardening-v1.md) — Stage 6 PostgreSQL/migration hardening baseline;
-- [`docs/database-recovery-v1.md`](docs/database-recovery-v1.md) — проверяемый PostgreSQL backup/restore contract;
-- [`docs/redis-realtime-integration-v1.md`](docs/redis-realtime-integration-v1.md) — production-semantics Redis/realtime integration contract;
+- [`docs/database-recovery-v1.md`](docs/database-recovery-v1.md) — PostgreSQL backup/restore contract;
+- [`docs/redis-realtime-integration-v1.md`](docs/redis-realtime-integration-v1.md) — Redis distributed realtime baseline;
+- [`docs/redis-recovery-v1.md`](docs/redis-recovery-v1.md) — Redis restart/recovery contract;
 - [`docs/web-application-maturity-v1.md`](docs/web-application-maturity-v1.md) — PWA/offline shell и client lifecycle;
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — типовые проблемы;
 - [`docs/roadmap.md`](docs/roadmap.md) — актуальная дорожная карта;
@@ -57,6 +58,7 @@ SPA является первым клиентом; backend API и realtime cont
 - Числовой discovery score не является публичным API и не показывается пользователю.
 - PostgreSQL — источник истины; Redis — ephemeral realtime слой.
 - Production realtime не должен молча переходить в process-local fallback.
+- Redis outage должен быть видимым, а recovery — происходить без обязательного process restart.
 - Ticket/presence/rate-limit/idempotency/pub-sub semantics проверяются на настоящем Redis при `DEBUG=False`.
 - Clean migration correctness проверяется на реальной PostgreSQL в CI; `create_all()` не заменяет Alembic rehearsal.
 - Backup не считается рабочим, пока restore не проверен отдельной БД, schema-drift gate и semantic data assertions.

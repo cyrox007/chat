@@ -13,7 +13,6 @@
 
 - [`product-concept.md`](product-concept.md) — позиционирование и продуктовые инварианты.
 - [`roadmap.md`](roadmap.md) — актуальная дорожная карта.
-- [`revival-roadmap.md`](revival-roadmap.md) — исторический revival-plan.
 - [`../CHANGELOG.md`](../CHANGELOG.md) — история выпущенных версий.
 - [`versioning.md`](versioning.md) — политика alpha/beta/stable.
 - [`versioning-quick-reference.md`](versioning-quick-reference.md) — краткий статус версии.
@@ -27,12 +26,13 @@
 - [`architecture.md`](architecture.md) — модули, домены, данные и границы ответственности.
 - [`client-architecture.md`](client-architecture.md) — SPA-first/API-first модель клиента.
 - [`api-and-realtime.md`](api-and-realtime.md) — HTTP API, auth/session и WebSocket v2.
-- [`security-and-privacy.md`](security-and-privacy.md) — security model, privacy boundaries и review checklist.
+- [`security-and-privacy.md`](security-and-privacy.md) — security model и privacy boundaries.
 - [`development.md`](development.md) — ветки, миграции, тесты и CI.
-- [`operations.md`](operations.md) — production-конфигурация, reminder worker и эксплуатационные ограничения.
-- [`prebeta-hardening-v1.md`](prebeta-hardening-v1.md) — Stage 6 PostgreSQL/migration integration baseline, выпущенный в `0.6.0-alpha.1`.
-- [`database-recovery-v1.md`](database-recovery-v1.md) — PostgreSQL backup/restore recovery contract, выпущенный в `0.6.1-alpha.1`.
-- [`redis-realtime-integration-v1.md`](redis-realtime-integration-v1.md) — Redis 7.2 production-semantics realtime contract, выпущенный в `0.6.2-alpha.1`.
+- [`operations.md`](operations.md) — production-конфигурация и эксплуатационные ограничения.
+- [`prebeta-hardening-v1.md`](prebeta-hardening-v1.md) — PostgreSQL/migration baseline (`0.6.0-alpha.1`).
+- [`database-recovery-v1.md`](database-recovery-v1.md) — PostgreSQL backup/restore (`0.6.1-alpha.1`).
+- [`redis-realtime-integration-v1.md`](redis-realtime-integration-v1.md) — Redis distributed realtime baseline (`0.6.2-alpha.1`).
+- [`redis-recovery-v1.md`](redis-recovery-v1.md) — real Redis restart/outage recovery (`0.6.3-alpha.1`).
 - [`release-checklist.md`](release-checklist.md) — release gate.
 
 ## Доменные документы
@@ -41,15 +41,15 @@
 - [`realtime-v2.md`](realtime-v2.md) — tickets, Redis pub/sub, presence, reconnect.
 - [`product-identity-v1.md`](product-identity-v1.md) — Persona/Space appearance и recurring Activities.
 - [`social-engagement-v2.md`](social-engagement-v2.md) — earned achievements и Conversation Rounds.
-- [`activity-occurrences-v1.md`](activity-occurrences-v1.md) — Activity Occurrences, reminders и notification inbox, выпущенные в `0.5.2-alpha.1`.
-- [`creator-support-v1.md`](creator-support-v1.md) — opt-in gifts, append-only ledger и cosmetic entitlements, выпущенные в `0.5.3-alpha.1` без real-money flows.
-- [`discovery-v1.md`](discovery-v1.md) — eligibility-first, explainable organic Space discovery, выпущенный в `0.5.4-alpha.1`.
-- [`web-application-maturity-v1.md`](web-application-maturity-v1.md) — PWA shell, безопасный offline contract, notification lifecycle и внешний reminder worker, выпущенные в `0.5.5-alpha.1`.
+- [`activity-occurrences-v1.md`](activity-occurrences-v1.md) — occurrences/reminders/inbox.
+- [`creator-support-v1.md`](creator-support-v1.md) — cosmetic gifts/support.
+- [`discovery-v1.md`](discovery-v1.md) — eligibility-first organic discovery.
+- [`web-application-maturity-v1.md`](web-application-maturity-v1.md) — PWA/offline shell и client lifecycle.
 
 ## Статус документов
 
-`VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md` и профильных документах следующего slice.
+`VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Текущий release: `0.6.2-alpha.1`.
+Текущий release: `0.6.3-alpha.1`.
 
-Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается; следующий Redis slice — restart/recovery и multi-process realtime scenarios.
+Текущая development-линия: `0.6.x-alpha` — следующий realtime slice: multi-process WebSocket/rolling-restart/backpressure hardening.
