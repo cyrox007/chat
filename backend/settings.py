@@ -63,6 +63,21 @@ class Config:
     REALTIME_MESSAGE_RATE_WINDOW_SECONDS = int(os.getenv("REALTIME_MESSAGE_RATE_WINDOW_SECONDS", "10"))
     REALTIME_IDEMPOTENCY_TTL_SECONDS = int(os.getenv("REALTIME_IDEMPOTENCY_TTL_SECONDS", "600"))
 
+    # Message external delivery. External channels remain opt-in at the Account
+    # preference layer. Safe minimums prevent accidental high-frequency nudges.
+    MESSAGE_EMAIL_NUDGE_INACTIVITY_MINUTES = max(
+        60, int(os.getenv("MESSAGE_EMAIL_NUDGE_INACTIVITY_MINUTES", "720"))
+    )
+    MESSAGE_EMAIL_NUDGE_COOLDOWN_MINUTES = max(
+        60, int(os.getenv("MESSAGE_EMAIL_NUDGE_COOLDOWN_MINUTES", "1440"))
+    )
+    MESSAGE_EMAIL_DELIVERY_MAX_ATTEMPTS = max(
+        1, int(os.getenv("MESSAGE_EMAIL_DELIVERY_MAX_ATTEMPTS", "5"))
+    )
+    MESSAGE_EMAIL_DELIVERY_RETRY_BASE_SECONDS = max(
+        60, int(os.getenv("MESSAGE_EMAIL_DELIVERY_RETRY_BASE_SECONDS", "300"))
+    )
+
     # Security. There are intentionally no production-capable default secrets.
     JWT_ACCESS_SECRET_KEY = os.getenv("JWT_ACCESS_SECRET_KEY", "")
     JWT_REFRESH_SECRET_KEY = os.getenv("JWT_REFRESH_SECRET_KEY", "")
