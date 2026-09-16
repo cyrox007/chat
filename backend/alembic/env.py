@@ -6,8 +6,6 @@ from sqlalchemy import pool
 from alembic import context
 from settings import config as cfg
 
-# this is the Alembic Config object, which provides
-# access to the values within the alembic.ini file.
 config = context.config
 
 if config.config_file_name is not None:
@@ -38,6 +36,7 @@ from components.engagement.occurrence_model import ActivityOccurrence
 from components.engagement.round_model import ConversationRound, ConversationRoundResponse
 from components.notification.model import (
     ActivityReminderPreference,
+    ExternalDeliveryLedger,
     MessageNotificationPreference,
     NotificationWorkerState,
     UserNotification,

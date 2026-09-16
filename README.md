@@ -6,15 +6,15 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Текущий выпущенный checkpoint: `0.6.7-alpha.1`.
+Текущий выпущенный checkpoint: `0.6.8-alpha.1`.
 
 Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 
-Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery baseline, Redis 7.2 distributed realtime, restart/recovery и real Sentinel master-promotion baseline, real multi-process Uvicorn/WebSocket rehearsal с rolling restart, bounded per-socket backpressure и message-notification delivery policy с distributed active-context suppression. Production backend запускается за постоянным systemd-owned listener, routine deploy меняет workers rolling reload без намеренного `502` окна, а frontend публикуется staged/asset-first. Production outage не маскируется process-local fallback; direct Redis и Sentinel topology используют общий failover-aware realtime transport, а медленный WebSocket consumer изолируется собственной outbound queue и не блокирует fan-out другим клиентам.
+Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery baseline, Redis 7.2 distributed realtime, restart/recovery и real Sentinel master-promotion baseline, real multi-process Uvicorn/WebSocket rehearsal с rolling restart, bounded per-socket backpressure, message-notification delivery policy с distributed active-context suppression и durable unread-Messenger email delivery. Production backend запускается за постоянным systemd-owned listener, routine deploy меняет workers rolling reload без намеренного `502` окна, а frontend публикуется staged/asset-first.
 
-Message delivery теперь различает online presence и активный conversation/Space: лишний toast/sound подавляется, если пользователь уже смотрит тот же context. Offline external re-engagement остаётся разрешён только для Messenger по opt-in; Space chat не создаёт background notification pressure отсутствующему Account.
+Message delivery различает online presence и активный conversation/Space: лишний toast/sound подавляется, если пользователь уже смотрит тот же context. Offline external re-engagement разрешён только для Messenger по opt-in. Для давно отсутствующего Account email worker создаёт агрегированное privacy-safe напоминание по durable ledger/cooldown/retry contract; Space chat по-прежнему не создаёт background notification pressure отсутствующему Account.
 
-До beta всё ещё нужны rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, durable unread-DM email delivery/ledger, Web Push, observability, security и финальные accessibility/browser/operations gates.
+До beta всё ещё нужны Web Push/PWA delivery, rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, observability, security и финальные accessibility/browser/operations gates.
 
 Канонический номер версии находится в `VERSION`, история выпусков — в `CHANGELOG.md`.
 
@@ -31,9 +31,10 @@ Message delivery теперь различает online presence и активн
 - [`docs/api-and-realtime.md`](docs/api-and-realtime.md) — HTTP API и WebSocket;
 - [`docs/security-and-privacy.md`](docs/security-and-privacy.md) — security/privacy model;
 - [`docs/development.md`](docs/development.md) — разработка, миграции, тесты и CI;
-- [`docs/operations.md`](docs/operations.md) — эксплуатация и reminder worker;
+- [`docs/operations.md`](docs/operations.md) — эксплуатация и background workers;
 - [`docs/production-deploy-v1.md`](docs/production-deploy-v1.md) — persistent listener, staged SPA publish и health-gated rolling deploy;
-- [`docs/message-notification-delivery-v1.md`](docs/message-notification-delivery-v1.md) — online/offline message routing, active context, email nudge и Web Push plan;
+- [`docs/message-notification-delivery-v1.md`](docs/message-notification-delivery-v1.md) — online/offline message routing, active context и external delivery policy;
+- [`docs/message-email-delivery-v1.md`](docs/message-email-delivery-v1.md) — durable unread-Messenger email queue/provider/retry/systemd contract;
 - [`docs/browser-compatibility-v1.md`](docs/browser-compatibility-v1.md) — browser launch matrix и Safari registration audit;
 - [`docs/prebeta-hardening-v1.md`](docs/prebeta-hardening-v1.md) — Stage 6 PostgreSQL/migration hardening baseline;
 - [`docs/database-recovery-v1.md`](docs/database-recovery-v1.md) — PostgreSQL backup/restore contract;
@@ -76,13 +77,14 @@ SPA является первым клиентом; backend API и realtime cont
 - Realtime fan-out не ждёт медленный socket write: каждый WebSocket имеет bounded outbound queue, а slow consumer изолированно отключается.
 - Active context используется только для notification UX и никогда не расширяет/сужает message authorization.
 - Offline external message re-engagement относится только к Messenger и требует opt-in; Space chat не создаёт фоновый spam отсутствующему Account.
+- Durable external delivery state хранится в PostgreSQL; destination email и private message text не сохраняются в delivery ledger.
+- Email nudge worker запускается внешним scheduler/systemd timer и не живёт внутри FastAPI web-worker lifecycle.
 - Clean migration correctness проверяется на реальной PostgreSQL в CI; `create_all()` не заменяет Alembic rehearsal.
 - Backup не считается рабочим, пока restore не проверен отдельной БД, schema-drift gate и semantic data assertions.
 - Synthetic legacy/recovery fixtures не заменяют rehearsal на production-like snapshot.
 - Access JWT браузера хранится только в памяти; долговременная сессия — HttpOnly refresh-cookie.
 - Credentials не передаются в WebSocket URL.
 - PWA service worker кэширует только shell/static assets и не является хранилищем auth/private API data.
-- Reminder worker запускается внешним scheduler'ом и не живёт внутри FastAPI web-worker lifecycle.
 - Standalone backend processes явно инициализируют ORM model registry.
 - Activity reminders остаются opt-in; browser/native push добавляется отдельным delivery adapter.
 - Creator support — бесплатные internal cosmetic gestures; реальные payments требуют отдельного financial/security review.

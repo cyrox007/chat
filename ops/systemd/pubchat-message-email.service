@@ -1,0 +1,13 @@
+[Unit]
+Description=PubChat unread Messenger email notification worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/projects/pubchat/backend
+ExecStart=/home/projects/pubchat/backend/venv/bin/python3 -m workers.unread_dm_email_nudge --stage all
+Nice=5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+TimeoutStartSec=10min

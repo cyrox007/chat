@@ -5,6 +5,10 @@ from sqlalchemy.engine import URL
 load_dotenv()
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    return os.getenv(name, "true" if default else "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
 class Config:
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
@@ -63,6 +67,48 @@ class Config:
     REALTIME_MESSAGE_RATE_WINDOW_SECONDS = int(os.getenv("REALTIME_MESSAGE_RATE_WINDOW_SECONDS", "10"))
     REALTIME_IDEMPOTENCY_TTL_SECONDS = int(os.getenv("REALTIME_IDEMPOTENCY_TTL_SECONDS", "600"))
 
+    # Message external delivery. External channels remain opt-in at the Account
+    # preference layer. Safe minimums prevent accidental high-frequency nudges.
+    MESSAGE_EMAIL_NUDGE_INACTIVITY_MINUTES = max(
+        60, int(os.getenv("MESSAGE_EMAIL_NUDGE_INACTIVITY_MINUTES", "720"))
+    )
+    MESSAGE_EMAIL_NUDGE_COOLDOWN_MINUTES = max(
+        60, int(os.getenv("MESSAGE_EMAIL_NUDGE_COOLDOWN_MINUTES", "1440"))
+    )
+    MESSAGE_EMAIL_DELIVERY_MAX_ATTEMPTS = max(
+        1, int(os.getenv("MESSAGE_EMAIL_DELIVERY_MAX_ATTEMPTS", "5"))
+    )
+    MESSAGE_EMAIL_DELIVERY_RETRY_BASE_SECONDS = max(
+        60, int(os.getenv("MESSAGE_EMAIL_DELIVERY_RETRY_BASE_SECONDS", "300"))
+    )
+    MESSAGE_EMAIL_DELIVERY_RETRY_MAX_SECONDS = max(
+        MESSAGE_EMAIL_DELIVERY_RETRY_BASE_SECONDS,
+        int(os.getenv("MESSAGE_EMAIL_DELIVERY_RETRY_MAX_SECONDS", "21600")),
+    )
+    MESSAGE_EMAIL_DELIVERY_LEASE_SECONDS = max(
+        60, int(os.getenv("MESSAGE_EMAIL_DELIVERY_LEASE_SECONDS", "300"))
+    )
+    MESSAGE_EMAIL_DELIVERY_BATCH_SIZE = max(
+        1, min(250, int(os.getenv("MESSAGE_EMAIL_DELIVERY_BATCH_SIZE", "50")))
+    )
+    MESSAGE_EMAIL_ONLINE_RECHECK_SECONDS = max(
+        60, int(os.getenv("MESSAGE_EMAIL_ONLINE_RECHECK_SECONDS", "900"))
+    )
+
+    # SMTP transport. It is intentionally disabled until HOST and FROM_EMAIL are
+    # explicitly configured. Username/password may be omitted for a trusted relay.
+    MESSAGE_EMAIL_SMTP_HOST = os.getenv("MESSAGE_EMAIL_SMTP_HOST", "").strip()
+    MESSAGE_EMAIL_SMTP_PORT = int(os.getenv("MESSAGE_EMAIL_SMTP_PORT", "587"))
+    MESSAGE_EMAIL_SMTP_USERNAME = os.getenv("MESSAGE_EMAIL_SMTP_USERNAME", "").strip()
+    MESSAGE_EMAIL_SMTP_PASSWORD = os.getenv("MESSAGE_EMAIL_SMTP_PASSWORD", "")
+    MESSAGE_EMAIL_SMTP_STARTTLS = _env_bool("MESSAGE_EMAIL_SMTP_STARTTLS", True)
+    MESSAGE_EMAIL_SMTP_USE_SSL = _env_bool("MESSAGE_EMAIL_SMTP_USE_SSL", False)
+    MESSAGE_EMAIL_SMTP_TIMEOUT_SECONDS = max(
+        1.0, float(os.getenv("MESSAGE_EMAIL_SMTP_TIMEOUT_SECONDS", "10"))
+    )
+    MESSAGE_EMAIL_FROM_EMAIL = os.getenv("MESSAGE_EMAIL_FROM_EMAIL", "").strip()
+    MESSAGE_EMAIL_FROM_NAME = os.getenv("MESSAGE_EMAIL_FROM_NAME", "PubChat").strip() or "PubChat"
+
     # Security. There are intentionally no production-capable default secrets.
     JWT_ACCESS_SECRET_KEY = os.getenv("JWT_ACCESS_SECRET_KEY", "")
     JWT_REFRESH_SECRET_KEY = os.getenv("JWT_REFRESH_SECRET_KEY", "")
@@ -105,6 +151,26 @@ class Config:
             raise RuntimeError(
                 "Production realtime requires REDIS_URL or Redis Sentinel configuration"
             )
+
+    def message_email_delivery_configured(self) -> bool:
+        auth_pair_valid = bool(self.MESSAGE_EMAIL_SMTP_USERNAME) == bool(self.MESSAGE_EMAIL_SMTP_PASSWORD)
+        tls_valid = not (self.MESSAGE_EMAIL_SMTP_STARTTLS and self.MESSAGE_EMAIL_SMTP_USE_SSL)
+        return bool(
+            self.MESSAGE_EMAIL_SMTP_HOST
+            and self.MESSAGE_EMAIL_FROM_EMAIL
+            and auth_pair_valid
+            and tls_valid
+        )
+
+    def ensure_message_email_delivery_settings(self) -> None:
+        if self.MESSAGE_EMAIL_SMTP_STARTTLS and self.MESSAGE_EMAIL_SMTP_USE_SSL:
+            raise RuntimeError("MESSAGE_EMAIL_SMTP_STARTTLS and MESSAGE_EMAIL_SMTP_USE_SSL are mutually exclusive")
+        if bool(self.MESSAGE_EMAIL_SMTP_USERNAME) != bool(self.MESSAGE_EMAIL_SMTP_PASSWORD):
+            raise RuntimeError("MESSAGE_EMAIL_SMTP_USERNAME and MESSAGE_EMAIL_SMTP_PASSWORD must be configured together")
+        if not self.MESSAGE_EMAIL_SMTP_HOST:
+            raise RuntimeError("MESSAGE_EMAIL_SMTP_HOST must be configured before enabling the email worker")
+        if not self.MESSAGE_EMAIL_FROM_EMAIL:
+            raise RuntimeError("MESSAGE_EMAIL_FROM_EMAIL must be configured before enabling the email worker")
 
     def database_url(self, async_mode=False):
         driver = "postgresql+asyncpg" if async_mode else "postgresql"
