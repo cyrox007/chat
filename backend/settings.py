@@ -33,8 +33,26 @@ class Config:
     DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 
     # Redis / realtime
+    # Direct topology remains the default/backward-compatible mode. When both
+    # Sentinel fields below are configured, Sentinel takes precedence and
+    # REDIS_URL is ignored by the realtime client factory.
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0" if DEBUG else "")
     REDIS_MAX_CONNECTIONS = int(os.getenv("REDIS_MAX_CONNECTIONS", "100"))
+    REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS = float(
+        os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS", "5")
+    )
+    REDIS_SOCKET_TIMEOUT_SECONDS = float(os.getenv("REDIS_SOCKET_TIMEOUT_SECONDS", "5"))
+    REDIS_SENTINEL_NODES = os.getenv("REDIS_SENTINEL_NODES", "")
+    REDIS_SENTINEL_MASTER = os.getenv("REDIS_SENTINEL_MASTER", "")
+    REDIS_SENTINEL_MIN_OTHER_SENTINELS = max(
+        0, int(os.getenv("REDIS_SENTINEL_MIN_OTHER_SENTINELS", "0"))
+    )
+    REDIS_SENTINEL_USERNAME = os.getenv("REDIS_SENTINEL_USERNAME", "")
+    REDIS_SENTINEL_PASSWORD = os.getenv("REDIS_SENTINEL_PASSWORD", "")
+    REDIS_USERNAME = os.getenv("REDIS_USERNAME", "")
+    REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
+    REDIS_DB = max(0, int(os.getenv("REDIS_DB", "0")))
+
     REALTIME_TICKET_TTL_SECONDS = int(os.getenv("REALTIME_TICKET_TTL_SECONDS", "30"))
     REALTIME_AUTH_TIMEOUT_SECONDS = int(os.getenv("REALTIME_AUTH_TIMEOUT_SECONDS", "8"))
     REALTIME_PRESENCE_TTL_SECONDS = int(os.getenv("REALTIME_PRESENCE_TTL_SECONDS", "90"))
@@ -70,6 +88,23 @@ class Config:
             )
         if len(set(secrets.values())) != len(secrets):
             raise RuntimeError("JWT access, refresh and CSRF secrets must be different")
+
+    def redis_configured(self) -> bool:
+        sentinel_nodes = self.REDIS_SENTINEL_NODES.strip()
+        sentinel_master = self.REDIS_SENTINEL_MASTER.strip()
+        return bool(self.REDIS_URL or (sentinel_nodes and sentinel_master))
+
+    def ensure_realtime_settings(self) -> None:
+        sentinel_nodes = self.REDIS_SENTINEL_NODES.strip()
+        sentinel_master = self.REDIS_SENTINEL_MASTER.strip()
+        if bool(sentinel_nodes) != bool(sentinel_master):
+            raise RuntimeError(
+                "REDIS_SENTINEL_NODES and REDIS_SENTINEL_MASTER must be configured together"
+            )
+        if not self.DEBUG and not self.redis_configured():
+            raise RuntimeError(
+                "Production realtime requires REDIS_URL or Redis Sentinel configuration"
+            )
 
     def database_url(self, async_mode=False):
         driver = "postgresql+asyncpg" if async_mode else "postgresql"
