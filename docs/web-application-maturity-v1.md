@@ -1,6 +1,6 @@
 # PubChat Stage 5.6 — Web Application Maturity
 
-Development line: `0.5.5-alpha.x`.
+Released checkpoint: `0.5.5-alpha.1`.
 
 ## Цель
 
@@ -114,20 +114,6 @@ Worker state читается через PostgreSQL row lock `FOR UPDATE SKIP LO
 - offline/reconnect notice не обещает сохранение приватных server data;
 - mobile bottom navigation не расширяется PWA controls.
 
-## Release gate
+## Quality gate
 
-Перед `0.5.5-alpha.1`:
-
-- одна Alembic head;
-- backend compile/import/contracts;
-- notification worker cursor/concurrency regressions;
-- SPA security guard;
-- PWA cache-safety guard;
-- app lifecycle guard;
-- production frontend build;
-- accessibility/offline consistency review;
-- docs/operations/UI Kit sync;
-- functional exact-head CI;
-- version bump;
-- второй exact-head CI;
-- merge только после второго gate.
+Для `0.5.5-alpha.1` выполнен первый functional exact-head CI до version bump. После синхронизации `VERSION`/release docs выполняется второй exact-head CI; merge разрешён только после его успешного завершения.
