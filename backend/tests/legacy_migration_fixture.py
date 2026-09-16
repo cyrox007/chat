@@ -31,12 +31,16 @@ def connection_kwargs(database: str) -> dict:
 
 
 def create_database() -> None:
-    with psycopg2.connect(**connection_kwargs("postgres")) as connection:
+    connection = psycopg2.connect(**connection_kwargs("postgres"))
+    try:
+        # CREATE DATABASE cannot run inside a transaction block.
         connection.autocommit = True
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (LEGACY_DB_NAME,))
             if cursor.fetchone() is None:
                 cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(LEGACY_DB_NAME)))
+    finally:
+        connection.close()
 
 
 def seed_legacy() -> None:
