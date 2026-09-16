@@ -76,4 +76,26 @@ export default class ModerationService {
 	static trustSafetyAudit(reportUid, params = {}) {
 		return $api.get(`/trust-safety/v1/reports/${reportUid}/audit`, { params });
 	}
+
+	static restrictionCapabilities() {
+		return $api.get('/trust-safety/v1/restriction-capabilities');
+	}
+
+	static createRestriction(payload) {
+		return $api.post('/trust-safety/v1/restrictions', payload);
+	}
+
+	static targetRestrictions(targetAccountUid, params = {}) {
+		return $api.get('/trust-safety/v1/restrictions', {
+			params: { target_account_uid: targetAccountUid, ...params },
+		});
+	}
+
+	static myRestrictions(params = {}) {
+		return $api.get('/trust-safety/v1/me/restrictions', { params });
+	}
+
+	static revokeRestriction(restrictionUid, reason) {
+		return $api.post(`/trust-safety/v1/restrictions/${restrictionUid}/revoke`, { reason });
+	}
 }
