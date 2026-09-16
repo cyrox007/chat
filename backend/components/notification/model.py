@@ -86,6 +86,8 @@ class ExternalDeliveryLedger(Database.Base):
     failed_at = Column(DateTime, nullable=True)
     provider_message_id = Column(String(180), nullable=True)
     failure_class = Column(String(80), nullable=True)
+    claim_token = Column(String(64), nullable=True)
+    claim_expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -97,6 +99,7 @@ class ExternalDeliveryLedger(Database.Base):
             name="uq_external_delivery_dedupe",
         ),
         Index("ix_external_delivery_pending", "channel", "status", "next_attempt_at", "created_at"),
+        Index("ix_external_delivery_claim", "channel", "status", "claim_expires_at"),
         Index("ix_external_delivery_account_created", "account_uid", "created_at"),
     )
 
