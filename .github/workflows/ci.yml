@@ -13,6 +13,20 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: chat_ci
+          POSTGRES_USER: pubchat
+          POSTGRES_PASSWORD: ci-db-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pubchat -d chat_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: backend
@@ -21,6 +35,11 @@ jobs:
       JWT_REFRESH_SECRET_KEY: ci-refresh-secret-value-at-least-32-characters-long
       CSRF_SECRET_KEY: ci-csrf-secret-value-at-least-32-characters-long
       DEBUG: "True"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: chat_ci
+      DB_USER: pubchat
+      DB_PASSWORD: ci-db-password
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -50,8 +69,29 @@ jobs:
         run: |
           test "$(alembic heads | wc -l)" -eq 1
           alembic heads
+      - name: Rehearse migrations on clean PostgreSQL
+        run: |
+          alembic upgrade head
+          alembic current | grep '(head)'
+      - name: Check model and migration schema drift
+        run: alembic check
       - name: Run backend contract tests
         run: python -m unittest discover -s tests -p 'test_*.py'
+      - name: Run PostgreSQL integration smoke
+        env:
+          PUBCHAT_POSTGRES_INTEGRATION: "1"
+        run: python -m unittest tests.test_postgres_integration
+      - name: Rehearse revival migrations with legacy data
+        env:
+          PUBCHAT_LEGACY_DB_NAME: chat_legacy_ci
+        run: |
+          python tests/legacy_migration_fixture.py create-db
+          DB_NAME=chat_legacy_ci alembic upgrade 4f3d66790cd3
+          python tests/legacy_migration_fixture.py seed
+          DB_NAME=chat_legacy_ci alembic upgrade head
+          DB_NAME=chat_legacy_ci alembic current | grep '(head)'
+          DB_NAME=chat_legacy_ci alembic check
+          PUBCHAT_LEGACY_MIGRATION_INTEGRATION=1 python -m unittest tests.test_legacy_migration_integration
 
   frontend-build:
     runs-on: ubuntu-latest

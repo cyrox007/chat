@@ -14,7 +14,7 @@ python -m pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Проверки:
+Локальные базовые проверки:
 
 ```bash
 python -m compileall -q .
@@ -24,6 +24,42 @@ python -m unittest discover -s tests -p 'test_*.py'
 ```
 
 Alembic должен иметь одну head. Новые schema changes оформляются отдельными migrations; предпочтительны additive и data-preserving изменения.
+
+### PostgreSQL integration gate
+
+Начиная с `0.6.0-alpha.1`, backend CI поднимает реальный PostgreSQL 16 и после базовых import/security checks выполняет:
+
+```bash
+alembic upgrade head
+alembic current
+alembic check
+python -m unittest discover -s tests -p 'test_*.py'
+PUBCHAT_POSTGRES_INTEGRATION=1 python -m unittest tests.test_postgres_integration
+```
+
+Требования gate:
+
+- historical migration chain должна разворачивать чистую PostgreSQL до current head;
+- `alembic check` не должен находить model/schema drift;
+- integration smoke использует реальную async SQLAlchemy session;
+- standalone process обязан явно инициализировать ORM model registry, а не зависеть от import side effects FastAPI routers;
+- `create_all()` не заменяет migration rehearsal.
+
+### Synthetic legacy migration rehearsal
+
+В том же CI создаётся отдельная rehearsal database. Она мигрируется до pre-revival revision `4f3d66790cd3`, после чего туда загружается synthetic representative legacy fixture и выполняется upgrade до current head.
+
+Gate проверяет:
+
+- Account/Persona/Credential backfill;
+- platform role mapping;
+- Space settings и canonical memberships;
+- legacy moderator dedupe/role semantics;
+- active legacy ban exclusion из canonical active membership;
+- normalized Space tags;
+- final Alembic head и zero schema drift.
+
+Этот fixture полезен как детерминированный regression contract, но не заменяет rehearsal на anonymized production-like snapshot и backup/restore drill перед реальным deployment.
 
 ## Frontend
 
@@ -50,9 +86,10 @@ npm run build
 - Для конкурентных инвариантов используются DB constraints/indexes.
 - Новая пользовательская функция выпускается вместе с mobile/loading/empty/error/permission состояниями.
 - Legacy домены мигрируют постепенно через versioned contract и compatibility bridge, а не big-bang rewrite.
+- Историческая migration может быть технически исправлена только если сохраняется её исходная data/business semantics; такие исправления должны проходить clean и legacy-fixture migration rehearsal.
 
 ## PR
 
 Описание PR должно фиксировать development line, реализованные contracts, migrations, UI/UX scope, известный долг и status CI.
 
-Подробнее: `installation.md`, `architecture.md`, `ui-ux-kit.md`, `release-checklist.md`.
+Подробнее: `installation.md`, `architecture.md`, `prebeta-hardening-v1.md`, `ui-ux-kit.md`, `release-checklist.md`.

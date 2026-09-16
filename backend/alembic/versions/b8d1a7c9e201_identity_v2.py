@@ -184,7 +184,11 @@ def upgrade() -> None:
     """)
 
     # Deterministic UUIDs avoid requiring pgcrypto/uuid-ossp extensions during migration.
-    op.execute("""
+    # These statements intentionally contain literal strings such as ':password'.
+    # exec_driver_sql() is required so SQLAlchemy does not reinterpret those
+    # historical salts as named bind parameters.
+    bind = op.get_bind()
+    bind.exec_driver_sql("""
         INSERT INTO credentials (uid, account_uid, kind, value_normalized, secret_hash, is_primary, verified_at)
         SELECT (
             SUBSTR(MD5(uid::text || ':password'), 1, 8) || '-' ||
@@ -196,7 +200,7 @@ def upgrade() -> None:
         FROM users
         WHERE uid IS NOT NULL AND hashed_password IS NOT NULL
     """)
-    op.execute("""
+    bind.exec_driver_sql("""
         INSERT INTO credentials (uid, account_uid, kind, value_normalized, secret_hash, is_primary, verified_at)
         SELECT (
             SUBSTR(MD5(uid::text || ':email'), 1, 8) || '-' ||
@@ -209,7 +213,7 @@ def upgrade() -> None:
         FROM users
         WHERE uid IS NOT NULL AND email IS NOT NULL AND TRIM(email) <> ''
     """)
-    op.execute("""
+    bind.exec_driver_sql("""
         INSERT INTO credentials (uid, account_uid, kind, value_normalized, secret_hash, is_primary, verified_at)
         SELECT (
             SUBSTR(MD5(uid::text || ':phone'), 1, 8) || '-' ||

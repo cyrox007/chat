@@ -30,6 +30,7 @@
 - [`security-and-privacy.md`](security-and-privacy.md) — security model, privacy boundaries и review checklist.
 - [`development.md`](development.md) — ветки, миграции, тесты и CI.
 - [`operations.md`](operations.md) — production-конфигурация, reminder worker и эксплуатационные ограничения.
+- [`prebeta-hardening-v1.md`](prebeta-hardening-v1.md) — Stage 6 PostgreSQL/migration integration baseline, выпущенный в `0.6.0-alpha.1`.
 - [`release-checklist.md`](release-checklist.md) — release gate.
 
 ## Доменные документы
@@ -45,8 +46,8 @@
 
 ## Статус документов
 
-`VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md` и профильных документах следующего milestone.
+`VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md` и профильных документах следующего slice.
 
-Текущий release: `0.5.5-alpha.1`.
+Текущий release: `0.6.0-alpha.1`.
 
-Следующая development-линия: `0.6.0-alpha.0` — Pre-beta hardening.
+Текущая development-линия: `0.6.0-alpha.x` — Pre-beta hardening продолжается.

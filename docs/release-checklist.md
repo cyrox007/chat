@@ -5,6 +5,9 @@
 - scope заморожен, P0/P1 blockers отсутствуют;
 - migrations reviewed, `alembic heads` показывает одну head;
 - backend compile/import и contract tests проходят;
+- для DB-sensitive slice clean PostgreSQL `alembic upgrade head` проходит;
+- `alembic check` не показывает model/schema drift;
+- PostgreSQL integration smoke проходит там, где slice затрагивает persistence/worker behavior;
 - frontend production build проходит;
 - privacy/permissions/data self-review завершён;
 - пользовательская и техническая документация обновлена;
@@ -24,10 +27,12 @@
 ## Перед deployment
 
 - backup данных;
-- migration rehearsal для рискованных изменений;
+- migration rehearsal для рискованных изменений на репрезентативной копии schema/data;
 - проверить PostgreSQL/Redis/configuration;
 - собрать frontend;
 - проверить `/health` и `/service/version`;
 - выполнить smoke test login/session, Space realtime и DM.
+
+Clean-database migration CI не заменяет backup/restore drill и rehearsal на legacy data перед реальным production deployment.
 
 Переход alpha → beta → stable зависит от readiness gate, а не даты или числа commits.

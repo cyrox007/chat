@@ -2,9 +2,9 @@
 
 ## Current release
 
-`0.5.5-alpha.1`
+`0.6.0-alpha.1`
 
-Next development line: `0.6.0-alpha.0` — Pre-beta hardening.
+Current development line remains `0.6.0-alpha.x` — Pre-beta hardening.
 
 The canonical released value lives in the repository root `VERSION` file. `CHANGELOG.md` records released checkpoints; active work is additionally tracked in `docs/roadmap.md` and domain documents.
 
@@ -17,7 +17,7 @@ Before `1.0.0`, PubChat uses Semantic Versioning with an explicit readiness chan
 `MAJOR.MINOR.PATCH` for stable releases.
 
 Examples:
-- `0.6.0-alpha.0` — active development of the next milestone;
+- `0.6.0-alpha.0` — active development of the next milestone before a validated checkpoint;
 - `0.6.0-alpha.1` — first validated checkpoint of that milestone;
 - `0.9.0-beta.1` — core product flows complete and entering stabilization;
 - `1.0.0` — first stable public release.
@@ -35,7 +35,9 @@ After `1.0.0`, normal SemVer rules apply.
 
 Alpha is used while launch-critical hardening or product domains are incomplete. Schema/API contracts may still evolve, although data-preserving migrations are preferred. Every recorded alpha checkpoint must pass CI on the exact versioned head.
 
-PubChat remains alpha because production-like PostgreSQL/Redis integration coverage, migration rehearsal, observability, accessibility, load testing, legacy compatibility reduction and final security review are still required.
+PubChat remains alpha because Stage 6 still requires rehearsal on an anonymized production-like legacy snapshot, backup/restore, PostgreSQL concurrency/DST work, Redis/realtime integration coverage, observability, accessibility, load testing, legacy compatibility reduction and final security review.
+
+`0.6.0-alpha.1` proves the clean PostgreSQL migration/schema-drift/async integration baseline plus a synthetic representative pre-revival data rehearsal with semantic assertions. It does not declare Stage 6 or Stage 6.1 complete.
 
 ## Beta
 
@@ -53,7 +55,7 @@ Stable begins at `1.0.0` only after beta launch gate and absence of known P0/P1 
 4. Update `VERSION` and release documentation only after success.
 5. Run CI again on the exact versioned head.
 6. Merge only after the second gate succeeds.
-7. Start the next compatible slice as next patch `alpha.0`, or next milestone as next minor `alpha.0`.
+7. Continue the same milestone on the next compatible alpha checkpoint or open a new milestone development line when the roadmap advances.
 
 Version number is a readiness statement, not commit count.
 
@@ -70,4 +72,4 @@ Version number is a readiness statement, not commit count.
 - `0.5.3-alpha.1` — consent-first internal gifts + cosmetic support ledger/entitlements;
 - `0.5.4-alpha.1` — explainable organic Space discovery;
 - `0.5.5-alpha.1` — installable PWA shell + external reminder worker + centralized notification lifecycle;
-- `0.6.0-alpha.0` — next Pre-beta hardening development line.
+- `0.6.0-alpha.1` — first Pre-beta hardening checkpoint: clean PostgreSQL migration/schema-drift/async integration baseline + synthetic legacy-data rehearsal.
