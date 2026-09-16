@@ -2,6 +2,27 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.8-alpha.1] — 2026-09-16
+
+Stage 6 checkpoint 9 — durable unread-Messenger email delivery.
+
+- добавлен privacy-minimal `external_delivery_ledger`: durable status/retry/provider metadata, aggregate counts и dedupe keys без текста личных сообщений и без сохранения email destination в ledger;
+- scheduled candidate worker выбирает только давно отсутствующие Account с unread Messenger, подтверждённым email и явным `email_unread_dm_nudge` opt-in;
+- Redis presence проверяется до queue и непосредственно перед delivery; вернувшийся online Account не получает offline nudge и не расходует retry budget;
+- Account block/privacy повторно проверяются перед queue/delivery, при этом legacy `PrivateMessage`/`RoomMember` UIDs явно сопоставляются через `Account.legacy_user_uid`;
+- Account-level cooldown не обходится новым входящим DM: внешний re-engagement остаётся периодическим агрегированным напоминанием, а не письмом на каждое сообщение;
+- SMTP adapter поддерживает STARTTLS/implicit SSL, privacy-safe plain/HTML template, stable RFC Message-ID и разделение retryable/terminal provider failures;
+- delivery worker использует PostgreSQL `FOR UPDATE SKIP LOCKED`, expiring claim lease и bounded exponential backoff; stale opt-out/read/block state переводит запись в `suppressed`;
+- worker claim-ит только непосредственно обрабатываемую запись, чтобы длинный SMTP batch не позволял lease более поздних записей истечь до отправки;
+- добавлены CLI queue/deliver/all stages, отдельные systemd oneshot/timer и installer с security/realtime/SMTP preflight;
+- PostgreSQL integration test проверяет disjoint concurrent claims и recovery expired lease;
+- добавлен `docs/message-email-delivery-v1.md` с production/retry/privacy контрактом и явной оговоркой, что SMTP не даёт абсолютный exactly-once после crash-after-send;
+- все существующие PostgreSQL/Redis Sentinel/recovery, multi-process WebSocket, rolling deploy и frontend gates остаются зелёными.
+
+Следующий Stage 6.3 slice: standards-based Web Push/PWA delivery и notification permission/subscription UX; параллельно продолжаются browser/security/observability gates.
+
+Quality gate: functional exact-head CI → version/docs sync → повторный exact-head CI перед merge.
+
 ## [0.6.7-alpha.1] — 2026-09-16
 
 Stage 6 checkpoint 8 — message notification policy / active-context baseline.
