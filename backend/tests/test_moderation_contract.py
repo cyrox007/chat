@@ -1,19 +1,29 @@
 import unittest
+from datetime import datetime, timedelta
 
 from pydantic import ValidationError
 
 from app import app
+from components.identity.model import PlatformRole
 from components.moderation.model import (
     ModerationAction,
     ModerationAppeal,
     ModerationReport,
+    PlatformRestriction,
+    PlatformRestrictionAuditEvent,
     TrustSafetyAuditEvent,
     TrustSafetyReport,
+)
+from components.moderation.policy import (
+    PLATFORM_CAPABILITIES,
+    effective_restriction_status,
 )
 from components.moderation.schemas import (
     ModerationActionCreateRequest,
     ModerationAppealResolveRequest,
     ModerationReportCreateRequest,
+    PlatformRestrictionCreateRequest,
+    PlatformRestrictionRevokeRequest,
     TrustSafetyDecisionRequest,
     TrustSafetyReportCreateRequest,
 )
@@ -155,6 +165,101 @@ class ModerationContractTests(unittest.TestCase):
             for foreign_key in TrustSafetyAuditEvent.__table__.c.report_uid.foreign_keys
         }
         self.assertEqual(targets, {"trust_safety_reports.uid"})
+
+    def test_platform_roles_have_non_social_authority_level(self):
+        self.assertIn("authority_level", PlatformRole.__table__.c.keys())
+        self.assertFalse(hasattr(PlatformRole, "reputation"))
+
+    def test_platform_restriction_contract_is_capability_scoped(self):
+        payload = PlatformRestrictionCreateRequest(
+            target_account_uid="00000000-0000-0000-0000-000000000021",
+            capability="messenger.send",
+            scope_type="platform",
+            reason_code="dm_abuse",
+            public_explanation="Возможность отправлять личные сообщения временно ограничена.",
+            duration_minutes=60,
+        )
+        self.assertEqual(payload.capability, "messenger.send")
+        self.assertIn(payload.capability, PLATFORM_CAPABILITIES)
+
+        with self.assertRaises(ValidationError):
+            PlatformRestrictionCreateRequest(
+                target_account_uid="00000000-0000-0000-0000-000000000021",
+                capability="unknown.power",
+                scope_type="platform",
+                reason_code="test",
+                public_explanation="Недопустимая capability.",
+                duration_minutes=60,
+            )
+        with self.assertRaises(ValidationError):
+            PlatformRestrictionCreateRequest(
+                target_account_uid="00000000-0000-0000-0000-000000000021",
+                capability="space.chat.send",
+                scope_type="space",
+                reason_code="chat_abuse",
+                public_explanation="Ограничение внутри пространства.",
+                duration_minutes=60,
+            )
+        with self.assertRaises(ValidationError):
+            PlatformRestrictionCreateRequest(
+                target_account_uid="00000000-0000-0000-0000-000000000021",
+                capability="account.access",
+                scope_type="space",
+                scope_uid="00000000-0000-0000-0000-000000000022",
+                reason_code="ban",
+                public_explanation="Недопустимый scope.",
+            )
+
+    def test_permanent_restriction_is_explicit_null_duration(self):
+        payload = PlatformRestrictionCreateRequest(
+            target_account_uid="00000000-0000-0000-0000-000000000021",
+            capability="messenger.send",
+            reason_code="persistent_abuse",
+            public_explanation="Ограничение действует без установленного срока.",
+        )
+        self.assertIsNone(payload.duration_minutes)
+        revoke = PlatformRestrictionRevokeRequest(reason="Решение пересмотрено модератором.")
+        self.assertTrue(revoke.reason)
+
+    def test_restriction_model_preserves_authority_snapshot_and_audit(self):
+        columns = set(PlatformRestriction.__table__.c.keys())
+        for column in {
+            "target_account_uid",
+            "actor_account_uid",
+            "capability",
+            "scope_type",
+            "scope_uid",
+            "actor_authority_level",
+            "target_authority_level",
+            "starts_at",
+            "expires_at",
+            "revoked_at",
+        }:
+            self.assertIn(column, columns)
+
+        audit_columns = set(PlatformRestrictionAuditEvent.__table__.c.keys())
+        self.assertEqual(
+            {"uid", "restriction_uid", "actor_account_uid", "event_type", "note", "created_at"},
+            audit_columns,
+        )
+
+    def test_effective_restriction_status_does_not_rewrite_history(self):
+        now = datetime.utcnow()
+        active = PlatformRestriction(
+            target_account_uid="00000000-0000-0000-0000-000000000031",
+            capability="messenger.send",
+            scope_type="platform",
+            reason_code="test",
+            public_explanation="test",
+            origin="human",
+            status="active",
+            actor_authority_level=50,
+            target_authority_level=0,
+            starts_at=now - timedelta(hours=2),
+            expires_at=now - timedelta(hours=1),
+        )
+        self.assertEqual(effective_restriction_status(active, now), "expired")
+        self.assertEqual(active.status, "active")
 
 
 if __name__ == "__main__":
