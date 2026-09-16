@@ -2,13 +2,13 @@
 
 ## Текущий статус
 
-Released: **`0.6.7-alpha.1`**.
+Released: **`0.6.8-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
-Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity и message notification policy с distributed active-context suppression.
+Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression и durable unread-Messenger email delivery.
 
-Следующий активный Stage 6.3 slice — **durable unread-Messenger email nudge**: delivery ledger, inactivity/cooldown/dedupe worker, provider abstraction и retry/backoff. После него — Web Push/PWA. До beta также остаются production-like data rehearsal, member-capacity/DST hardening, observability, load/security и browser/accessibility gates.
+Следующий активный Stage 6.3 slice — **Web Push / PWA delivery**: per-device subscriptions, VAPID provider, service-worker push/click flow, opt-in UX и terminal subscription cleanup. После него — delivery observability/browser matrix и оставшиеся beta gates.
 
 ## Завершённые checkpoints
 
@@ -52,14 +52,26 @@ Persistent systemd-owned listener, health-gated rolling deploy, staged SPA publi
 Direct/Sentinel topology abstraction, real master+replica+3-Sentinel promotion rehearsal, same-service ticket/PubSub recovery и bounded concurrency до/после promotion.
 
 ### Stage 6 checkpoint 8 — Message notification policy / active context ✅ `0.6.7-alpha.1`
-- account-level Messenger/Space in-app/sound preferences и opt-in flags будущих external adapters;
+- account-level Messenger/Space in-app/sound preferences и opt-in flags external adapters;
 - Redis connection-scoped Messenger active context с TTL/heartbeat; Space active context через distributed room presence;
 - duplicate toast/sound suppression, когда получатель уже смотрит тот же context, без изменения authorization;
 - offline external re-engagement только для Messenger по opt-in; offline Space chat никогда не создаёт background notification pressure;
 - Space alert fan-out проходит active-membership и Account-block boundaries;
 - единая SPA surface для Messenger/Space alerts с существующими private/chat sounds;
-- Alembic migration + preference API + deterministic policy/active-context tests;
-- существующие Redis Sentinel/recovery, multi-process, deploy, PostgreSQL recovery и frontend gates остаются зелёными.
+- Alembic migration + preference API + deterministic policy/active-context tests.
+
+### Stage 6 checkpoint 9 — Durable unread-Messenger email delivery ✅ `0.6.8-alpha.1`
+- durable privacy-minimal external delivery ledger без private message body и destination email;
+- scheduled inactivity/cooldown/dedupe candidate worker только для opt-in Messenger re-engagement;
+- current online presence, verified email, unread state и Account block/privacy повторно проверяются непосредственно перед delivery;
+- новые DM не обходят Account-level email cooldown;
+- SMTP provider поддерживает STARTTLS/implicit SSL, stable Message-ID и privacy-safe aggregate template;
+- retryable/terminal provider failures разделены, retries используют bounded exponential backoff;
+- delivery records claim-ятся через `FOR UPDATE SKIP LOCKED` + expiring lease; expired claim recoverable после crash;
+- worker берёт по одному delivery claim непосредственно перед network send, чтобы batch не создавал преждевременный lease expiry;
+- systemd oneshot/timer и installer выносят scheduler из FastAPI worker lifecycle;
+- PostgreSQL integration test фиксирует concurrent disjoint claims + expired-lease recovery;
+- legacy Messenger/Space User UID явно сопоставляется с Account через `legacy_user_uid`, Account block/privacy не смешивается с legacy identity.
 
 ## Stage 6 — Pre-beta hardening 🚧 `0.6.x-alpha`
 
@@ -85,11 +97,14 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ✅ `private_notification.mp3` / `chat_notification.mp3` mapping;
 - ✅ durable message preferences и deterministic policy tests;
 - ✅ Redis Messenger active-context TTL + Space context через distributed presence;
-- ⏳ scheduled unread-Messenger email nudge: inactivity threshold + cooldown + dedupe + opt-out;
-- ⏳ durable external-delivery ledger, provider abstraction, retry/backoff;
-- ⏳ Web Push adapter: Service Worker/Push API/Notifications API + VAPID + per-device lifecycle;
-- ⏳ concurrent worker / `SKIP LOCKED`, restart/cursor recovery, load/idempotency;
-- ⏳ delivery metrics/health и scheduler/service unit.
+- ✅ scheduled unread-Messenger email nudge: inactivity threshold + Account cooldown + dedupe + opt-out;
+- ✅ durable external email ledger + SMTP provider + retry/backoff + expiring claim lease;
+- ✅ concurrent worker / `SKIP LOCKED` claim validation и expired-lease recovery;
+- ✅ external email scheduler/service unit вне web-worker lifecycle;
+- ⏳ Web Push adapter: Service Worker/Push API/Notifications API + VAPID + per-device subscription lifecycle;
+- ⏳ terminal push subscription cleanup + retry/backoff integration;
+- ⏳ notification preferences UI для email/Web Push;
+- ⏳ delivery metrics/health, load/idempotency profiling.
 
 ### 6.4 Discovery / performance 🚧
 - multi-source bounded candidate generation вместо newest-catalog bias;
@@ -109,8 +124,9 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ✅ multi-worker Uvicorn supervisor + persistent systemd socket;
 - ✅ `/health/live` и dependency-aware `/health/ready`;
 - ✅ health-gated rolling deploy + staged asset-first SPA publish;
+- ✅ external Messenger email systemd scheduler/service + fail-fast provider config installer;
 - ⏳ Sentinel topology/promotion/pool metrics и alerting;
-- ⏳ email delivery scheduler/service unit + provider health/metrics;
+- ⏳ email/push delivery metrics/provider health;
 - ⏳ structured logs/error tracking, incident procedure;
 - 🚧 deployment/recovery runbook;
 - ⏳ backup retention/encryption/off-site storage + RPO/RTO;
@@ -123,6 +139,7 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ⏳ Playwright WebKit registration/login/refresh through production-like same-origin proxy;
 - ⏳ Chromium + Firefox + WebKit critical-journey matrix;
 - ⏳ notification preferences UI и PWA Web Push permission/subscription UX;
+- ⏳ iOS/iPadOS installed Home Screen push flow в device/browser matrix;
 - ⏳ keyboard/focus, contrast/mobile/narrow viewport, onboarding and terminology audit;
 - 🚧 error/empty/offline consistency.
 
@@ -149,6 +166,7 @@ Beta назначается только когда launch-critical journeys р�
 - Offline external message re-engagement относится только к Messenger и требует opt-in; Space chat не создаёт background spam отсутствующему Account.
 - Active context подавляет duplicate UX, но не является authorization state.
 - Notification routing не расширяет block/privacy/visibility.
+- External delivery ledger не хранит private message text или destination email.
 - Background scheduler не запускается внутри каждого web worker.
 - Service worker не является storage для auth/private API data.
 - Production listener принадлежит process manager/systemd; routine deploy rolling, frontend publish staged.
