@@ -6,6 +6,7 @@ import { registerPubChatServiceWorker } from '@/pwa/registerServiceWorker';
 
 import "@/assets/main.css";
 import "@/assets/ui-utilities.css";
+import "@/assets/messaging-ux.css";
 
 const app = createApp(App);
 
