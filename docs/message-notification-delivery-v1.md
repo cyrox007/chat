@@ -4,15 +4,16 @@
 
 ## Implementation status
 
-Baseline slices 1–2 выпущены как `0.6.7-alpha.1`:
+Message policy/active-context baseline выпущен как `0.6.7-alpha.1`, durable unread-Messenger email delivery — как `0.6.8-alpha.1`:
 
 - ✅ account-level message notification preferences + deterministic online/offline/active-context policy tests;
 - ✅ Redis-backed connection-scoped Messenger active context, Space active context через distributed room presence и sound mapping в SPA;
 - ✅ online-only Space alerts с membership/block boundaries;
 - ✅ offline Space external re-engagement запрещён server-side policy;
-- ⏳ durable email delivery ledger + scheduled unread-DM nudge worker;
-- ⏳ provider abstraction/retry/backoff/metrics;
-- ⏳ Web Push subscription/delivery adapter и browser/device matrix.
+- ✅ durable email delivery ledger + scheduled unread-DM candidate worker;
+- ✅ SMTP provider abstraction + expiring claims + retry/backoff + systemd scheduler;
+- ⏳ Web Push subscription/delivery adapter и browser/device matrix;
+- ⏳ delivery/provider metrics и preferences UI для external channels.
 
 ## Базовая матрица
 
@@ -72,39 +73,47 @@ External/re-engagement defaults выключены. Отключение вне�
 
 ## Unread Messenger nudge по email
 
-Первый внешний re-engagement adapter — email для непрочитанных direct messages.
+Первый внешний re-engagement adapter — email для непрочитанных direct messages; production runtime закреплён checkpoint `0.6.8-alpha.1`.
 
-Worker запускается внешним scheduler, а не внутри каждого FastAPI worker. Он выбирает Account только если одновременно выполняются условия:
+Worker запускается внешним systemd timer, а не внутри каждого FastAPI worker. Candidate queue создаётся только когда одновременно выполняются условия:
 
 1. есть непрочитанные сообщения Messenger;
 2. Account отсутствует дольше configurable inactivity threshold;
-3. после последнего nudge появились новые unread либо истёк configurable cooldown;
+3. с предыдущего не-suppressed nudge истёк Account-level configurable cooldown — новое сообщение само по себе cooldown не обходит;
 4. пользователь явно разрешил email message reminders;
-5. sender/block/privacy rules всё ещё позволяют соответствующий conversation;
-6. для этого unread window ещё не был отправлен эквивалентный delivery event.
+5. есть текущий verified email;
+6. sender/block/privacy rules всё ещё позволяют соответствующий conversation;
+7. Account сейчас offline по distributed Redis presence.
 
-Nudge должен быть ненавязчивым: агрегированный digest/count, без FOMO/streak copy и без бесконечного письма на каждый message. По умолчанию письмо не раскрывает полный текст приватных сообщений; достаточно сообщить о непрочитанных диалогах и безопасно привести пользователя в PubChat.
+Перед SMTP send worker повторно проверяет online state, preference, verified destination, unread state и block/privacy. Поэтому пользователь, который вернулся, прочитал сообщения, отозвал opt-in или заблокировал отправителя между queue и delivery, не получает устаревшее письмо.
 
-После возврата/прочтения cooldown state сбрасывается естественным образом. Точная частота не зашивается в product contract до load/engagement testing: threshold и cooldown конфигурируемые и имеют безопасные минимумы.
+Nudge ненавязчивый: агрегированный unread/dialog count, без FOMO/streak copy и без письма на каждый message. Полный текст приватных сообщений не включается в email.
 
 ## Delivery state и idempotency
 
-Внешняя доставка должна иметь durable ledger/state, отдельный от realtime pub/sub. Минимально нужны:
+PostgreSQL `external_delivery_ledger` — durable source of truth для внешней доставки. Он хранит:
 
-- channel: `email`, позднее `web_push`;
-- notification/message aggregate key;
-- Account UID;
-- created/attempted/delivered/failed timestamps;
-- retry count/next attempt;
-- provider message id без секретов;
-- dedupe key;
-- failure class без утечки message contents.
+- channel + Account UID;
+- aggregate/dedupe key;
+- unread/dialog counts;
+- pending/processing/delivered/failed/suppressed state;
+- attempt count, next attempt, claim token/expiry;
+- provider message id и privacy-safe failure class;
+- lifecycle timestamps.
 
-PostgreSQL остаётся source of truth для unread/delivery ledger. Redis используется для presence/active context и не превращает delivery history в ephemeral state.
+Ledger намеренно не хранит destination email и private message body. Адрес разрешается из текущего verified `Credential` непосредственно перед provider call.
+
+Worker использует `FOR UPDATE SKIP LOCKED` и expiring claim lease. Claim берётся непосредственно перед обработкой одной записи, поэтому медленный SMTP batch не заставляет leases следующих элементов истекать раньше времени. Expired claim может быть восстановлен другим worker после crash.
+
+Retryable provider failures получают bounded exponential backoff; terminal failures завершаются как `failed`; opt-out/read/block transition — `suppressed`. Возврат пользователя online переносит запись обратно в `pending` без расходования retry budget.
+
+SMTP по своей природе не обеспечивает абсолютный exactly-once в crash-after-send окне. PubChat использует stable RFC Message-ID на delivery UID, но не утверждает, что внешний relay гарантированно дедуплицирует повторную попытку.
+
+Подробный operational contract: [`message-email-delivery-v1.md`](message-email-delivery-v1.md).
 
 ## Web Push / PWA
 
-Следующий adapter после email — standards-based Web Push поверх существующего service worker:
+Следующий adapter — standards-based Web Push поверх существующего service worker:
 
 - Push API + Notifications API + Service Worker;
 - subscription привязана к Account/device и может быть отозвана;
@@ -114,7 +123,7 @@ PostgreSQL остаётся source of truth для unread/delivery ledger. Redis
 - push click открывает разрешённый destination, после чего backend заново проверяет auth/privacy/block state;
 - expired/unsubscribed endpoints удаляются после terminal provider response.
 
-На iOS/iPadOS Web Push поддерживается для web app, добавленного на Home Screen (начиная с 16.4); permission должен запрашиваться из пользовательского действия. Поэтому mobile UX должен уметь объяснить установку PWA, но не давить на пользователя.
+Mobile/iOS behavior проверяется отдельной browser/device matrix и не считается доказанным только наличием Service Worker API в коде.
 
 ## Anti-abuse и privacy
 
@@ -124,14 +133,14 @@ PostgreSQL остаётся source of truth для unread/delivery ledger. Redis
 - notification body не является authorization token;
 - active-context suppression не является authorization decision;
 - external delivery не раскрывает sender/message content сверх необходимого;
-- rate limit применяется на Account/channel и aggregate window;
+- re-engagement имеет Account-level cooldown;
 - отсутствие пользователя не является поводом уведомлять его о каждом сообщении Space.
 
 ## Implementation slices
 
 1. ✅ Message-notification domain + preferences + deterministic policy tests — `0.6.7-alpha.1`.
 2. ✅ Redis active-context signal и sound mapping в SPA — `0.6.7-alpha.1`.
-3. ⏳ Durable email delivery ledger + scheduled unread-DM nudge worker.
-4. ⏳ Email adapter/provider abstraction и retry/backoff/metrics.
+3. ✅ Durable email delivery ledger + scheduled unread-DM candidate worker — `0.6.8-alpha.1`.
+4. ✅ SMTP provider + claim lease + retry/backoff + systemd scheduler — `0.6.8-alpha.1`.
 5. ⏳ Web Push subscription model, VAPID adapter, service-worker push/click flow.
-6. ⏳ Browser/device matrix: Chromium, Firefox, Safari macOS и iOS/iPadOS installed PWA.
+6. ⏳ Browser/device matrix: Chromium, Firefox, Safari macOS и installed mobile PWA scenarios.
