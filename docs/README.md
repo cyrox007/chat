@@ -30,6 +30,8 @@
 - [`development.md`](development.md) — ветки, миграции, тесты и CI.
 - [`operations.md`](operations.md) — production-конфигурация и эксплуатационные ограничения.
 - [`production-deploy-v1.md`](production-deploy-v1.md) — persistent listener, staged SPA publish и health-gated rolling production deploy.
+- [`message-notification-delivery-v1.md`](message-notification-delivery-v1.md) — online/offline routing для Messenger/Space, email nudge и Web Push delivery plan.
+- [`browser-compatibility-v1.md`](browser-compatibility-v1.md) — browser launch matrix и аудит исторического Safari registration defect.
 - [`prebeta-hardening-v1.md`](prebeta-hardening-v1.md) — PostgreSQL/migration baseline (`0.6.0-alpha.1`).
 - [`database-recovery-v1.md`](database-recovery-v1.md) — PostgreSQL backup/restore (`0.6.1-alpha.1`).
 - [`redis-realtime-integration-v1.md`](redis-realtime-integration-v1.md) — Redis distributed realtime baseline (`0.6.2-alpha.1`).
@@ -55,4 +57,4 @@
 
 Текущий release: `0.6.5-alpha.2`.
 
-Текущая development-линия: `0.6.x-alpha` — следующий realtime slice: Redis failover/capacity hardening.
+Текущая development-линия: `0.6.x-alpha` — следующий realtime slice: Redis failover/capacity hardening; message delivery/browser compatibility идут параллельными Stage 6.3/6.7 workstreams.

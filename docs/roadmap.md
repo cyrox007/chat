@@ -6,9 +6,9 @@ Released: **`0.6.5-alpha.2`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
-PubChat остаётся alpha: PostgreSQL migration/recovery, Redis distributed/restart recovery, real multi-process Uvicorn/WebSocket rolling-restart, bounded slow-consumer backpressure и production deploy continuity уже закреплены CI. До beta всё ещё нужны production-like snapshot rehearsal, member-capacity/DST hardening, Redis failover/capacity, observability, load/security и финальные accessibility/operations gates.
+PubChat остаётся alpha: PostgreSQL migration/recovery, Redis distributed/restart recovery, real multi-process Uvicorn/WebSocket rolling-restart, bounded slow-consumer backpressure и production deploy continuity уже закреплены CI. До beta всё ещё нужны production-like snapshot rehearsal, member-capacity/DST hardening, Redis failover/capacity, observability, load/security, message delivery hardening и финальные accessibility/browser/operations gates.
 
-UX-polish коммуникационных поверхностей выполняется параллельно внутри **6.7 UX/accessibility** и не заменяет следующий инфраструктурный checkpoint **6.2 Redis failover/capacity**. Production deploy hardening выполняется внутри **6.6 Operations / observability** и также не меняет порядок realtime checkpoint.
+UX-polish коммуникационных поверхностей выполняется параллельно внутри **6.7 UX/accessibility** и не заменяет следующий инфраструктурный checkpoint **6.2 Redis failover/capacity**. Production deploy hardening выполняется внутри **6.6 Operations / observability** и также не меняет порядок realtime checkpoint. Message notification delivery развивается в **6.3 Notification worker** поверх уже существующих notification/realtime contracts.
 
 ## Завершённые checkpoints
 
@@ -108,14 +108,24 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - ✅ реальные multi-process Uvicorn/WebSocket scenarios;
 - ✅ rolling-restart client reconnect baseline;
 - ✅ slow-client/backpressure isolation;
-- ⏳ Redis failover topology/capacity tests.
+- 🚧 direct/Sentinel topology abstraction с backward-compatible `REDIS_URL` mode;
+- ⏳ real Redis Sentinel master/replica promotion rehearsal без restart application process;
+- ⏳ PubSub resubscription и ticket/presence semantics после promotion;
+- ⏳ connection-pool/capacity tests до и после failover.
 
-### 6.3 Notification worker 🚧
+### 6.3 Notification worker / message delivery 🚧
 - ✅ baseline PostgreSQL integration smoke;
+- ✅ product delivery contract: offline external notifications относятся только к Messenger/direct messages; Space chat notifications разрешены, когда Account online;
+- ✅ существующие sound assets зафиксированы как `private_notification.mp3` для Messenger и `chat_notification.mp3` для Space chat;
+- 🚧 durable message-notification preferences и policy tests для online/offline/active-context matrix;
+- ⏳ Redis active-context TTL (`messenger:<dialog>`, `space:<room>`) для подавления дублирующего toast/sound, когда пользователь уже смотрит тот же context;
+- ⏳ scheduled unread-Messenger email nudge для давно отсутствующих Accounts: inactivity threshold + cooldown + dedupe + opt-out, без письма на каждое сообщение;
+- ⏳ durable external-delivery ledger, retry/backoff и provider abstraction;
+- ⏳ Web Push adapter поверх Service Worker/Push API/Notifications API с VAPID и per-device subscription lifecycle;
 - ⏳ concurrent worker/`SKIP LOCKED` validation;
 - ⏳ cursor recovery/restart tests;
 - ⏳ load/idempotency profiling;
-- ⏳ worker metrics/health contract.
+- ⏳ worker/delivery metrics и health contract.
 
 ### 6.4 Discovery / performance
 - multi-source bounded candidate generation вместо newest-catalog bias;
@@ -124,7 +134,8 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - privacy/block regression под большим candidate set.
 
 ### 6.5 Security/privacy
-- session/cookie/CSRF review;
+- session/cookie/CSRF review, включая явный CSRF proof contract вместо неявной зависимости от browser cookie behavior;
+- registration/login/refresh cookie compatibility audit для Safari/WebKit;
 - upload/media review;
 - moderation/report/appeal privacy audit;
 - Account block coverage audit;
@@ -140,6 +151,7 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - ✅ health-gated deploy script и отдельный one-time installer для перехода с legacy service;
 - ✅ staged SPA publish не очищает текущий live build и переключает `index.html` последним;
 - ✅ CI rehearsal подтверждает HTTP continuity при SIGHUP и при полном supervisor replacement за persistent socket;
+- ⏳ email delivery scheduler/service unit и provider health/metrics;
 - ⏳ structured logs/metrics/error tracking;
 - ⏳ alerting/status/incident procedure;
 - 🚧 deployment/recovery runbook;
@@ -147,10 +159,15 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - ⏳ shared/object storage;
 - ⏳ expanded PostgreSQL/Redis compatibility matrix.
 
-### 6.7 UX/accessibility
+### 6.7 UX/accessibility / browser compatibility 🚧
 - 🚧 messaging surfaces polish v1: единый compact composer для Space chat и Messenger, встроенная attachment shelf, меньше постоянного visual chrome, desktop/mobile responsive density;
 - 🚧 desktop information panels: overlay-only close controls и более компактная secondary navigation;
 - ✅ authenticated bootstrap повторяет transient network/`502`/`503`/`504` сбои с bounded backoff вместо ложного окончательного outage state;
+- ✅ исторический Safari registration audit: ранняя версия зависела от cookie-only CSRF handshake и могла ломаться при cross-site cookie blocking; отдельный mount-time CSRF fetch также создавал race window;
+- ⏳ Playwright WebKit registration/login/refresh smoke через production-like same-origin proxy;
+- ⏳ Chromium + Firefox + WebKit critical-journey browser matrix;
+- ⏳ PWA Web Push permission/subscription UX; iOS/iPadOS installed Home Screen flow включается в device/browser matrix;
+- ⏳ notification preferences UI: Messenger/Space sound, email unread-DM nudge, Web Push;
 - ⏳ полный keyboard/focus audit;
 - ⏳ contrast/mobile/narrow viewport pass;
 - 🚧 error/empty/offline consistency;
@@ -177,6 +194,8 @@ Beta назначается только когда launch-critical journeys р�
 - Organic discovery нельзя купить через gift/support.
 - Service worker не является storage для auth/private API data.
 - Background scheduler не запускается внутри каждого web worker.
+- Offline external message re-engagement относится только к Messenger; Space chat не создаёт фоновый notification spam отсутствующему Account.
+- Message notification routing не расширяет block/privacy/visibility.
 - Migration correctness проверяется реальной PostgreSQL.
 - Backup correctness включает restore + data assertions.
 - Production realtime не должен молча использовать process-local fallback.
