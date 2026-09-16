@@ -32,6 +32,7 @@
 - [`production-deploy-v1.md`](production-deploy-v1.md) — persistent listener, staged SPA publish и health-gated rolling production deploy.
 - [`message-notification-delivery-v1.md`](message-notification-delivery-v1.md) — message preferences, online/offline routing, active-context suppression и external channel policy.
 - [`message-email-delivery-v1.md`](message-email-delivery-v1.md) — durable unread-Messenger email ledger/provider/retry/systemd contract (`0.6.8-alpha.1`).
+- [`web-push-delivery-v1.md`](web-push-delivery-v1.md) — per-device Web Push/VAPID/service-worker/provider/privacy contract (`0.6.9-alpha.1`).
 - [`browser-compatibility-v1.md`](browser-compatibility-v1.md) — browser launch matrix и аудит исторического Safari registration defect.
 - [`prebeta-hardening-v1.md`](prebeta-hardening-v1.md) — PostgreSQL/migration baseline (`0.6.0-alpha.1`).
 - [`database-recovery-v1.md`](database-recovery-v1.md) — PostgreSQL backup/restore (`0.6.1-alpha.1`).
@@ -57,6 +58,6 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Текущий release: `0.6.8-alpha.1`.
+Текущий release: `0.6.9-alpha.1`.
 
-Текущая development-линия: `0.6.x-alpha` — durable unread-Messenger email delivery завершён; следующий Stage 6.3 slice — Web Push/PWA delivery, параллельно с browser/security/observability gates.
+Текущая development-линия: `0.6.x-alpha` — Web Push/PWA Messenger delivery завершён; следующий launch-critical workstream — production-grade moderation / Trust & Safety, параллельно с browser/security/observability gates и unit-economics/monetization planning.
