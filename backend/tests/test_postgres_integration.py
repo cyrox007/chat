@@ -8,6 +8,7 @@ from components.model_registry import ensure_models_registered
 from components.notification.model import NotificationWorkerState
 from components.notification.worker_service import WORKER_NAME_ACTIVITY_REMINDERS, lock_worker_state
 from database import Database
+from tests.test_trust_safety_postgres_integration import TrustSafetyPostgresIntegrationTests  # noqa: F401
 
 
 @unittest.skipUnless(
@@ -33,6 +34,8 @@ class PostgreSQLIntegrationTests(unittest.TestCase):
                         "notification_worker_state",
                         "external_delivery_ledger",
                         "web_push_subscriptions",
+                        "trust_safety_reports",
+                        "trust_safety_audit_events",
                         "alembic_version",
                     )
                 }
