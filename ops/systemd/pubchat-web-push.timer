@@ -1,0 +1,13 @@
+[Unit]
+Description=Schedule PubChat Messenger Web Push delivery worker
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=30s
+AccuracySec=5s
+RandomizedDelaySec=5s
+Persistent=true
+Unit=pubchat-web-push.service
+
+[Install]
+WantedBy=timers.target
