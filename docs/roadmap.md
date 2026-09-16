@@ -10,6 +10,8 @@ Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжает
 
 Следующий активный Stage 6.3 slice — **Web Push / PWA delivery**: per-device subscriptions, VAPID provider, service-worker push/click flow, opt-in UX и terminal subscription cleanup. После него — delivery observability/browser matrix и оставшиеся beta gates.
 
+Отдельно зафиксированы два обязательных launch workstream, которые раньше были недооценены: **production-grade moderation / Trust & Safety** и **устойчивая монетизация / unit economics**. Текущий Report/ModerationAction/Appeal foundation полезен, но сам по себе не является готовой операционной системой модерации. PubChat также не может рассчитывать, что инфраструктура, поддержка и Trust & Safety будут бесконечно финансироваться только энтузиазмом команды.
+
 ## Завершённые checkpoints
 
 ### Stage 1 — Foundation & Security ✅ `0.1.0-alpha.1`
@@ -22,7 +24,7 @@ Account/Persona/Credential/IdentitySession, privacy, relationships и Persona-fi
 One-time WebSocket tickets, Redis pub/sub/presence, heartbeat/reconnect, rate limits/idempotency.
 
 ### Stage 4 — Living Spaces & Social Core ✅ `0.4.0-alpha.1`
-Spaces/memberships/scoped roles, social graph, invitations, Rules/Events/History и moderation/appeals.
+Spaces/memberships/scoped roles, social graph, invitations, Rules/Events/History и moderation/appeals foundation.
 
 ### Stage 5.1–5.6 ✅ `0.5.0-alpha.1` → `0.5.5-alpha.1`
 Product identity/Activities, earned engagement, occurrences/reminders, cosmetic support, organic discovery и installable PWA/external reminder-worker baseline.
@@ -143,13 +145,57 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ⏳ keyboard/focus, contrast/mobile/narrow viewport, onboarding and terminology audit;
 - 🚧 error/empty/offline consistency.
 
+### 6.8 Trust & Safety / moderation launch readiness 🚧
+
+Stage 4 дал доменные сущности reports/actions/appeals, но **production-grade moderation пока не готова**. До публичного запуска нужен не только schema/API foundation, а рабочий операционный контур.
+
+- ⏳ единый пользовательский report flow из Persona, Messenger message, Space message, Space/profile и media attachment;
+- ⏳ report reason taxonomy, severity/priority, duplicate collapse и rate-limit против report spam;
+- ⏳ moderator queue с фильтрами, search, ownership/claim, priority и состояниями triage/in-review/resolved/escalated;
+- ⏳ безопасный evidence snapshot/reference: что именно было пожаловано, контекст, timestamps и минимально необходимая история без бесконтрольного доступа к приватной переписке;
+- ⏳ platform moderation actions по Account/content с чётким scope, сроком, reason code и human-readable explanation;
+- ⏳ Space-local moderation отдельно от platform Trust & Safety; Space moderator не получает глобальных прав;
+- ⏳ Account-level block/suspension/ban-evasion enforcement для sibling Persona и новых Persona того же Account;
+- ⏳ anti-spam/raid baseline: message burst, invite/DM abuse, repeated unsolicited contacts, mass-join/leave и очевидная automation pressure;
+- ⏳ media/upload abuse workflow: quarantine/remove/review hooks без автоматической выдачи модератору лишних приватных данных;
+- ⏳ immutable/auditable moderation history, actor/reason/scope/duration и защита от тихого редактирования прошлых решений;
+- ⏳ полноценная appeal queue, повторная проверка другим moderator/admin там, где это уместно, и защита от бесконечного appeal spam;
+- ⏳ internal moderator UX: быстрый context review, linked reports/history, но без публичного social score и без автоматического «вердикта» на основе reputation;
+- ⏳ moderation metrics: queue age, response time, action/appeal counts, overturned decisions, abuse-rate signals; без KPI, стимулирующих модераторов выдавать больше санкций;
+- ⏳ privacy/retention policy для reports/evidence и redaction/export procedures;
+- ⏳ load/incident rehearsal: spam-wave/raid, moderator backlog, Redis/backend outage во время incident response.
+
+**Beta gate:** нельзя считать модерацию готовой только потому, что `Report`, `ModerationAction` и `Appeal` существуют в БД. Для публичной beta должен работать end-to-end flow «пожаловаться → очередь → решение → аудит → уведомление → апелляция» хотя бы для основных типов abuse.
+
+### 6.9 Sustainable monetization / business viability 🚧
+
+Цель — финансировать инфраструктуру, storage/traffic, email/push, поддержку и Trust & Safety без продажи trust, moderation authority или organic ranking.
+
+- ⏳ построить cost model: PostgreSQL/Redis/compute, storage, egress/CDN, uploads/media, email, push, backups, observability, support/moderation; считать cost per active Account / message / stored GB там, где метрика полезна;
+- ⏳ определить минимальный monthly revenue target: infrastructure + moderation/support + payment/provider fees + safety reserve, а не только «сервер пока оплачивается»;
+- ⏳ выбрать 1–2 monetization hypotheses для beta и не распыляться на полноценную игровую экономику;
+- ⏳ основной кандидат — PubChat Plus: косметика/темы, расширенное оформление Persona/Space, дополнительные convenience-функции и разумные resource limits без деградации базового общения;
+- ⏳ отдельный cosmetic catalog / gifts / Space appearance entitlements, не влияющие на trust, permissions, moderation или discovery ranking;
+- ⏳ проверить модель дополнительных storage/media limits для платных Account/Space, сохраняя бесплатный базовый messaging path;
+- ⏳ позже проверить real creator/Space support с прозрачной комиссией платформы; это отдельный financial/security/legal checkpoint, не продолжение текущих бесплатных cosmetic gestures;
+- ⏳ исследовать professional/community plan для управляемых Spaces: дополнительные admin/analytics/storage инструменты, но без покупки места в organic discovery;
+- ⏳ entitlement model server-side: subscription/cosmetic/resource entitlement отдельно от Account trust, role и permissions;
+- ⏳ pricing/retention experiments: conversion, churn, ARPPU/ARPU и willingness-to-pay без dark patterns, искусственных streak losses и давления через личные сообщения;
+- ⏳ payment provider, receipts/refunds/chargebacks, tax/legal/privacy requirements и fraud controls до первого real-money transaction;
+- ⏳ observability для revenue pipeline без хранения лишних платёжных данных в PubChat;
+- ⏳ зафиксировать бесплатное ядро продукта и платные границы до beta, чтобы monetization не переделывала архитектуру после роста.
+
+**Жёсткие ограничения монетизации:** деньги не покупают trust, verification-as-authority, moderation immunity, Space/platform moderator role, обход block/privacy/rate-limit, преимущество в organic discovery или право сильнее воздействовать на других пользователей. Appeals/reporting/security recovery также не становятся платными функциями.
+
 ## Beta
 
-Beta назначается только когда launch-critical journeys работают end-to-end, production-like gates пройдены, observability доступна и нет известных P0/P1 blockers. Ориентир `0.9.0-beta.1` не является календарным обещанием.
+Beta назначается только когда launch-critical journeys работают end-to-end, production-like gates пройдены, observability доступна и нет известных P0/P1 blockers. Помимо technical reliability, до публичной beta должен существовать рабочий moderation/Trust & Safety контур и понятная операционная модель его поддержки. Monetization может не быть полностью включена в первой beta, но до расширения аудитории должны быть выбраны monetization hypothesis, cost model и бесплатные/платные границы продукта, чтобы инфраструктура и moderation не зависели от бессрочного ручного финансирования.
+
+Ориентир `0.9.0-beta.1` не является календарным обещанием.
 
 ## Stable 1.0
 
-`1.0.0` — первый public stable release с explicit API/data compatibility commitment.
+`1.0.0` — первый public stable release с explicit API/data compatibility commitment, рабочей moderation operations model и устойчивым планом финансирования инфраструктуры/поддержки.
 
 ## Постоянные инварианты
 
@@ -157,6 +203,7 @@ Beta назначается только когда launch-critical journeys р�
 - Reputation/achievement != Permission.
 - Space moderator != Platform moderator.
 - Деньги не покупают trust/moderation authority.
+- Платный entitlement не расширяет privacy/access/abuse permissions.
 - Account block нельзя обойти другой Persona.
 - Discovery ranking не расширяет eligibility/privacy и не покупается gift/support.
 - PostgreSQL — durable source of truth; Redis — ephemeral realtime/presence/context layer.
@@ -171,5 +218,6 @@ Beta назначается только когда launch-critical journeys р�
 - Service worker не является storage для auth/private API data.
 - Production listener принадлежит process manager/systemd; routine deploy rolling, frontend publish staged.
 - Rolling deploy требует expand/contract-compatible schema changes.
+- Moderation decision имеет scope/reason/audit trail и не покупается за деньги.
 - Communication quality first; никакой тюремной терминологии.
 - SPA — первый клиент, contracts reusable для Android/iOS.
