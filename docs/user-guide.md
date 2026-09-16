@@ -1,6 +1,6 @@
 # PubChat — руководство пользователя
 
-Документ описывает пользовательские функции выпущенного checkpoint PubChat `0.5.4-alpha.1`.
+Документ описывает пользовательские функции выпущенного checkpoint PubChat `0.5.5-alpha.1`.
 
 ## 1. Account и Persona
 
@@ -126,7 +126,7 @@ Owner/moderator имеет отдельную scoped queue. Решения: warn
 
 ## 15. Напоминания и notification inbox
 
-В `0.5.2-alpha.1` Activities получили concrete bounded occurrences и opt-in in-app reminders.
+Activities имеют concrete bounded occurrences и opt-in in-app reminders.
 
 ### Как включить напоминание
 
@@ -152,15 +152,16 @@ Owner/moderator имеет отдельную scoped queue. Решения: warn
 - максимум 200 активных Activity reminders на Account;
 - recurring occurrences materialize только в bounded horizon;
 - приложение периодически выполняет idempotent in-app sync;
+- начиная с `0.5.5-alpha.1`, сервер может формировать reminders внешним background worker даже без открытого SPA, если оператор настроил scheduler;
 - browser/native push пока не используется.
 
 ### Время и DST
 
-Activity сейчас хранит canonical UTC instant. Для recurring schedule пока не сохраняется IANA timezone name, поэтому при переходе летнего/зимнего времени локальное wall-clock время weekly/monthly серии может сдвинуться на час. Reminder следует фактическому UTC schedule. Это известное alpha-ограничение и будет исправлено до beta на backend, а не client-side костылём.
+Activity сейчас хранит canonical UTC instant. Для recurring schedule пока не сохраняется IANA timezone name, поэтому при переходе летнего/зимнего времени локальное wall-clock время weekly/monthly серии может сдвинуться на час. Reminder следует фактическому UTC schedule. Это известное alpha-ограничение и будет исправлено до beta на backend.
 
 ## 16. Поддержка Persona и Spaces
 
-В `0.5.3-alpha.1` появились бесплатные внутренние gifts как спокойный способ сказать «спасибо». Это не магазин и не платёжная система.
+Бесплатные внутренние gifts — спокойный способ сказать «спасибо». Это не магазин и не платёжная система.
 
 ### Persona support
 
@@ -191,42 +192,50 @@ Activity сейчас хранит canonical UTC instant. Для recurring sched
 - параллельные sends одного Account сериализуются server-side для соблюдения лимита;
 - публичный shelf не показывает sender/message;
 - append-only ledger сохраняет historical snapshot даже после удаления исходной Persona/Space;
-- реальных checkout/payment/wallet/balance/refund/payout функций в `0.5.3` нет.
+- checkout/payment/wallet/balance/refund/payout функций пока нет.
 
 ## 17. Explainable Space Discovery
 
-В `0.5.4-alpha.1` основной экран Spaces использует organic discovery вместо простой сортировки только по созданию.
+Основной экран Spaces использует organic discovery вместо простой сортировки только по созданию.
 
-### Что влияет на рекомендации
-
-Backend может учитывать:
-
-- недавнее общение разных участников;
-- ближайшую доступную Activity/Event;
-- общие темы с вашими активными Spaces;
-- знакомый формат Space;
-- ваш явный social intent;
-- небольшие freshness/member-count сигналы.
+Backend может учитывать недавнее общение разных участников, ближайшую доступную Activity/Event, общие темы, формат Space, social intent и небольшие freshness/member-count сигналы.
 
 Privacy и block проверяются **до** ranking. Рекомендация не может сделать private или недоступный Space видимым.
 
-### «Почему здесь»
+Карточка может показать до трёх коротких причин «Почему здесь». Числовой score пользователю не показывается.
 
-Карточка может показать до трёх коротких причин: например «Здесь недавно общались», «Похожие темы на ваши пространства» или «Скоро общая активность».
+Не влияют: legacy rating, gifts/support, payments/paid boost, moderation authority или скрытый рейтинг пользователя.
 
-Числовой score пользователю не показывается и не является частью публичного API.
+Текущий organic-v1 работает на bounded pool до 200 канонически допустимых кандидатов. Очень старый Space за пределами pool может не попасть в ranking, даже если снова ожил; это pre-beta hardening task.
 
-### Что не влияет
+## 18. Установка PubChat как приложения и offline mode
 
-- legacy `rating` Space;
-- количество gifts/support;
-- цена, платежи или покупка boost;
-- moderation authority;
-- скрытый рейтинг пользователя.
+Начиная с `0.5.5-alpha.1`, поддерживающий браузер может предложить установить PubChat как PWA.
 
-Текущий organic-v1 работает на bounded pool до 200 канонически допустимых кандидатов. Это alpha-ограничение: очень старый Space за пределами pool может не попасть в ranking, даже если снова ожил. До beta candidate generation будет улучшен без unbounded scan.
+### Установка
 
-## 18. Что PubChat сознательно не делает
+Когда браузер разрешает install flow, в интерфейсе появляется спокойная карточка «PubChat можно установить». Нажмите «Установить» и подтвердите browser prompt. После установки PubChat может открываться в отдельном standalone-окне без обычной вкладки браузера.
+
+Если нажать «Не сейчас», prompt скрывается для текущей browser session. Core-функции PubChat не зависят от установки: приложение продолжает работать как обычный SPA.
+
+### Обновления
+
+Когда новая версия web application готова, PubChat показывает уведомление «Доступно обновление». Нажмите «Обновить», чтобы перезагрузить страницу и использовать новую версию. Автоматической внезапной перезагрузки во время работы нет.
+
+### Что доступно без сети
+
+Service worker сохраняет только application shell и статические assets. Если сеть пропала после загрузки, открытый интерфейс может остаться на экране и покажет offline/reconnect состояние.
+
+PubChat **не обещает**:
+
+- offline чтение личных сообщений после перезапуска;
+- offline синхронизацию чатов;
+- сохранение приватных profile/Space/API данных в PWA cache;
+- background browser push.
+
+Auth/API/realtime responses и credentials service worker не кэширует.
+
+## 19. Что PubChat сознательно не делает
 
 - не продаёт moderation roles;
 - не продаёт trust;
@@ -237,4 +246,6 @@ Privacy и block проверяются **до** ranking. Рекомендаци
 - не включает reminders или support без согласия пользователя;
 - не использует gift count как discovery/trust signal;
 - не продаёт organic discovery ranking;
+- не хранит auth/private API data в service-worker cache;
+- не выдаёт offline shell за полноценный offline messenger;
 - не скрывает причины moderation decisions за игровой терминологией.
