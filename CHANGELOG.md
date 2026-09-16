@@ -2,6 +2,30 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.2-alpha.1] — 2026-09-16
+
+Stage 6 — Pre-beta hardening, checkpoint 3: Redis realtime production-semantics baseline.
+
+### Redis integration
+- backend CI поднимает реальный Redis 7.2 service вместе с PostgreSQL 16;
+- dedicated realtime integration test выполняется с `DEBUG=False`, process-local fallback исключён;
+- два независимых `RealtimeService` instance используют общий Redis state;
+- one-time ticket создаётся одним instance, consume-ится другим и не принимается повторно;
+- Redis TTL удаляет истёкший ticket;
+- presence register/query/unregister работает cross-instance;
+- rate-limit counter общий для нескольких workers;
+- idempotency claim/release общий для нескольких workers;
+- Redis pub/sub доставляет protocol-v2 event между независимыми service instances.
+
+### Boundaries
+- production realtime не должен молча переходить в process-local fallback;
+- Redis остаётся ephemeral/distributed state, durable social/domain data остаются в PostgreSQL;
+- restart/failure recovery, multi-process WebSocket tests, rolling-restart reconnect и load/backpressure остаются следующими Stage 6.2 slices.
+
+Добавлен `docs/redis-realtime-integration-v1.md`.
+
+Quality gate: functional exact-head CI с Redis 7.2 + PostgreSQL 16/recovery gates → version/docs sync → повторный exact-head CI перед merge.
+
 ## [0.6.1-alpha.1] — 2026-09-16
 
 Stage 6 — Pre-beta hardening, checkpoint 2: PostgreSQL backup/restore recovery drill.
