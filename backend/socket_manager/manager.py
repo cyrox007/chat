@@ -9,6 +9,7 @@ from fastapi import WebSocket
 from components.realtime import realtime_service
 from components.user.model import User
 from settings import config
+from socket_manager.outbound import OutboundPump
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -20,6 +21,10 @@ class ConnectionManager:
 
     Delivery, tickets and presence are delegated to realtime_service so multiple
     Uvicorn workers can participate in one logical PubChat realtime network.
+
+    Each local socket owns a bounded outbound pump. Redis/pub-sub fan-out only
+    enqueues frames, so one stalled consumer cannot block delivery to unrelated
+    sockets or hold the Redis listener for the full socket send timeout.
     """
 
     def __init__(self):
@@ -29,6 +34,7 @@ class ConnectionManager:
         self.user_last_seen: Dict[UUID, datetime] = {}
         self.status_subscriptions: Dict[UUID, Set[UUID]] = defaultdict(set)
         self.connection_ids: Dict[WebSocket, str] = {}
+        self.outbound_pumps: Dict[WebSocket, OutboundPump] = {}
         realtime_service.register_callback(self._handle_bus_event)
 
     @property
@@ -47,14 +53,73 @@ class ConnectionManager:
         return connection_id
 
     async def _send_json(self, websocket: WebSocket, message: dict) -> None:
-        """Bound per-socket send latency so a slow consumer cannot block fan-out."""
+        """Bound a direct/fallback socket write by the configured send timeout."""
         await asyncio.wait_for(
             websocket.send_json(message),
             timeout=config.REALTIME_SEND_TIMEOUT_SECONDS,
         )
 
+    async def _start_outbound(self, websocket: WebSocket, room_uid: Optional[UUID] = None) -> None:
+        existing = self.outbound_pumps.pop(websocket, None)
+        if existing:
+            await existing.stop()
+
+        async def on_failure(reason: str) -> None:
+            await self._evict_failed_consumer(websocket, room_uid, reason)
+
+        pump = OutboundPump(
+            websocket,
+            queue_size=config.REALTIME_OUTBOUND_QUEUE_SIZE,
+            send_timeout=config.REALTIME_SEND_TIMEOUT_SECONDS,
+            on_failure=on_failure,
+        )
+        self.outbound_pumps[websocket] = pump
+        pump.start()
+
+    async def _stop_outbound(self, websocket: WebSocket) -> None:
+        pump = self.outbound_pumps.pop(websocket, None)
+        if pump:
+            await pump.stop()
+
+    def _enqueue_json(self, websocket: WebSocket, message: dict) -> bool:
+        pump = self.outbound_pumps.get(websocket)
+        if not pump:
+            logger.warning("Realtime outbound pump missing for local socket")
+            return False
+        return pump.enqueue(message)
+
+    async def _evict_failed_consumer(
+        self,
+        websocket: WebSocket,
+        room_uid: Optional[UUID],
+        reason: str,
+    ) -> None:
+        if websocket not in self.outbound_pumps:
+            return
+
+        is_backpressure = reason in {"queue_full", "send_timeout"}
+        close_code = 1013 if is_backpressure else 1011
+        close_reason = "Realtime client too slow" if is_backpressure else "Realtime delivery failed"
+        logger.warning(
+            "Evicting realtime consumer: reason=%s room=%s pending=%s",
+            reason,
+            room_uid,
+            self.outbound_pumps[websocket].pending,
+        )
+
+        try:
+            await asyncio.wait_for(
+                websocket.close(code=close_code, reason=close_reason),
+                timeout=max(0.1, min(config.REALTIME_SEND_TIMEOUT_SECONDS, 1.0)),
+            )
+        except Exception:
+            pass
+        finally:
+            await self.disconnect(websocket, room_uid)
+
     async def connect_to_room(self, websocket: WebSocket, room_uid: UUID, user_uid: UUID):
         self.room_connections.setdefault(room_uid, []).append((websocket, user_uid))
+        await self._start_outbound(websocket, room_uid)
         connection_id = self._connection_id(websocket)
         was_online = await realtime_service.is_online(user_uid)
         await realtime_service.register_connection(
@@ -70,6 +135,7 @@ class ConnectionManager:
 
     async def connect_to_messenger(self, websocket: WebSocket, user_uid: UUID):
         self.user_connections.setdefault(user_uid, []).append(websocket)
+        await self._start_outbound(websocket)
         connection_id = self._connection_id(websocket)
         was_online = await realtime_service.is_online(user_uid)
         await realtime_service.register_connection(
@@ -83,6 +149,8 @@ class ConnectionManager:
 
     async def disconnect(self, websocket: WebSocket, room_uid: Optional[UUID] = None):
         affected_user_uid: Optional[UUID] = None
+
+        await self._stop_outbound(websocket)
 
         if room_uid is not None:
             connections = self.room_connections.get(room_uid, [])
@@ -151,39 +219,16 @@ class ConnectionManager:
         message: dict,
         exclude_user: Optional[UUID] = None,
     ) -> None:
-        stale: list[WebSocket] = []
-        coroutines = []
-        sockets = []
         for websocket, user_uid in list(self.room_connections.get(room_uid, [])):
             if exclude_user and user_uid == exclude_user:
                 continue
-            sockets.append(websocket)
-            coroutines.append(self._send_json(websocket, message))
-
-        if coroutines:
-            results = await asyncio.gather(*coroutines, return_exceptions=True)
-            for websocket, result in zip(sockets, results):
-                if isinstance(result, Exception):
-                    stale.append(websocket)
-                    if isinstance(result, asyncio.TimeoutError):
-                        logger.warning("Realtime room consumer exceeded send timeout: room=%s", room_uid)
-
-        for websocket in stale:
-            await self.disconnect(websocket, room_uid)
+            if not self._enqueue_json(websocket, message):
+                logger.warning("Realtime room frame rejected by outbound queue: room=%s", room_uid)
 
     async def _send_local_user(self, user_uid: UUID, message: dict) -> None:
-        sockets = list(self.user_connections.get(user_uid, []))
-        if not sockets:
-            return
-        results = await asyncio.gather(
-            *(self._send_json(websocket, message) for websocket in sockets),
-            return_exceptions=True,
-        )
-        for websocket, result in zip(sockets, results):
-            if isinstance(result, Exception):
-                if isinstance(result, asyncio.TimeoutError):
-                    logger.warning("Realtime DM consumer exceeded send timeout: user=%s", user_uid)
-                await self.disconnect(websocket)
+        for websocket in list(self.user_connections.get(user_uid, [])):
+            if not self._enqueue_json(websocket, message):
+                logger.warning("Realtime user frame rejected by outbound queue: user=%s", user_uid)
 
     async def _handle_bus_event(self, event: dict) -> None:
         kind = event.get("kind")
@@ -249,11 +294,18 @@ class ConnectionManager:
         return self.active_dialogs.get(websocket)
 
     async def send_to_specific_user(self, websocket: WebSocket, message: dict):
+        pump = self.outbound_pumps.get(websocket)
+        if pump:
+            if not pump.enqueue(message):
+                logger.warning("Realtime frame rejected by device outbound queue")
+            return
+
+        # Authentication/early setup paths may intentionally send before a pump
+        # exists. Keep those writes bounded instead of silently dropping them.
         try:
             await self._send_json(websocket, message)
         except Exception:
             logger.exception("Ошибка отправки realtime сообщения на конкретное устройство")
-            await self.disconnect(websocket)
 
     async def update_user_activity(self, db_session, user_uid: UUID):
         self.user_last_seen[user_uid] = datetime.now()

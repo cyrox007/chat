@@ -6,13 +6,13 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Текущий выпущенный checkpoint: `0.6.4-alpha.1`.
+Текущий выпущенный checkpoint: `0.6.5-alpha.1`.
 
 Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 
-Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery baseline, Redis 7.2 distributed realtime и restart/recovery baselines, а также real multi-process Uvicorn/WebSocket rehearsal с rolling restart. Production outage не маскируется process-local fallback; Uvicorn workers используют общий Redis transport/presence, а клиент после замены worker подключается заново с новым one-time ticket.
+Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery baseline, Redis 7.2 distributed realtime и restart/recovery baselines, real multi-process Uvicorn/WebSocket rehearsal с rolling restart и bounded per-socket backpressure. Production outage не маскируется process-local fallback; Uvicorn workers используют общий Redis transport/presence, а медленный WebSocket consumer изолируется собственной outbound queue и не блокирует fan-out другим клиентам.
 
-До beta всё ещё нужны rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, slow-client/backpressure и Redis failover/capacity tests, observability, security и финальные accessibility/operations gates.
+До beta всё ещё нужны rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, Redis failover/capacity tests, observability, security и финальные accessibility/operations gates.
 
 Канонический номер версии находится в `VERSION`, история выпусков — в `CHANGELOG.md`.
 
@@ -35,6 +35,7 @@ Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery bas
 - [`docs/redis-realtime-integration-v1.md`](docs/redis-realtime-integration-v1.md) — Redis distributed realtime baseline;
 - [`docs/redis-recovery-v1.md`](docs/redis-recovery-v1.md) — Redis restart/recovery contract;
 - [`docs/realtime-multiprocess-v1.md`](docs/realtime-multiprocess-v1.md) — real Uvicorn multi-process / rolling-restart contract;
+- [`docs/realtime-backpressure-v1.md`](docs/realtime-backpressure-v1.md) — bounded per-socket outbound queues и slow-consumer isolation;
 - [`docs/web-application-maturity-v1.md`](docs/web-application-maturity-v1.md) — PWA/offline shell и client lifecycle;
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — типовые проблемы;
 - [`docs/roadmap.md`](docs/roadmap.md) — актуальная дорожная карта;
@@ -62,6 +63,7 @@ SPA является первым клиентом; backend API и realtime cont
 - Redis outage должен быть видимым, а recovery — происходить без обязательного process restart.
 - Ticket/presence/rate-limit/idempotency/pub-sub semantics проверяются на настоящем Redis при `DEBUG=False`.
 - Multi-process WebSocket/rolling-restart semantics проверяются на реальных Uvicorn process в CI.
+- Realtime fan-out не ждёт медленный socket write: каждый WebSocket имеет bounded outbound queue, а slow consumer изолированно отключается.
 - Clean migration correctness проверяется на реальной PostgreSQL в CI; `create_all()` не заменяет Alembic rehearsal.
 - Backup не считается рабочим, пока restore не проверен отдельной БД, schema-drift gate и semantic data assertions.
 - Synthetic legacy/recovery fixtures не заменяют rehearsal на production-like snapshot.

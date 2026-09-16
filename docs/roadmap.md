@@ -2,11 +2,11 @@
 
 ## Текущий статус
 
-Released: **`0.6.4-alpha.1`**.
+Released: **`0.6.5-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
-PubChat остаётся alpha: PostgreSQL migration/recovery, Redis distributed/restart recovery и real multi-process Uvicorn/WebSocket rolling-restart baselines уже закреплены CI. До beta всё ещё нужны production-like snapshot rehearsal, member-capacity/DST hardening, slow-client/backpressure, Redis failover/capacity, observability, load/security и финальные accessibility/operations gates.
+PubChat остаётся alpha: PostgreSQL migration/recovery, Redis distributed/restart recovery, real multi-process Uvicorn/WebSocket rolling-restart и bounded slow-consumer backpressure baselines уже закреплены CI. До beta всё ещё нужны production-like snapshot rehearsal, member-capacity/DST hardening, Redis failover/capacity, observability, load/security и финальные accessibility/operations gates.
 
 ## Завершённые checkpoints
 
@@ -66,6 +66,15 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - replacement worker принимает reconnect с новым one-time ticket;
 - существующие PostgreSQL/Redis recovery и frontend gates остаются зелёными.
 
+### Stage 6 checkpoint 6 — Bounded WebSocket backpressure ✅ `0.6.5-alpha.1`
+- каждый local WebSocket имеет отдельную bounded outbound queue;
+- Redis/pub/sub callback только enqueue-ит frame и не ждёт медленный network write;
+- один sender task на socket сохраняет порядок сообщений;
+- `queue_full` и `send_timeout` изолированно отключают slow consumer с code `1013`;
+- queue capacity configurable через `REALTIME_OUTBOUND_QUEUE_SIZE`;
+- deterministic tests подтверждают ordering, non-blocking overflow и timeout isolation;
+- multi-process/recovery/backup/frontend gates остаются зелёными.
+
 ## Stage 6 — Pre-beta hardening 🚧 `0.6.x-alpha`
 
 ### 6.1 Data / migrations 🚧
@@ -87,7 +96,7 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - ✅ automatic pub/sub resubscription после Redis restart;
 - ✅ реальные multi-process Uvicorn/WebSocket scenarios;
 - ✅ rolling-restart client reconnect baseline;
-- ⏳ slow-client/backpressure под нагрузкой;
+- ✅ slow-client/backpressure isolation;
 - ⏳ Redis failover topology/capacity tests.
 
 ### 6.3 Notification worker 🚧
@@ -151,6 +160,7 @@ Beta назначается только когда launch-critical journeys р�
 - Backup correctness включает restore + data assertions.
 - Production realtime не должен молча использовать process-local fallback.
 - Redis recovery не требует process restart; ephemeral state восстанавливается протоколом, а не становится durable.
+- Slow realtime consumer не должен блокировать fan-out другим соединениям.
 - Communication quality first.
 - Никакой тюремной терминологии.
 - SPA — первый клиент, contracts reusable для Android/iOS.

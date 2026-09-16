@@ -2,6 +2,23 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.5-alpha.1] — 2026-09-16
+
+Stage 6 pre-beta hardening checkpoint 6 — bounded WebSocket backpressure.
+
+- каждый process-local WebSocket получил отдельную bounded outbound queue;
+- Redis/pub-sub fan-out больше не ждёт socket write каждого клиента и только ставит frame в локальную очередь;
+- один sender task на socket сохраняет порядок кадров;
+- переполнение очереди изолированно отключает только медленного клиента с WebSocket code `1013`;
+- socket send timeout также изолирует stalled consumer и не задерживает delivery другим соединениям;
+- лимит очереди настраивается через `REALTIME_OUTBOUND_QUEUE_SIZE` (default `64`);
+- deterministic tests проверяют порядок, non-blocking overflow и send-timeout isolation;
+- все PostgreSQL/Redis recovery, multi-process rolling-restart и frontend gates остаются зелёными.
+
+Остаётся Stage 6.2 задача: Redis failover topology/capacity tests. Общий load/capacity profiling продолжается также в performance/operations блоках Stage 6.
+
+Quality gate: functional exact-head CI → version/docs sync → повторный exact-head CI перед merge.
+
 ## [0.6.4-alpha.1] — 2026-09-16
 
 Stage 6 pre-beta hardening checkpoint 5 — real multi-process WebSocket / rolling-restart baseline.
