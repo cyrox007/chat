@@ -40,7 +40,7 @@ class Persona(Database.Base):
 
     uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     account_uid = Column(UUID(as_uuid=True), ForeignKey("accounts.uid", ondelete="CASCADE"), nullable=False, index=True)
-    handle = Column(String(32), nullable=False, unique=True, index=True)
+    handle = Column(String(32), nullable=False)
     display_name = Column(String(80), nullable=False)
     avatar = Column(String(255), nullable=True)
     bio = Column(String(500), nullable=True)
@@ -57,6 +57,8 @@ class Persona(Database.Base):
     privacy = relationship("PrivacySettings", back_populates="persona", uselist=False, cascade="all, delete-orphan")
 
     __table_args__ = (
+        UniqueConstraint("handle", name="personas_handle_key"),
+        Index("ix_personas_handle", "handle", unique=True),
         Index("ix_personas_account_primary", "account_uid", "is_primary"),
     )
 
@@ -86,7 +88,7 @@ class IdentitySession(Database.Base):
 
     uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     account_uid = Column(UUID(as_uuid=True), ForeignKey("accounts.uid", ondelete="CASCADE"), nullable=False, index=True)
-    refresh_token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    refresh_token_hash = Column(String(64), nullable=False)
     device_label = Column(String(120), nullable=True)
     user_agent = Column(Text, nullable=True)
     ip_address = Column(String(64), nullable=True)
@@ -96,6 +98,11 @@ class IdentitySession(Database.Base):
     revoked_at = Column(DateTime, nullable=True)
 
     account = relationship("Account", back_populates="sessions")
+
+    __table_args__ = (
+        UniqueConstraint("refresh_token_hash", name="identity_sessions_refresh_token_hash_key"),
+        Index("ix_identity_sessions_refresh_token_hash", "refresh_token_hash", unique=True),
+    )
 
 
 class PrivacySettings(Database.Base):
