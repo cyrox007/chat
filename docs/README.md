@@ -20,7 +20,7 @@
 - [`ui-ux-kit.md`](ui-ux-kit.md) — основная дизайн-система и UX-правила.
 - [`ui-ux-notifications.md`](ui-ux-notifications.md) — notification/reminder UX extension.
 - [`ui-ux-discovery.md`](ui-ux-discovery.md) — explainable organic discovery UX rules.
-- [`ui-ux-pwa.md`](ui-ux-pwa.md) — install/update/offline UX extension для Stage 5.6.
+- [`ui-ux-pwa.md`](ui-ux-pwa.md) — install/update/offline UX extension.
 
 ## Для разработчика
 
@@ -41,12 +41,12 @@
 - [`activity-occurrences-v1.md`](activity-occurrences-v1.md) — Activity Occurrences, reminders и notification inbox, выпущенные в `0.5.2-alpha.1`.
 - [`creator-support-v1.md`](creator-support-v1.md) — opt-in gifts, append-only ledger и cosmetic entitlements, выпущенные в `0.5.3-alpha.1` без real-money flows.
 - [`discovery-v1.md`](discovery-v1.md) — eligibility-first, explainable organic Space discovery, выпущенный в `0.5.4-alpha.1`.
-- [`web-application-maturity-v1.md`](web-application-maturity-v1.md) — PWA shell, безопасный offline contract, notification lifecycle и внешний reminder worker; активный `0.5.5-alpha.x` slice.
+- [`web-application-maturity-v1.md`](web-application-maturity-v1.md) — PWA shell, безопасный offline contract, notification lifecycle и внешний reminder worker, выпущенные в `0.5.5-alpha.1`.
 
 ## Статус документов
 
-`VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md` и domain-документе текущего slice.
+`VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md` и профильных документах следующего milestone.
 
-Текущий release: `0.5.4-alpha.1`.
+Текущий release: `0.5.5-alpha.1`.
 
-Следующая development-линия: `0.5.5-alpha.0` — Web application maturity.
+Следующая development-линия: `0.6.0-alpha.0` — Pre-beta hardening.
