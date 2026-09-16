@@ -8,6 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from components.decorators.db import get_session
 from components.identity.model import AccountRelationship, Persona, PrivacySettings
 from components.message.model import PrivateMessage
+from components.notification.message_delivery import (
+    SURFACE_MESSENGER,
+    get_message_notification_preferences,
+    message_delivery_policy,
+)
 from components.realtime import realtime_service
 from components.realtime.active_context import active_context_service
 from components.room.model import RoomMember
@@ -261,9 +266,35 @@ async def handle_send_private_message(
         )
         formatted_message["frontId"] = front_id
 
-        await private_manager.send_to_user(sender_uid, formatted_message)
+        sender_message = {
+            **formatted_message,
+            "notification": {
+                "surface": SURFACE_MESSENGER,
+                "notify_in_app": False,
+                "play_sound": False,
+                "active_context": True,
+            },
+        }
+        await private_manager.send_to_user(sender_uid, sender_message)
+
         if receiver_uid != sender_uid:
-            await private_manager.send_to_user(receiver_uid, formatted_message)
+            preferences = await get_message_notification_preferences(db_session, receiver_uid)
+            receiver_online = await realtime_service.is_online(receiver_uid)
+            receiver_active = await active_context_service.is_active(
+                receiver_uid,
+                SURFACE_MESSENGER,
+                sender_uid,
+            )
+            policy = message_delivery_policy(
+                SURFACE_MESSENGER,
+                online=receiver_online,
+                active_context=receiver_active,
+                preferences=preferences,
+            )
+            await private_manager.send_to_user(
+                receiver_uid,
+                {**formatted_message, "notification": policy},
+            )
     except Exception:
         await realtime_service.release_event(sender_uid, scope, front_id)
         logger.exception("Ошибка отправки private message")
