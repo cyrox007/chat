@@ -2,11 +2,11 @@
 
 ## Текущий статус
 
-Released: **`0.6.1-alpha.1`**.
+Released: **`0.6.2-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
-PubChat остаётся alpha: основные продуктовые контуры сформированы, PostgreSQL migration/integration/recovery baseline уже закреплён CI, но до beta всё ещё нужны rehearsal на anonymized production-like snapshot, concurrency/DST hardening, Redis/realtime reliability, observability, load/security и финальные accessibility/operations gates.
+PubChat остаётся alpha: основные продуктовые контуры сформированы, PostgreSQL migration/recovery baseline и Redis production-semantics integration baseline уже закреплены CI. До beta всё ещё нужны production-like snapshot rehearsal, concurrency/DST hardening, Redis restart/recovery и multi-process WebSocket tests, observability, load/security и финальные accessibility/operations gates.
 
 ## Завершённые checkpoints
 
@@ -39,57 +39,59 @@ Consent-first internal gifts, append-only support ledger, cosmetic entitlements 
 ### Stage 5.5 — Discovery Quality ✅ `0.5.4-alpha.1`
 Eligibility-first organic discovery, explainable reasons, distinct-author activity signal, privacy-aware upcoming context, bounded candidate pool и no-paid/no-gift ranking boundary.
 
-Известное alpha-ограничение: candidate pool пока начинается с bounded canonical catalog по новизне. До beta candidate generation будет собираться из нескольких bounded источников activity/upcoming/shared context.
-
 ### Stage 5.6 — Web Application Maturity ✅ `0.5.5-alpha.1`
-- installable PWA shell и static-only service-worker cache;
-- external reminder worker с durable cursor/lock;
-- centralized notification lifecycle;
-- PWA/cache/lifecycle regression guards.
+Installable PWA shell, external reminder worker, centralized notification lifecycle и PWA/cache/lifecycle regression guards.
 
 ### Stage 6 checkpoint 1 — PostgreSQL migration/integration baseline ✅ `0.6.0-alpha.1`
 - PostgreSQL 16 service в backend CI;
-- clean-database `alembic upgrade head` через всю historical migration chain;
-- single current head и zero model/schema drift через `alembic check`;
-- synthetic representative pre-revival DB rehearsal `4f3d66790cd3 -> head` с semantic data assertions;
-- Account/Persona/Credential/role backfill, Space settings/memberships/tags и active legacy-ban semantics проверяются после upgrade;
-- DB URL безопасен для спецсимволов credentials;
-- standalone workers используют explicit ORM model registry/bootstrap;
-- real async PostgreSQL smoke проверяет migrated core tables и notification worker cursor/lock.
+- clean-database historical `alembic upgrade head`;
+- zero model/schema drift через `alembic check`;
+- synthetic representative legacy-data rehearsal с semantic assertions;
+- DB URL special-character safety;
+- explicit ORM registry для standalone processes;
+- real async PostgreSQL smoke.
 
 ### Stage 6 checkpoint 2 — PostgreSQL recovery baseline ✅ `0.6.1-alpha.1`
-- PostgreSQL 16 `pg_dump` custom-format backup после legacy rehearsal;
-- portable dump через `--no-owner --no-privileges`;
-- restore в отдельную пустую database;
-- restored DB повторно должна быть на Alembic head;
-- `alembic check` после restore подтверждает zero schema drift;
-- legacy semantic assertions повторяются на restored data;
-- backup не считается рабочим без проверенного restore;
-- recovery contract документирован отдельно в `database-recovery-v1.md`.
+- PostgreSQL 16 custom-format `pg_dump`;
+- restore в отдельную database;
+- restored Alembic head + zero drift;
+- повторные legacy semantic assertions;
+- recovery contract в `database-recovery-v1.md`.
 
-Synthetic fixture/recovery baseline не заменяет rehearsal на anonymized production-like snapshot и production backup policy.
+### Stage 6 checkpoint 3 — Redis realtime baseline ✅ `0.6.2-alpha.1`
+- Redis 7.2 service в backend CI;
+- realtime integration smoke принудительно работает при `DEBUG=False`;
+- два независимых `RealtimeService` instance используют общий distributed state;
+- one-time ticket issue/consume/TTL проверяется cross-instance;
+- presence register/query/unregister проверяется cross-instance;
+- rate-limit counter нельзя обойти сменой worker;
+- idempotency claim/release разделяется между workers;
+- Redis pub/sub доставляет protocol-v2 event между независимыми instances;
+- production fallback boundary закреплён документом `redis-realtime-integration-v1.md`.
 
 ## Stage 6 — Pre-beta hardening 🚧 `0.6.x-alpha`
 
 Обязательный milestone перед beta. Новые social/product mechanics не являются приоритетом: задача — доказать корректность, переносимость и эксплуатационную готовность уже построенных контуров.
 
 ### 6.1 Data / migrations 🚧
-- ✅ production-like PostgreSQL 16 integration environment в CI;
-- ✅ Alembic upgrade from historical clean baseline до current head;
-- ✅ zero model/schema drift через `alembic check`;
-- ✅ synthetic representative legacy-data rehearsal с data assertions;
-- ✅ PostgreSQL backup/restore recovery drill с повторными schema/data assertions;
-- ⏳ rehearsal на anonymized production-like snapshot/копии реальной legacy schema/data;
+- ✅ PostgreSQL 16 integration environment в CI;
+- ✅ historical clean migration chain;
+- ✅ zero model/schema drift;
+- ✅ synthetic representative legacy-data rehearsal;
+- ✅ PostgreSQL backup/restore recovery drill;
+- ⏳ rehearsal на anonymized production-like snapshot;
 - ⏳ member-capacity concurrency hardening;
 - ⏳ IANA timezone storage и DST-correct recurring wall-clock semantics.
 
-### 6.2 Redis / realtime reliability — следующий активный slice
-- Redis integration tests без development fallback;
-- cross-worker realtime test environment;
-- Redis restart/failure recovery;
-- ticket/idempotency/presence TTL validation;
-- slow-client/backpressure scenarios;
-- reconnect после rolling restart.
+### 6.2 Redis / realtime reliability 🚧
+- ✅ Redis 7.2 integration tests без development fallback;
+- ✅ distributed ticket/presence/rate-limit/idempotency semantics;
+- ✅ cross-instance Redis pub/sub delivery;
+- ⏳ Redis restart/failure recovery без process restart;
+- ⏳ потеря/восстановление pub/sub subscription;
+- ⏳ реальные multi-process WebSocket scenarios;
+- ⏳ slow-client/backpressure scenarios под нагрузкой;
+- ⏳ reconnect после rolling restart.
 
 ### 6.3 Notification worker 🚧
 - ✅ baseline integration smoke с реальным PostgreSQL и durable worker state;
@@ -124,7 +126,7 @@ Synthetic fixture/recovery baseline не заменяет rehearsal на anonymi
 - deployment/recovery runbook;
 - backup retention/encryption/off-site storage + RPO/RTO policy;
 - shared/object storage strategy;
-- конкретная supported PostgreSQL/Redis compatibility matrix.
+- расширенная PostgreSQL/Redis compatibility matrix beyond current CI baselines.
 
 ### 6.7 UX/accessibility
 - полный keyboard/focus audit;
@@ -154,8 +156,10 @@ Beta назначается только когда launch-critical journeys р�
 - Organic discovery нельзя купить через gift/support.
 - Service worker не является storage для auth/private API data.
 - Background scheduler не запускается внутри каждого web worker.
-- Migration correctness проверяется реальной PostgreSQL, а не только импортом моделей.
-- Backup correctness включает restore + data assertions, а не только успешный `pg_dump`.
+- Migration correctness проверяется реальной PostgreSQL.
+- Backup correctness включает restore + data assertions.
+- Production realtime не должен молча использовать process-local fallback.
+- Redis rate-limit/idempotency/presence semantics должны быть distributed.
 - Synthetic fixtures не подменяют rehearsal на production-like snapshot.
 - Communication quality first.
 - Никакой тюремной терминологии.

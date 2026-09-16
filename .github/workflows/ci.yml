@@ -27,6 +27,15 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: backend
@@ -40,6 +49,7 @@ jobs:
       DB_NAME: chat_ci
       DB_USER: pubchat
       DB_PASSWORD: ci-db-password
+      REDIS_URL: redis://127.0.0.1:6379/0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -81,6 +91,10 @@ jobs:
         env:
           PUBCHAT_POSTGRES_INTEGRATION: "1"
         run: python -m unittest tests.test_postgres_integration
+      - name: Run Redis realtime integration smoke
+        env:
+          PUBCHAT_REDIS_INTEGRATION: "1"
+        run: python -m unittest tests.test_redis_realtime_integration
       - name: Rehearse revival migrations with legacy data
         env:
           PUBCHAT_LEGACY_DB_NAME: chat_legacy_ci

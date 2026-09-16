@@ -31,6 +31,8 @@
 - [`development.md`](development.md) — ветки, миграции, тесты и CI.
 - [`operations.md`](operations.md) — production-конфигурация, reminder worker и эксплуатационные ограничения.
 - [`prebeta-hardening-v1.md`](prebeta-hardening-v1.md) — Stage 6 PostgreSQL/migration integration baseline, выпущенный в `0.6.0-alpha.1`.
+- [`database-recovery-v1.md`](database-recovery-v1.md) — PostgreSQL backup/restore recovery contract, выпущенный в `0.6.1-alpha.1`.
+- [`redis-realtime-integration-v1.md`](redis-realtime-integration-v1.md) — Redis 7.2 production-semantics realtime contract, выпущенный в `0.6.2-alpha.1`.
 - [`release-checklist.md`](release-checklist.md) — release gate.
 
 ## Доменные документы
@@ -48,6 +50,6 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md` и профильных документах следующего slice.
 
-Текущий release: `0.6.0-alpha.1`.
+Текущий release: `0.6.2-alpha.1`.
 
-Текущая development-линия: `0.6.0-alpha.x` — Pre-beta hardening продолжается.
+Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается; следующий Redis slice — restart/recovery и multi-process realtime scenarios.
