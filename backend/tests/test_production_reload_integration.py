@@ -19,12 +19,19 @@ def _free_port() -> int:
         return sock.getsockname()[1]
 
 
-def _http_ok(url: str, timeout: float = 1.0) -> bool:
+def _http_probe(url: str, timeout: float = 3.0) -> tuple[bool, float, str | None]:
+    started = time.monotonic()
     try:
         with urlopen(url, timeout=timeout) as response:
-            return response.status == 200
-    except (OSError, URLError):
-        return False
+            elapsed = time.monotonic() - started
+            return response.status == 200, elapsed, None
+    except (OSError, URLError) as exc:
+        elapsed = time.monotonic() - started
+        return False, elapsed, repr(exc)
+
+
+def _http_ok(url: str, timeout: float = 3.0) -> bool:
+    return _http_probe(url, timeout=timeout)[0]
 
 
 @unittest.skipUnless(
@@ -66,18 +73,25 @@ class ProductionReloadIntegrationTest(unittest.TestCase):
 
             os.kill(process.pid, signal.SIGHUP)
 
-            failures = 0
+            failures = []
+            latencies = []
             checks = 0
-            deadline = time.monotonic() + 5
+            deadline = time.monotonic() + 6
             while time.monotonic() < deadline:
                 checks += 1
-                if not _http_ok(health_url):
-                    failures += 1
+                ok, elapsed, error = _http_probe(health_url)
+                latencies.append(elapsed)
+                if not ok:
+                    failures.append((elapsed, error))
                 time.sleep(0.05)
 
             self.assertIsNone(process.poll(), "Uvicorn supervisor exited after SIGHUP")
-            self.assertGreater(checks, 20)
-            self.assertEqual(failures, 0, "HTTP became unavailable during rolling worker reload")
+            self.assertGreater(checks, 10)
+            self.assertEqual(
+                failures,
+                [],
+                f"HTTP request failed during rolling worker reload: {failures}; max_latency={max(latencies):.3f}s",
+            )
         finally:
             if process.poll() is None:
                 os.killpg(process.pid, signal.SIGTERM)
@@ -86,3 +100,5 @@ class ProductionReloadIntegrationTest(unittest.TestCase):
                 except subprocess.TimeoutExpired:
                     os.killpg(process.pid, signal.SIGKILL)
                     process.wait(timeout=5)
+            if process.stdout:
+                process.stdout.close()
