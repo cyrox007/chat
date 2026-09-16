@@ -13,10 +13,12 @@ from components.notification.message_delivery import (
     get_message_notification_preferences,
     message_delivery_policy,
 )
+from components.notification.web_push import queue_messenger_web_push
 from components.realtime import realtime_service
 from components.realtime.active_context import active_context_service
 from components.room.model import RoomMember
 from components.user.model import User
+from database import Database
 from settings import config
 from socket_manager import private_manager
 from utils.logger import setup_logger
@@ -291,6 +293,20 @@ async def handle_send_private_message(
                 active_context=receiver_active,
                 preferences=preferences,
             )
+
+            if policy.get("web_push_eligible"):
+                try:
+                    async with Database.sessionmaker() as push_db:
+                        await queue_messenger_web_push(
+                            push_db,
+                            receiver_legacy_uid=receiver_uid,
+                            sender_legacy_uid=sender_uid,
+                        )
+                except Exception:
+                    # External delivery is best-effort and must never turn a
+                    # successfully persisted direct message into a send failure.
+                    logger.exception("Failed to queue Messenger Web Push")
+
             await private_manager.send_to_user(
                 receiver_uid,
                 {**formatted_message, "notification": policy},
