@@ -8,10 +8,10 @@ Released checkpoint: `0.6.5-alpha.1`.
 
 ## Модель
 
-Каждый process-local WebSocket получает собственный `OutboundPump`:
+Каждый process-local WebSocket получает собственный `OutboundPump` для fan-out delivery:
 
-- bounded `asyncio.Queue` хранит ожидающие outbound frames;
-- один sender task последовательно отправляет frames и сохраняет порядок;
+- bounded `asyncio.Queue` хранит ожидающие fan-out frames;
+- один sender task последовательно отправляет queued fan-out frames и сохраняет их порядок;
 - Redis/pub-sub callback только кладёт payload в очередь и не ждёт network write;
 - размер очереди ограничен `REALTIME_OUTBOUND_QUEUE_SIZE`;
 - один socket write ограничен `REALTIME_SEND_TIMEOUT_SECONDS`.
@@ -26,7 +26,7 @@ Released checkpoint: `0.6.5-alpha.1`.
 Consumer считается непригодным для продолжения realtime-сессии, когда:
 
 1. его outbound queue переполнена (`queue_full`); или
-2. отправка одного frame превышает send timeout (`send_timeout`).
+2. отправка одного queued fan-out frame превышает send timeout (`send_timeout`).
 
 Такой WebSocket закрывается изолированно с code `1013` (`Try Again Later`) и reason `Realtime client too slow`.
 
@@ -36,7 +36,9 @@ Consumer считается непригодным для продолжения
 
 ## Ordering
 
-В пределах одного WebSocket порядок frames сохраняется одним sender task.
+В пределах одного WebSocket порядок frames, прошедших через `OutboundPump`, сохраняется одним sender task.
+
+Connection-scoped direct responses на действие самого клиента могут отправляться из его собственного handler path и не входят в ordering guarantee fan-out очереди. Они не удерживают Redis/pub/sub callback и поэтому не создают cross-client backpressure.
 
 Между разными sockets общей ordering guarantee нет и не требуется: каждый connection имеет собственную очередь и собственную скорость доставки.
 
@@ -46,13 +48,13 @@ Canonical message ordering по-прежнему определяется persis
 
 До этого fan-out делал concurrent `send_json()` через `asyncio.gather()`. Быстрые sockets получали frame параллельно, но сам Redis callback ждал завершения всех send operations либо их timeout. Один stalled consumer мог удерживать обработку следующего Redis event до `REALTIME_SEND_TIMEOUT_SECONDS`.
 
-Bounded outbound pumps разделяют ingress и network delivery: callback заканчивается после enqueue, а timeout конкретного consumer обрабатывается его sender task.
+Bounded outbound pumps разделяют ingress и fan-out network delivery: callback заканчивается после enqueue, а timeout конкретного consumer обрабатывается его sender task.
 
 ## Проверки
 
 `tests/test_realtime_backpressure.py` детерминированно проверяет:
 
-- сохранение порядка на fast consumer;
+- сохранение порядка queued fan-out frames на fast consumer;
 - queue overflow без ожидания send timeout;
 - `queue_full` isolation для blocked consumer;
 - `send_timeout` isolation для stalled send.
@@ -76,14 +78,14 @@ Bounded outbound pumps разделяют ingress и network delivery: callback 
 Следующие отдельные задачи:
 
 - Redis failover topology;
-- Redis/pub-sub и reconnect capacity profiling;
+- Redis/pub/sub и reconnect capacity profiling;
 - observability/metrics для queue depth, slow-consumer eviction и delivery latency;
 - production-like load profile с реальными concurrency targets.
 
 ## Инварианты
 
 - slow consumer не блокирует fan-out другим sockets;
-- outbound memory на один socket ограничена;
-- порядок frames внутри одного socket сохраняется;
+- outbound fan-out memory на один socket ограничена;
+- порядок queued fan-out frames внутри одного socket сохраняется;
 - backpressure не превращается в purchasable priority или reputation mechanic;
 - reconnect после `1013` использует обычный Realtime v2 flow с новым one-time ticket.
