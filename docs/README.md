@@ -29,6 +29,7 @@
 - [`security-and-privacy.md`](security-and-privacy.md) — security model и privacy boundaries.
 - [`development.md`](development.md) — ветки, миграции, тесты и CI.
 - [`operations.md`](operations.md) — production-конфигурация и эксплуатационные ограничения.
+- [`production-deploy-v1.md`](production-deploy-v1.md) — health-gated rolling production deploy без routine `502` окна.
 - [`prebeta-hardening-v1.md`](prebeta-hardening-v1.md) — PostgreSQL/migration baseline (`0.6.0-alpha.1`).
 - [`database-recovery-v1.md`](database-recovery-v1.md) — PostgreSQL backup/restore (`0.6.1-alpha.1`).
 - [`redis-realtime-integration-v1.md`](redis-realtime-integration-v1.md) — Redis distributed realtime baseline (`0.6.2-alpha.1`).
