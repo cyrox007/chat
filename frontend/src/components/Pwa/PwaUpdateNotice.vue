@@ -20,14 +20,14 @@ onUnmounted(() => window.removeEventListener('pubchat:app-update-ready', showUpd
 </script>
 
 <template>
-	<div v-if="updateReady" class="update-notice" role="status" aria-live="polite">
+	<div v-if="updateReady" class="update-notice" role="status" aria-live="polite" aria-atomic="true">
 		<div>
 			<strong>Доступно обновление PubChat</strong>
 			<span>Перезагрузите приложение, чтобы использовать новую версию.</span>
 		</div>
 		<div class="update-notice__actions">
 			<button class="ui-button" type="button" @click="reload">Обновить</button>
-			<button class="update-notice__dismiss" type="button" aria-label="Скрыть уведомление" @click="dismiss">
+			<button class="update-notice__dismiss" type="button" aria-label="Скрыть уведомление об обновлении" @click="dismiss">
 				<i class="fas fa-xmark" aria-hidden="true"></i>
 			</button>
 		</div>
@@ -58,6 +58,7 @@ onUnmounted(() => window.removeEventListener('pubchat:app-update-ready', showUpd
 .update-notice__actions { display: flex; align-items: center; gap: var(--ui-space-2); }
 .update-notice__dismiss { width: 2.25rem; height: 2.25rem; border: 0; border-radius: 50%; background: transparent; color: var(--ui-text-muted); cursor: pointer; }
 .update-notice__dismiss:hover { background: var(--ui-surface-muted); }
+.update-notice__dismiss:focus-visible { outline: none; box-shadow: var(--ui-focus-ring); }
 @media (max-width: 720px) {
 	.update-notice { bottom: 5.35rem; align-items: stretch; flex-direction: column; }
 	.update-notice__actions { justify-content: flex-end; }
