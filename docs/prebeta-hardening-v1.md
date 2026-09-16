@@ -6,7 +6,7 @@
 
 Version: `0.6.0-alpha.1`.
 
-Scope: production-like PostgreSQL migration/integration baseline.
+Scope: PostgreSQL migration/integration baseline с synthetic representative pre-revival data rehearsal.
 
 ## Что уже доказано CI
 
@@ -19,7 +19,10 @@ Scope: production-like PostgreSQL migration/integration baseline.
 - smoke проверяет наличие ключевых migrated tables и durable notification worker state;
 - worker cursor успешно читается и блокируется через реальную PostgreSQL session;
 - standalone worker использует явный ORM model registry вместо зависимости от случайного import order web-приложения;
-- DB URL строится через SQLAlchemy `URL.create()`, поэтому логин/пароль со специальными символами корректно кодируются.
+- DB URL строится через SQLAlchemy `URL.create()`, поэтому логин/пароль со специальными символами корректно кодируются;
+- отдельная legacy rehearsal DB мигрируется до pre-revival revision `4f3d66790cd3`, засеивается synthetic representative legacy data и затем обновляется до current head;
+- legacy rehearsal делает data assertions для Account/Persona/Credential/role backfill, Space settings/memberships/tags и активного legacy ban semantics;
+- legacy rehearsal повторно проходит `alembic current` и `alembic check` после data-preserving upgrade.
 
 ## Исправленный migration debt
 
@@ -49,9 +52,9 @@ CLI worker раньше косвенно зависел от import side effects
 
 Stage 6.1 остаётся активным. Следующие обязательные задачи:
 
-- migration rehearsal на репрезентативной legacy schema/data, а не только на чистой БД;
+- rehearsal на anonymized production-like snapshot/копии реальной legacy schema/data, а не только на synthetic fixture;
 - backup/restore drill;
-- upgrade rehearsal с data assertions до/после;
+- расширенные before/after data assertions на production-like snapshot;
 - member-capacity concurrency hardening под реальной PostgreSQL;
 - IANA timezone storage и DST-correct recurring wall-clock semantics;
 - destructive downgrade не является launch requirement и отдельно не обещается.
@@ -62,5 +65,6 @@ Stage 6.1 остаётся активным. Следующие обязател
 - schema changes не обходят migration chain через `create_all`;
 - CI не отключает `alembic check` ради ложного green;
 - исправления исторических migrations не должны менять уже определённую бизнес-семантику backfill;
+- synthetic fixture не подменяет rehearsal на production-like snapshot;
 - standalone workers обязаны явно инициализировать ORM registry;
 - PostgreSQL остаётся authoritative persistent datastore.
