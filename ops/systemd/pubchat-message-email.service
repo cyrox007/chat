@@ -6,7 +6,6 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=/home/projects/pubchat/backend
-EnvironmentFile=-/home/projects/pubchat/backend/.env
 ExecStart=/home/projects/pubchat/backend/venv/bin/python3 -m workers.unread_dm_email_nudge --stage all
 Nice=5
 IOSchedulingClass=best-effort
