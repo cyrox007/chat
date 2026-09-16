@@ -244,3 +244,46 @@ class PlatformRestrictionAuditEvent(Database.Base):
             "created_at",
         ),
     )
+
+
+class PlatformRestrictionAppeal(Database.Base):
+    """Appeal against one Account-level platform capability restriction."""
+
+    __tablename__ = "platform_restriction_appeals"
+
+    uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    restriction_uid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("platform_restrictions.uid", ondelete="CASCADE"),
+        nullable=False,
+    )
+    appellant_account_uid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.uid", ondelete="SET NULL"),
+        nullable=True,
+    )
+    reviewer_account_uid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.uid", ondelete="SET NULL"),
+        nullable=True,
+    )
+    body = Column(Text, nullable=False)
+    status = Column(String(24), nullable=False, default="pending")
+    resolution = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "restriction_uid",
+            "appellant_account_uid",
+            name="uq_platform_restriction_appeal_appellant",
+        ),
+        Index("ix_platform_restriction_appeals_status_created", "status", "created_at"),
+        Index(
+            "ix_platform_restriction_appeals_appellant_created",
+            "appellant_account_uid",
+            "created_at",
+        ),
+    )
