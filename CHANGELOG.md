@@ -11,6 +11,8 @@ Stage 6 — Pre-beta hardening, checkpoint 1: PostgreSQL migration/integration b
 - clean-database `alembic upgrade head` проходит через всю historical migration chain;
 - `alembic current` подтверждает единственную current head;
 - `alembic check` закрепляет отсутствие model/schema drift;
+- отдельная synthetic representative pre-revival DB проходит upgrade `4f3d66790cd3 -> head` с semantic data assertions;
+- legacy fixture проверяет Account/Persona/Credential/role backfill, Space settings/memberships/tags и active legacy ban semantics;
 - historical Identity v2 credential backfill исправлен через raw driver SQL без изменения salts/deterministic UUID formula;
 - ORM metadata reconciled с уже выпущенной schema для Persona handle, refresh-token hash и Activity RSVP uniqueness;
 - DB URL строится через SQLAlchemy `URL.create()`, поэтому credentials со спецсимволами корректно кодируются.
@@ -26,9 +28,9 @@ Stage 6 — Pre-beta hardening, checkpoint 1: PostgreSQL migration/integration b
 - development/release checklist требуют real PostgreSQL migration/schema-drift gates для DB-sensitive slices;
 - roadmap отдельно показывает доказанные пункты и оставшийся Stage 6.1 scope.
 
-Известные ограничения: этот checkpoint проверяет clean-database path. Representative legacy-data rehearsal, backup/restore drill, member-capacity concurrency hardening и IANA/DST recurrence остаются активными задачами Stage 6.1.
+Известные ограничения: synthetic fixture не заменяет rehearsal на anonymized production-like snapshot. Backup/restore drill, member-capacity concurrency hardening и IANA/DST recurrence остаются активными задачами Stage 6.1.
 
-Quality gate: functional exact-head backend/frontend CI с PostgreSQL 16 → version/docs sync → повторный exact-head CI перед merge.
+Quality gate: functional exact-head backend/frontend CI с PostgreSQL 16 и legacy-data rehearsal → version/docs sync → повторный exact-head CI перед merge.
 
 ## [0.5.5-alpha.1] — 2026-09-16
 
