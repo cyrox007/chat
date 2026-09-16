@@ -63,23 +63,20 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
-
-import NotificationService from '@/API/NotificationService';
 
 const router = useRouter();
 const route = useRoute();
 const store = useStore();
 const currentTheme = ref('light');
 const isDropdownOpen = ref(false);
-const unreadNotifications = ref(0);
-let notificationTimer = null;
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000';
 
 const isAuthenticated = computed(() => store.getters.isAuth);
 const currentUser = computed(() => store.getters.getUser || {});
+const unreadNotifications = computed(() => store.getters['notifications/unread'] || 0);
 const isAdmin = computed(() => ['admin', 'superadmin'].includes(currentUser.value.global_role));
 const profileRoute = computed(() => ({ name: 'UserProfile', params: { uid: currentUser.value.uid } }));
 const spaceUid = computed(() => {
@@ -96,39 +93,13 @@ const unreadLabel = computed(() => unreadNotifications.value > 99 ? '99+' : Stri
 const notificationAriaLabel = computed(() => unreadNotifications.value ? `Напоминания: ${unreadNotifications.value} непрочитанных` : 'Напоминания');
 const intentLabel = computed(() => ({ open: 'Хочу пообщаться', meet: 'Открыт знакомствам', games: 'Ищу компанию для игры', friends: 'Только знакомые', quiet: 'Спокойный режим' }[currentUser.value.social_intent] || 'В PubChat'));
 
-const refreshNotifications = async ({ sync = false } = {}) => {
-	if (!isAuthenticated.value) { unreadNotifications.value = 0; return; }
-	try {
-		const response = sync ? await NotificationService.sync() : await NotificationService.unreadCount();
-		unreadNotifications.value = Number(response.data.unread || 0);
-	} catch {
-		// Notification status must not break the application shell.
-	}
-};
-const handleNotificationChange = (event) => {
-	if (Number.isFinite(event.detail?.unread)) unreadNotifications.value = Math.max(0, Number(event.detail.unread));
-	else refreshNotifications();
-};
-const startNotificationTimer = () => {
-	if (notificationTimer) clearInterval(notificationTimer);
-	notificationTimer = setInterval(() => refreshNotifications({ sync: true }), 180000);
-};
-const stopNotificationTimer = () => { if (notificationTimer) clearInterval(notificationTimer); notificationTimer = null; };
-
-watch(isAuthenticated, async (value) => {
-	if (!value) { stopNotificationTimer(); unreadNotifications.value = 0; return; }
-	await refreshNotifications({ sync: true });
-	startNotificationTimer();
-}, { immediate: true });
-
 const toggleDropdown = () => { isDropdownOpen.value = !isDropdownOpen.value; };
 const closeDropdown = () => { isDropdownOpen.value = false; };
 const handleLogout = async () => { closeDropdown(); await store.dispatch('logout'); await router.replace({ name: 'login' }); };
 const applyTheme = (theme) => { document.documentElement.classList.remove('light-theme', 'dark-theme'); document.documentElement.classList.add(`${theme}-theme`); localStorage.setItem('theme', theme); currentTheme.value = theme; };
 const toggleTheme = () => applyTheme(currentTheme.value === 'dark' ? 'light' : 'dark');
 
-onMounted(() => { applyTheme(localStorage.getItem('theme') || 'light'); window.addEventListener('pubchat:notifications-changed', handleNotificationChange); });
-onUnmounted(() => { stopNotificationTimer(); window.removeEventListener('pubchat:notifications-changed', handleNotificationChange); });
+onMounted(() => { applyTheme(localStorage.getItem('theme') || 'light'); });
 </script>
 
 <style scoped>

@@ -45,26 +45,28 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
+import { useStore } from 'vuex';
 
 import NotificationService from '@/API/NotificationService';
 
 const router = useRouter();
+const store = useStore();
 const loading = ref(true);
 const markingAll = ref(false);
 const errorMessage = ref('');
 const items = ref([]);
-const unread = ref(0);
+const unread = computed(() => store.getters['notifications/unread']);
 
 const load = async () => {
 	loading.value = true;
 	errorMessage.value = '';
 	try {
-		await NotificationService.sync();
+		await store.dispatch('notifications/sync');
 		const response = await NotificationService.list({ limit: 100 });
 		items.value = response.data.notifications || [];
-		unread.value = response.data.unread || 0;
+		store.dispatch('notifications/setUnread', response.data.unread || 0);
 	} catch (error) {
 		console.error('Не удалось загрузить notifications:', error);
 		errorMessage.value = 'Проверьте соединение и попробуйте ещё раз.';
@@ -78,7 +80,7 @@ const markAll = async () => {
 	try {
 		await NotificationService.markAllRead();
 		items.value = items.value.map((item) => ({ ...item, is_read: true }));
-		unread.value = 0;
+		store.dispatch('notifications/setUnread', 0);
 	} catch {
 		errorMessage.value = 'Не удалось обновить состояние уведомлений.';
 	} finally {
@@ -92,7 +94,7 @@ const openNotification = async (item) => {
 			const response = await NotificationService.markRead(item.uid);
 			const index = items.value.findIndex((candidate) => candidate.uid === item.uid);
 			if (index >= 0) items.value[index] = response.data.notification;
-			unread.value = Math.max(0, unread.value - 1);
+			store.dispatch('notifications/decrementUnread');
 		} catch {
 			// Navigation stays useful even if read-state update temporarily fails.
 		}

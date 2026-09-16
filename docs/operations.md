@@ -9,8 +9,9 @@
 - FastAPI backend.
 - PostgreSQL как durable source of truth.
 - Redis для production realtime/distributed state.
-- Собранный Vue SPA.
+- Собранный Vue SPA/PWA shell.
 - Reverse proxy с HTTPS и WebSocket support.
+- Внешний scheduler для reminder worker, если фоновые reminders должны формироваться без открытого SPA.
 
 ## Environment
 
@@ -32,11 +33,13 @@ Frontend:
 - `VITE_API_BASE_URL` — HTTP API origin;
 - `VITE_API_WS_SERVER_URL` — необязательный WebSocket origin. Если не задан, SPA преобразует API `http/https` в `ws/wss`.
 
-## HTTPS и cookies
+## HTTPS, cookies и PWA
 
-Production должен работать через HTTPS. Refresh session использует HttpOnly cookie, а realtime — `wss://` за TLS termination/reverse proxy.
+Production должен работать через HTTPS. Refresh session использует HttpOnly cookie, realtime — `wss://`, а service worker/PWA installability требуют secure context. `localhost` остаётся стандартным browser exception для development.
 
 Proxy должен корректно передавать WebSocket Upgrade/Connection headers и не логировать секретные credentials. Realtime v2 специально не помещает credential в WebSocket URL.
+
+Service worker регистрируется только production build и обслуживает application shell/static assets. Он не должен кэшировать API/auth/realtime responses или credentials.
 
 ## Redis
 
@@ -56,7 +59,7 @@ Proxy должен корректно передавать WebSocket Upgrade/Con
 
 На alpha-стадии destructive migrations без backup/rehearsal недопустимы.
 
-## Workers и realtime
+## Web workers и realtime
 
 ConnectionManager хранит реальные WebSocket objects только локально процессу. Distributed events/presence идут через Redis, поэтому разрешён multi-worker deployment при исправно работающем Redis.
 
@@ -67,6 +70,42 @@ ConnectionManager хранит реальные WebSocket objects только �
 - cross-worker delivery;
 - cross-worker restriction/disconnect;
 - reconnect клиента после rolling restart.
+
+## Reminder reconciliation worker
+
+Начиная с Stage 5.6 reminder reconciliation может выполняться независимо от открытого браузера.
+
+Ручной запуск:
+
+```bash
+cd backend
+python -m workers.notification_reconciler
+```
+
+Для production-like эксплуатации этот command запускается внешним scheduler'ом: cron, systemd timer, Kubernetes CronJob или аналогом.
+
+### Почему worker не встроен в FastAPI
+
+Он намеренно не запускается из application lifespan. Иначе каждый Uvicorn worker мог бы создать собственный background loop и многократно выполнять один и тот же sweep.
+
+### Bounded/cursor semantics
+
+- run ограничен batch size и max batches;
+- PostgreSQL `NotificationWorkerState` хранит durable cursor;
+- следующий scheduler-run продолжает после предыдущего Account UID;
+- `FOR UPDATE SKIP LOCKED` не позволяет overlap-run выполнять тот же sweep параллельно;
+- после конца списка cursor сбрасывается;
+- crash до сохранения cursor может привести к повторной обработке window, но notification DB dedupe делает это безопасным.
+
+Scheduler interval должен выбираться с учётом минимального reminder lead time и фактической нагрузки. До performance/load gate проект не публикует универсальный production interval.
+
+## PWA/offline contract
+
+Offline mode в Stage 5.6 — это только application shell.
+
+Кэшируются same-origin navigation/static assets. Не кэшируются messages, API projections, notification inbox, auth/session responses и иные приватные fetch/XHR данные.
+
+Это означает: открытая страница может остаться на экране при потере сети, но PubChat пока не обещает offline messaging или восстановление приватного содержимого после закрытия браузера.
 
 ## Uploads
 
@@ -87,9 +126,10 @@ ConnectionManager хранит реальные WebSocket objects только �
 Полный observability stack пока не завершён. До beta необходимы:
 
 - structured application logs;
-- metrics для HTTP/realtime/Redis/PostgreSQL;
+- metrics для HTTP/realtime/Redis/PostgreSQL/reminder worker;
 - error tracking;
 - latency/error-rate dashboards;
+- worker success/failure/cursor metrics;
 - alerting;
 - incident/status procedures.
 
@@ -114,14 +154,17 @@ ConnectionManager хранит реальные WebSocket objects только �
 6. Secrets и CORS origins проверены.
 7. Redis/PostgreSQL доступны.
 8. Frontend production build выполнен.
-9. `/health` и `/service/version` проверены.
-10. Login/refresh, Space realtime и DM smoke test пройдены.
+9. HTTPS/service worker scope проверены.
+10. Если нужны background reminders — scheduler worker настроен отдельно от web processes.
+11. `/health` и `/service/version` проверены.
+12. Login/refresh, Space realtime, DM и notification worker smoke test пройдены.
 
 ## Пока не заявлено как готовое
 
 - Docker Compose/Kubernetes manifests;
 - shared object storage;
-- background notification worker/native push;
+- browser push/native push;
+- offline messaging/private data cache;
 - production-like load test results;
 - формальная PostgreSQL/Redis compatibility matrix;
 - fully automated rollback.
