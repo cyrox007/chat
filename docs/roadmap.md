@@ -6,7 +6,7 @@ Released: **`0.6.0-alpha.1`**.
 
 Current development line: **`0.6.0-alpha.x`** — Pre-beta hardening продолжается.
 
-PubChat остаётся alpha: основные продуктовые контуры сформированы, а clean PostgreSQL migration/integration baseline уже доказан CI. До beta всё ещё нужны representative legacy-data rehearsal, backup/restore, concurrency/DST hardening, Redis/realtime reliability, observability, load/security и финальные accessibility/operations gates.
+PubChat остаётся alpha: основные продуктовые контуры сформированы, а clean PostgreSQL migration/integration baseline и synthetic representative legacy-data rehearsal уже закреплены CI. До beta всё ещё нужны rehearsal на anonymized production-like snapshot, backup/restore, concurrency/DST hardening, Redis/realtime reliability, observability, load/security и финальные accessibility/operations gates.
 
 ## Завершённые checkpoints
 
@@ -82,13 +82,15 @@ Stage 5.6 не добавляет browser/native push и не обещает off
 - clean-database `alembic upgrade head` через всю historical migration chain;
 - `alembic current` достигает единственной current head;
 - `alembic check` закрепляет zero model/schema drift;
+- отдельная synthetic representative pre-revival DB проходит upgrade `4f3d66790cd3 -> head` с before/after data semantics checks;
+- legacy fixture проверяет Account/Persona/Credential/role backfill, Space settings/memberships/tags и active legacy ban semantics;
 - исправлен historical identity credential backfill без изменения deterministic UUID semantics;
 - identity/engagement metadata reconciled с уже выпущенной DB schema;
 - DB URLs строятся через SQLAlchemy `URL.create()` и безопасны для спецсимволов credentials;
 - standalone worker получил explicit ORM model registry/bootstrap вместо зависимости от web import side effects;
 - real async PostgreSQL smoke проверяет migrated core tables и durable notification worker cursor/lock.
 
-Этот checkpoint не означает завершение Stage 6.1: подробнее `prebeta-hardening-v1.md`.
+Этот checkpoint не означает завершение Stage 6.1: synthetic fixture не заменяет rehearsal на anonymized production-like snapshot. Подробнее `prebeta-hardening-v1.md`.
 
 ## Stage 6 — Pre-beta hardening 🚧 `0.6.0-alpha.x`
 
@@ -98,7 +100,8 @@ Stage 5.6 не добавляет browser/native push и не обещает off
 - ✅ production-like PostgreSQL 16 integration environment в CI;
 - ✅ Alembic upgrade from historical clean baseline до current head;
 - ✅ zero model/schema drift через `alembic check`;
-- ⏳ migration rehearsal на репрезентативной копии legacy schema/data с data assertions;
+- ✅ synthetic representative legacy-data rehearsal с data assertions;
+- ⏳ rehearsal на anonymized production-like snapshot/копии реальной legacy schema/data;
 - ⏳ backup/restore drill;
 - ⏳ member-capacity concurrency hardening;
 - ⏳ IANA timezone storage и DST-correct recurring wall-clock semantics.
@@ -174,6 +177,7 @@ Beta назначается только когда launch-critical journeys р�
 - Service worker не является storage для auth/private API data.
 - Background scheduler не запускается внутри каждого web worker.
 - Migration correctness проверяется реальной PostgreSQL, а не только импортом моделей.
+- Synthetic migration fixtures не подменяют rehearsal на production-like snapshot.
 - Communication quality first.
 - Никакой тюремной терминологии.
 - SPA — первый клиент, contracts reusable для Android/iOS.
