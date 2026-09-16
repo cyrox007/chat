@@ -2,6 +2,25 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.5-alpha.2] — 2026-09-16
+
+Stage 6 parallel stabilization checkpoint — production deploy reliability + messaging UX polish.
+
+- production backend переведён на Uvicorn multiprocess supervisor с минимум двумя workers при `DEBUG=False`;
+- systemd владеет постоянным listener `127.0.0.1:9000` через `pubchat-backend.socket`, поэтому supervisor restart не создаёт connection-refused окно для nginx;
+- routine deploy использует `SIGHUP` rolling worker reload вместо остановки единственного listener;
+- добавлены `/health/live` и dependency-aware `/health/ready` для PostgreSQL + production Redis;
+- tracked deploy script выполняет security/Redis preflight, migrations, staged frontend build, rolling reload и readiness gate;
+- SPA build сначала собирается в `dist.next`, затем публикует static/hash assets и только после них `index.html`, не очищая live build во время сборки;
+- CI реально проверяет inherited persistent socket, SIGHUP worker replacement и queued HTTP request во время полного supervisor replacement без connection-refused;
+- authenticated SPA bootstrap повторяет transient network/`502`/`503`/`504` ошибки с bounded backoff;
+- Space chat и Messenger получили compact messaging UX pass: attachment shelf, более плотный composer, calmer message chrome и responsive controls;
+- desktop Space info panel больше не показывает overlay-only close control на широком layout.
+
+Это patch checkpoint внутри `0.6.5`: следующий инфраструктурный Stage 6.2 checkpoint остаётся Redis failover topology/capacity.
+
+Quality gate: production-deploy/realtime/frontend functional CI → version/docs sync → повторный exact-head CI перед merge.
+
 ## [0.6.5-alpha.1] — 2026-09-16
 
 Stage 6 pre-beta hardening checkpoint 6 — bounded WebSocket backpressure.
