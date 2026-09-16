@@ -104,7 +104,7 @@ class SmtpEmailProvider:
             await asyncio.to_thread(self._send_sync, message)
         except EmailProviderError:
             raise
-        except BaseException as exc:
+        except Exception as exc:
             raise _classify_smtp_exception(exc) from exc
         return EmailProviderResult(provider_message_id=str(message["Message-ID"]))
 
