@@ -6,12 +6,12 @@
 
 ## Обязательные сервисы
 
-- FastAPI backend.
+- FastAPI backend за systemd-owned persistent listener.
 - PostgreSQL как durable source of truth.
-- Redis для production realtime/distributed state.
+- Redis для production realtime/distributed presence/context.
 - Собранный Vue SPA/PWA shell.
 - Reverse proxy с HTTPS и WebSocket support.
-- Внешний scheduler для reminder worker, если фоновые reminders должны формироваться без открытого SPA.
+- Внешние scheduler units для background workers, если reminder/email функции включены.
 
 ## Environment
 
@@ -19,14 +19,16 @@ Backend использует `backend/.env.example` как перечень ос
 
 Критически важны:
 
-- `FRONTEND_URL` — allowlist origins CORS;
+- `FRONTEND_URL` — allowlist origins CORS и canonical frontend destination;
 - `DB_*` — PostgreSQL;
-- `REDIS_URL` — Redis;
+- direct `REDIS_URL` либо complete Redis Sentinel topology;
 - `JWT_ACCESS_SECRET_KEY`;
 - `JWT_REFRESH_SECRET_KEY`;
 - `CSRF_SECRET_KEY`.
 
 Три security secret должны быть разными и длиной не менее 32 символов. Production не должен использовать значения из `.env.example`.
+
+Для unread-Messenger email worker дополнительно нужны `MESSAGE_EMAIL_SMTP_HOST` и `MESSAGE_EMAIL_FROM_EMAIL`; SMTP username/password задаются только парой. STARTTLS и implicit SSL взаимоисключающие. Сам внешний канал всё равно остаётся opt-in на уровне Account preference.
 
 Frontend:
 
@@ -35,17 +37,17 @@ Frontend:
 
 ## HTTPS, cookies и PWA
 
-Production должен работать через HTTPS. Refresh session использует HttpOnly cookie, realtime — `wss://`, а service worker/PWA installability требуют secure context. `localhost` остаётся стандартным browser exception для development.
+Production должен работать через HTTPS. Refresh session использует HttpOnly cookie, realtime — `wss://`, а service worker/PWA installability требуют secure context. `localhost` остаётся standard browser exception для development.
 
-Proxy должен корректно передавать WebSocket Upgrade/Connection headers и не логировать секретные credentials. Realtime v2 специально не помещает credential в WebSocket URL.
+Proxy должен корректно передавать WebSocket Upgrade/Connection headers и не логировать credentials. Realtime v2 не помещает credential в WebSocket URL.
 
-Service worker регистрируется только production build и обслуживает application shell/static assets. Он не должен кэшировать API/auth/realtime responses или credentials.
+Service worker обслуживает application shell/static assets и не должен кэшировать API/auth/realtime responses или credentials.
 
 ## Redis
 
-В production Redis обязателен. Он обслуживает одноразовые socket tickets, pub/sub, distributed presence, heartbeat state, rate limiting и idempotency.
+В production Redis обязателен. Он обслуживает one-time socket tickets, pub/sub, distributed presence, active context, heartbeat state, rate limiting и idempotency.
 
-Если Redis недоступен, production realtime не должен молча переходить в process-local режим и создавать ложное ощущение multi-worker correctness.
+Если Redis недоступен, production realtime/message external-delivery policy не должен молча переходить в process-local режим. Offline email worker fail-closed, потому что без distributed presence нельзя безопасно утверждать, что Account отсутствует.
 
 ## PostgreSQL и migrations
 
@@ -63,17 +65,11 @@ Service worker регистрируется только production build и о�
 
 ConnectionManager хранит реальные WebSocket objects только локально процессу. Distributed events/presence идут через Redis, поэтому разрешён multi-worker deployment при исправно работающем Redis.
 
-Проверяйте:
+Проверяйте pub/sub reconnect, heartbeat/presence TTL, cross-worker delivery/restriction и reconnect клиента после rolling restart.
 
-- pub/sub reconnect;
-- heartbeat/presence TTL;
-- cross-worker delivery;
-- cross-worker restriction/disconnect;
-- reconnect клиента после rolling restart.
+Routine production deploy выполняется через `bash ops/deploy.sh`; legacy full-restart updater не должен использоваться после перехода на persistent socket deployment.
 
-## Reminder reconciliation worker
-
-Начиная с Stage 5.6 reminder reconciliation может выполняться независимо от открытого браузера.
+## Activity reminder reconciliation worker
 
 Ручной запуск:
 
@@ -82,88 +78,93 @@ cd backend
 python -m workers.notification_reconciler
 ```
 
-Для production-like эксплуатации этот command запускается внешним scheduler'ом: cron, systemd timer, Kubernetes CronJob или аналогом.
+В production этот command запускается внешним scheduler'ом. Worker намеренно не встроен в FastAPI lifecycle: иначе каждый Uvicorn worker мог бы выполнять собственный background sweep.
 
-### Почему worker не встроен в FastAPI
+`NotificationWorkerState` хранит durable cursor, run bounded по batch/max-batches, а `FOR UPDATE SKIP LOCKED` предотвращает overlap одного cursor sweep. Crash может повторить window, но notification dedupe делает повтор безопасным.
 
-Он намеренно не запускается из application lifespan. Иначе каждый Uvicorn worker мог бы создать собственный background loop и многократно выполнять один и тот же sweep.
+## Unread Messenger email worker
 
-### Bounded/cursor semantics
+Checkpoint `0.6.8-alpha.1` добавляет отдельный re-engagement worker только для Messenger. Offline Space chat не участвует в email delivery.
 
-- run ограничен batch size и max batches;
-- PostgreSQL `NotificationWorkerState` хранит durable cursor;
-- следующий scheduler-run продолжает после предыдущего Account UID;
-- `FOR UPDATE SKIP LOCKED` не позволяет overlap-run выполнять тот же sweep параллельно;
-- после конца списка cursor сбрасывается;
-- crash до сохранения cursor может привести к повторной обработке window, но notification DB dedupe делает это безопасным.
+CLI:
 
-Scheduler interval должен выбираться с учётом минимального reminder lead time и фактической нагрузки. До performance/load gate проект не публикует универсальный production interval.
+```bash
+cd backend
+python -m workers.unread_dm_email_nudge --stage queue
+python -m workers.unread_dm_email_nudge --stage deliver
+python -m workers.unread_dm_email_nudge --stage all
+```
+
+Production units устанавливаются после заполнения SMTP settings:
+
+```bash
+cd /home/projects/pubchat
+bash ops/install-message-email-worker.sh
+```
+
+Installer выполняет security/realtime/SMTP preflight, устанавливает `pubchat-message-email.service` + `.timer`, включает timer и сразу запускает один bounded cycle. По умолчанию timer проверяет работу примерно раз в 15 минут с randomized delay.
+
+Delivery contract:
+
+- candidate queue только для inactive Account с verified email, opt-in и unread DM;
+- Account-level cooldown не обходится новым входящим сообщением;
+- current Redis presence, preference, verified email, unread state и block/privacy повторно проверяются перед send;
+- PostgreSQL ledger не хранит destination email и message body;
+- network send защищён expiring claim lease; concurrency использует `FOR UPDATE SKIP LOCKED`;
+- retryable SMTP failures получают bounded exponential backoff, terminal failures завершаются как `failed`;
+- если пользователь снова online — delivery переносится без расходования retry budget;
+- opt-out/read/block transition переводит stale delivery в `suppressed`.
+
+SMTP не даёт абсолютный exactly-once на границе «relay принял письмо, process умер до DB commit». PubChat использует стабильный `Message-ID` для одного delivery UID, но не обещает downstream дедупликацию со стороны любого relay.
+
+Подробности: [`message-email-delivery-v1.md`](message-email-delivery-v1.md).
 
 ## PWA/offline contract
 
-Offline mode в Stage 5.6 — это только application shell.
+Offline mode пока означает application shell, а не offline private messaging. Не кэшируются messages, API projections, notification inbox, auth/session responses и другие приватные fetch/XHR данные.
 
-Кэшируются same-origin navigation/static assets. Не кэшируются messages, API projections, notification inbox, auth/session responses и иные приватные fetch/XHR данные.
-
-Это означает: открытая страница может остаться на экране при потере сети, но PubChat пока не обещает offline messaging или восстановление приватного содержимого после закрытия браузера.
+Web Push является следующим отдельным delivery adapter и не должен менять этот cache contract.
 
 ## Uploads
 
-Текущая реализация использует локальный `backend/uploads` и отдаёт `/uploads` через FastAPI.
-
-Это ограничение для горизонтального deployment: локальные файлы одного instance не существуют на другом. До production scaling требуется shared volume или object storage/CDN adapter.
+Текущая реализация использует локальный `backend/uploads` и отдаёт `/uploads` через FastAPI. Для горизонтального deployment нужен shared volume или object storage/CDN adapter.
 
 ## Health и version
 
-- `GET /health` — базовый health endpoint.
-- `GET /service/version` — версия backend.
-- FastAPI metadata также использует канонический `VERSION`.
+- `GET /health/live` — process liveness;
+- `GET /health/ready` — dependency-aware PostgreSQL + Redis readiness;
+- `GET /service/version` — версия backend;
+- FastAPI metadata использует канонический `VERSION`.
 
 После deployment сверяйте backend version с ожидаемым release и frontend build version.
 
 ## Observability
 
-Полный observability stack пока не завершён. До beta необходимы:
+Полный observability stack пока не завершён. До beta необходимы structured logs, HTTP/realtime/Redis/PostgreSQL metrics, email/Web Push worker/provider metrics, error tracking, dashboards/alerting и incident/status procedures.
 
-- structured application logs;
-- metrics для HTTP/realtime/Redis/PostgreSQL/reminder worker;
-- error tracking;
-- latency/error-rate dashboards;
-- worker success/failure/cursor metrics;
-- alerting;
-- incident/status procedures.
-
-Нельзя логировать access/refresh token material или WebSocket tickets.
+Нельзя логировать access/refresh tokens, WebSocket tickets, SMTP credentials, destination email из delivery attempts или private message body.
 
 ## Backup
 
-Минимальная стратегия перед production launch должна включать:
-
-- регулярный PostgreSQL backup;
-- проверку restore procedure;
-- backup/migration strategy для uploads/object storage;
-- секреты отдельно от repository backup.
+Минимальная стратегия перед production launch должна включать регулярный PostgreSQL backup, проверенный restore, storage backup policy и хранение secrets отдельно от repository backup.
 
 ## Release deployment checklist
 
 1. Все CI jobs зелёные на exact versioned head.
 2. `VERSION` и `CHANGELOG.md` совпадают.
 3. Database backup выполнен.
-4. Migration rehearsal пройден для рискованной схемы.
-5. `alembic heads` показывает одну head.
-6. Secrets и CORS origins проверены.
-7. Redis/PostgreSQL доступны.
-8. Frontend production build выполнен.
-9. HTTPS/service worker scope проверены.
-10. Если нужны background reminders — scheduler worker настроен отдельно от web processes.
-11. `/health` и `/service/version` проверены.
-12. Login/refresh, Space realtime, DM и notification worker smoke test пройдены.
+4. Migration rehearsal пройден для рискованной схемы; `alembic heads` показывает одну head.
+5. Secrets/CORS/Redis/PostgreSQL проверены.
+6. Frontend production build выполнен staged publish path.
+7. `/health/live`, `/health/ready`, `/service/version` проверены.
+8. Login/refresh, Space realtime, DM и notification smoke tests пройдены.
+9. Если email nudge включается — SMTP preflight + `ops/install-message-email-worker.sh` + timer status проверены отдельно.
 
 ## Пока не заявлено как готовое
 
-- Docker Compose/Kubernetes manifests;
+- Docker Compose/Kubernetes production manifests;
 - shared object storage;
-- browser push/native push;
+- Web Push/native push;
 - offline messaging/private data cache;
 - production-like load test results;
 - формальная PostgreSQL/Redis compatibility matrix;
