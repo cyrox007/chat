@@ -46,9 +46,9 @@ class UnreadDmEmailNudgeTests(unittest.TestCase):
             )
         )
 
-    def test_new_unread_message_can_queue_without_waiting_for_cooldown(self):
+    def test_new_unread_message_does_not_bypass_account_cooldown(self):
         previous = datetime(2026, 9, 16, 12, 0, 0)
-        self.assertTrue(
+        self.assertFalse(
             should_queue_again(
                 previous_aggregate_key="unread-dm:message-a",
                 previous_created_at=previous,
