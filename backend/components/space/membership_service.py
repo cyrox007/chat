@@ -17,8 +17,16 @@ from components.space.service import (
 
 
 async def _load_room(db: AsyncSession, space_uid: UUID) -> Room:
-    room = await db.get(Room, space_uid)
-    if not room or not room.is_active:
+    result = await db.execute(
+        select(Room)
+        .where(
+            Room.uid == space_uid,
+            Room.is_active.is_(True),
+        )
+        .limit(1)
+    )
+    room = result.scalar_one_or_none()
+    if not room:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error_type": "space_not_found"},

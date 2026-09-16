@@ -1,12 +1,17 @@
+import asyncio
 import unittest
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 from pydantic import ValidationError
 
 from app import app
+from components.room.model import Room
 from components.space.content_schemas import SpaceEventCreateRequest, SpaceEventUpdateRequest
 from components.space.invitation_schemas import SpaceInvitationActionRequest
 from components.space.membership_schemas import SpaceMembershipActionRequest
+from components.space.membership_service import _load_room
 from components.space.model import (
     SpaceEvent,
     SpaceHistoryEntry,
@@ -75,6 +80,22 @@ class SpaceContractTests(unittest.TestCase):
     def test_membership_is_unique_per_space_and_account(self):
         names = {constraint.name for constraint in SpaceMembership.__table__.constraints if constraint.name}
         self.assertIn("uq_space_membership", names)
+
+    def test_membership_room_loader_queries_public_uuid(self):
+        space_uid = uuid4()
+        room = Room(uid=space_uid, name="UUID room")
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = room
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+
+        loaded = asyncio.run(_load_room(db, space_uid))
+
+        self.assertIs(loaded, room)
+        statement = db.execute.await_args.args[0]
+        sql = str(statement)
+        self.assertIn("rooms.uid", sql)
+        self.assertNotIn("rooms.id =", sql)
 
     def test_invitation_is_unique_per_space_and_invitee(self):
         names = {constraint.name for constraint in SpaceInvitation.__table__.constraints if constraint.name}
