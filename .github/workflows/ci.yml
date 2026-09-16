@@ -102,6 +102,8 @@ jobs:
           PUBCHAT_REDIS_RECOVERY_INTEGRATION=1 \
             PUBCHAT_REDIS_CONTAINER_ID="$REDIS_CONTAINER_ID" \
             python -m unittest tests.test_redis_recovery_integration
+      - name: Drill Redis Sentinel master promotion and recovery
+        run: bash tests/run_redis_sentinel_failover.sh
       - name: Rehearse multi-process WebSocket rolling restart
         env:
           PUBCHAT_REALTIME_MULTIPROCESS_INTEGRATION: "1"
