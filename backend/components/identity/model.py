@@ -125,6 +125,7 @@ class PlatformRole(Database.Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(64), nullable=False, unique=True)
     description = Column(String(255), nullable=True)
+    authority_level = Column(Integer, nullable=False, default=0)
 
 
 class PlatformPermission(Database.Base):
