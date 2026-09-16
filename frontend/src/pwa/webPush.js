@@ -32,6 +32,18 @@ const currentRegistration = async ({ waitUntilReady = false } = {}) => {
 	return navigator.serviceWorker.ready;
 };
 
+export const dropLocalWebPushSubscription = async () => {
+	if (!isPushApiSupported()) return false;
+	const registration = await currentRegistration();
+	const subscription = registration ? await registration.pushManager.getSubscription() : null;
+	if (!subscription) return false;
+	try {
+		return await subscription.unsubscribe();
+	} catch {
+		return false;
+	}
+};
+
 export const webPushCapability = async () => {
 	const supported = isPushApiSupported();
 	if (!supported) {
