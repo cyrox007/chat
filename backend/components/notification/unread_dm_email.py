@@ -100,9 +100,13 @@ def should_queue_again(
     now: datetime,
     cooldown_minutes: int,
 ) -> bool:
+    """Enforce a real Account-level nudge cooldown, even when new DMs arrive.
+
+    The aggregate key is still part of durable audit/dedupe state, but a newly
+    arrived unread message must not turn this re-engagement channel into an email
+    per message. The worker sends at most one nudge per configured cooldown.
+    """
     if not previous_aggregate_key or previous_created_at is None:
-        return True
-    if previous_aggregate_key != aggregate_key:
         return True
     cooldown = timedelta(minutes=max(60, int(cooldown_minutes)))
     return utc_naive(now) - utc_naive(previous_created_at) >= cooldown
@@ -632,7 +636,6 @@ async def run_email_delivery_worker(
     batch_size: int | None = None,
     now: datetime | None = None,
 ) -> DeliveryWorkerStats:
-    current = utc_naive(now or datetime.now(timezone.utc))
     stats = DeliveryWorkerStats()
     provider = provider or SmtpEmailProvider()
     if not provider.configured:
@@ -646,15 +649,27 @@ async def run_email_delivery_worker(
         return stats
     stats.infrastructure_ready = True
 
-    async with session_factory() as claim_db:
-        claims = await claim_pending_email_deliveries(
-            claim_db,
-            now=current,
-            limit=batch_size or config.MESSAGE_EMAIL_DELIVERY_BATCH_SIZE,
-        )
-    stats.claimed = len(claims)
+    bounded_batch_size = max(
+        1,
+        min(int(batch_size or config.MESSAGE_EMAIL_DELIVERY_BATCH_SIZE), 250),
+    )
 
-    for claim in claims:
+    # Claim only the row that is about to be processed. A worker that pre-claims
+    # a large SMTP batch can otherwise let the later leases expire while earlier
+    # network calls are still in flight, allowing another host to duplicate them.
+    for _ in range(bounded_batch_size):
+        claim_now = utc_naive(now or datetime.now(timezone.utc))
+        async with session_factory() as claim_db:
+            claims = await claim_pending_email_deliveries(
+                claim_db,
+                now=claim_now,
+                limit=1,
+            )
+        if not claims:
+            break
+
+        claim = claims[0]
+        stats.claimed += 1
         try:
             try:
                 online = await realtime_service.is_online(claim.account_uid)
@@ -666,7 +681,7 @@ async def run_email_delivery_worker(
                         claim,
                         failure_class="presence_unavailable",
                         retryable=True,
-                        now=current,
+                        now=claim_now,
                     )
                 stats.retried += int(retried)
                 stats.failed += int(not retried)
@@ -674,26 +689,26 @@ async def run_email_delivery_worker(
 
             if online:
                 async with session_factory() as db:
-                    await _release_online_claim(db, claim, now=current)
+                    await _release_online_claim(db, claim, now=claim_now)
                 stats.deferred_online += 1
                 continue
 
             async with session_factory() as db:
                 preference = await db.get(MessageNotificationPreference, claim.account_uid)
                 if not preference or not preference.email_unread_dm_nudge:
-                    await _suppress_claim(db, claim, reason="email_opt_out", now=current)
+                    await _suppress_claim(db, claim, reason="email_opt_out", now=claim_now)
                     stats.suppressed += 1
                     continue
 
                 recipient = await _verified_email(db, claim.account_uid)
                 if not recipient:
-                    await _suppress_claim(db, claim, reason="verified_email_missing", now=current)
+                    await _suppress_claim(db, claim, reason="verified_email_missing", now=claim_now)
                     stats.suppressed += 1
                     continue
 
                 summary = await _eligible_unread_summary(db, claim.account_uid)
                 if summary is None:
-                    await _suppress_claim(db, claim, reason="no_eligible_unread_dm", now=current)
+                    await _suppress_claim(db, claim, reason="no_eligible_unread_dm", now=claim_now)
                     stats.suppressed += 1
                     continue
 
@@ -712,7 +727,7 @@ async def run_email_delivery_worker(
                         claim,
                         failure_class=exc.failure_class,
                         retryable=exc.retryable,
-                        now=current,
+                        now=utc_naive(now or datetime.now(timezone.utc)),
                     )
                 stats.retried += int(retried)
                 stats.failed += int(not retried)
@@ -725,7 +740,7 @@ async def run_email_delivery_worker(
                         claim,
                         failure_class="provider_error",
                         retryable=True,
-                        now=current,
+                        now=utc_naive(now or datetime.now(timezone.utc)),
                     )
                 stats.retried += int(retried)
                 stats.failed += int(not retried)
@@ -736,7 +751,7 @@ async def run_email_delivery_worker(
                     db,
                     claim,
                     provider_message_id=result.provider_message_id,
-                    now=current,
+                    now=utc_naive(now or datetime.now(timezone.utc)),
                 )
             stats.delivered += 1
         except Exception:
@@ -747,7 +762,7 @@ async def run_email_delivery_worker(
                     claim,
                     failure_class="delivery_worker_error",
                     retryable=True,
-                    now=current,
+                    now=utc_naive(now or datetime.now(timezone.utc)),
                 )
             stats.retried += int(retried)
             stats.failed += int(not retried)
