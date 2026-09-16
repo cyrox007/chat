@@ -1,0 +1,12 @@
+[Unit]
+Description=Schedule PubChat unread Messenger email notification worker
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+RandomizedDelaySec=2min
+Persistent=true
+Unit=pubchat-message-email.service
+
+[Install]
+WantedBy=timers.target
