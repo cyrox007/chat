@@ -2,6 +2,49 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.5.5-alpha.1] — 2026-09-16
+
+Stage 5.6 — Web Application Maturity.
+
+### PWA / offline shell
+- локальный installable manifest с существующими 192/512 icons;
+- production-only service-worker registration;
+- network-first navigation shell;
+- runtime cache только для same-origin static assets;
+- API/auth/realtime/fetch-XHR responses намеренно не кэшируются;
+- access JWT/refresh state не попадают в service-worker cache;
+- спокойный install prompt и update notice;
+- accessibility: named install region, polite update live region, keyboard-visible dismiss focus;
+- CI `check:pwa` guard закрепляет cache/privacy boundary.
+
+### Reminder delivery foundation
+- отдельный `python -m workers.notification_reconciler`;
+- worker не запускается внутри FastAPI/Uvicorn lifecycle;
+- bounded batch/max-batches;
+- durable `NotificationWorkerState` cursor;
+- `FOR UPDATE SKIP LOCKED` не позволяет overlap-run выполнять тот же sweep одновременно;
+- cursor продолжает обработку между scheduler runs и сбрасывается после конца eligible Account set;
+- crash/retry безопасен благодаря existing notification DB dedupe;
+- additive Alembic migration сохраняет одну migration head.
+
+### SPA lifecycle
+- notification unread/sync/polling вынесен из Header в Vuex `notifications` module;
+- `App.vue` владеет authenticated start/stop lifecycle и online reconciliation;
+- Header стал presentation-only для notification badge;
+- NotificationsView обновляет общий unread state после read/read-all;
+- authenticated bootstrap защищён shared in-flight promise от двойного connect/sync;
+- CI `check:lifecycle` guard закрепляет ownership границы.
+
+### Documentation / operations
+- добавлены `web-application-maturity-v1.md` и `ui-ux-pwa.md`;
+- operations описывает внешний scheduler, cursor/lock semantics и PWA cache contract;
+- system requirements фиксируют secure-context/HTTPS требования PWA;
+- architecture обновлена PWA/browser-cache и external-worker boundaries.
+
+Stage 5.6 не добавляет browser/native push и не обещает offline messaging/private data synchronization.
+
+Quality gate: functional exact-head backend/frontend CI → version/docs sync → повторный exact-head CI перед merge.
+
 ## [0.5.4-alpha.1] — 2026-09-15
 
 Stage 5.5 — Explainable Organic Discovery.
