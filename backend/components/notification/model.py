@@ -30,6 +30,32 @@ class ActivityReminderPreference(Database.Base):
     )
 
 
+class MessageNotificationPreference(Database.Base):
+    """Account-level alert preferences for message delivery surfaces.
+
+    These settings control notification UX only. They never grant or remove the
+    right to receive/read a message and they do not replace block/privacy checks.
+    External re-engagement channels default to disabled until explicitly enabled.
+    """
+
+    __tablename__ = "message_notification_preferences"
+
+    account_uid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.uid", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    messenger_in_app = Column(Boolean, nullable=False, default=True)
+    space_in_app = Column(Boolean, nullable=False, default=True)
+    messenger_sound = Column(Boolean, nullable=False, default=True)
+    space_sound = Column(Boolean, nullable=False, default=True)
+    email_unread_dm_nudge = Column(Boolean, nullable=False, default=False)
+    web_push_messenger = Column(Boolean, nullable=False, default=False)
+    web_push_space = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class UserNotification(Database.Base):
     __tablename__ = "user_notifications"
 
