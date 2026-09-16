@@ -2,7 +2,10 @@ import CSRFService from "@/API/CSRFService";
 import UsersServices from "@/API/UsersService";
 import AuthService from "@/API/AuthService";
 import { clearAccessToken, setAccessToken } from "@/API/session";
-import { detachWebPushDeviceBeforeLogout } from "@/pwa/webPush";
+import {
+	detachWebPushDeviceBeforeLogout,
+	dropLocalWebPushSubscription,
+} from "@/pwa/webPush";
 
 const readJSON = (key) => {
 	try {
@@ -65,14 +68,22 @@ export default {
 		},
 	},
 	actions: {
-		clearUser({ commit }) {
+		async clearUser({ commit }) {
+			// If auth expires, invalidate the local PushSubscription as a privacy
+			// boundary. The stale server endpoint will receive 404/410 and be removed.
+			await dropLocalWebPushSubscription().catch(() => null);
 			clearAccessToken();
 			localStorage.removeItem('access_token');
 			commit('setUser', null);
 			commit('setIdentity', null);
 			commit('setAuth', false);
 		},
-		async applyIdentitySession({ commit }, responseData) {
+		async applyIdentitySession({ commit, state }, responseData) {
+			const previousAccountUid = state.identity?.account?.uid || null;
+			const nextAccountUid = responseData.account?.uid || null;
+			if (previousAccountUid && nextAccountUid && previousAccountUid !== nextAccountUid) {
+				await dropLocalWebPushSubscription().catch(() => null);
+			}
 			setAccessToken(responseData.access_token);
 			localStorage.removeItem('access_token');
 			commit('setUser', responseData.user);
