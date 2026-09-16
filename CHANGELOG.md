@@ -2,6 +2,29 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.9-alpha.1] — 2026-09-16
+
+Stage 6 checkpoint 10 — Web Push / PWA Messenger delivery.
+
+- добавлена Account-owned per-device модель `web_push_subscriptions` с endpoint fingerprinting и lifecycle API для register/status/remove;
+- Web Push остаётся явным opt-in: browser permission запрашивается только после действия пользователя и никогда не появляется при bootstrap приложения;
+- VAPID private key хранится только на backend; клиент получает только public key и capability status;
+- offline push queue создаётся только для Messenger и только когда получатель offline; Space chat по-прежнему не создаёт background push pressure;
+- push payload privacy-minimal: без текста личного сообщения, sender identity и иных данных переписки; click destination ограничен same-origin Messenger route;
+- перед network delivery повторно проверяются Redis presence, текущий opt-in, unread state и Account block/privacy;
+- Web Push использует тот же durable `external_delivery_ledger`: per-conversation cooldown/dedupe, `FOR UPDATE SKIP LOCKED`, expiring claim lease и bounded retry/backoff;
+- terminal provider responses `404/410` удаляют протухшие subscriptions; retryable failures остаются bounded;
+- push worker вынесен в отдельные systemd oneshot/timer units и не живёт внутри Uvicorn lifecycle;
+- logout/session teardown инвалидирует local PushSubscription, чтобы shared browser/device не продолжил получать уведомления предыдущего Account;
+- service worker получил `push`/`notificationclick`, сохранив static-only cache contract: auth/API/private data по-прежнему не кэшируются;
+- Notifications UI получил email/Web Push preference controls и explicit device opt-in flow;
+- добавлены migration `k0a6d4f88006`, deterministic Web Push privacy/provider/endpoint tests и PWA regression guard;
+- functional exact-head CI прошёл migration/schema/backend/PostgreSQL/Redis Sentinel/multiprocess/rolling-deploy/frontend gates перед release-doc sync.
+
+Следующий launch-critical workstream — production-grade moderation / Trust & Safety end-to-end flow; параллельно продолжаются browser/security/observability gates и формализация unit economics/monetization boundaries.
+
+Quality gate: functional exact-head CI → version/docs sync → повторный exact-head CI перед merge.
+
 ## [0.6.8-alpha.1] — 2026-09-16
 
 Stage 6 checkpoint 9 — durable unread-Messenger email delivery.

@@ -31,6 +31,8 @@ class PostgreSQLIntegrationTests(unittest.TestCase):
                         "rooms",
                         "user_notifications",
                         "notification_worker_state",
+                        "external_delivery_ledger",
+                        "web_push_subscriptions",
                         "alembic_version",
                     )
                 }

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Query, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
@@ -15,6 +15,8 @@ from components.notification.message_delivery import (
 from components.notification.schemas import (
     ActivityReminderUpdateRequest,
     MessageNotificationPreferenceUpdateRequest,
+    WebPushSubscriptionRemoveRequest,
+    WebPushSubscriptionUpsertRequest,
 )
 from components.notification.service import (
     delete_activity_reminder,
@@ -26,7 +28,14 @@ from components.notification.service import (
     sync_activity_reminders,
     unread_notification_count,
 )
+from components.notification.web_push import (
+    remove_web_push_subscription,
+    upsert_web_push_subscription,
+    web_push_subscription_count,
+)
+from components.space.service import _get_account
 from database import Database
+from settings import config
 
 
 def install(app: FastAPI) -> None:
@@ -103,6 +112,63 @@ def install(app: FastAPI) -> None:
             payload,
         )
         return {"status": "ok", "preferences": preferences}
+
+    @notifications.get("/web-push/config")
+    async def web_push_config(
+        current_user: dict = Depends(auth_middle),
+    ):
+        _ = current_user
+        return {
+            "status": "ok",
+            "enabled": config.web_push_configured(),
+            "public_key": config.WEB_PUSH_VAPID_PUBLIC_KEY if config.web_push_configured() else None,
+        }
+
+    @notifications.get("/web-push/subscriptions/status")
+    async def web_push_status(
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        account = await _get_account(db, current_user["user_uid"])
+        count = await web_push_subscription_count(db, account.uid)
+        return {"status": "ok", "registered_devices": count}
+
+    @notifications.post("/web-push/subscriptions", status_code=status.HTTP_201_CREATED)
+    async def register_web_push_subscription(
+        payload: WebPushSubscriptionUpsertRequest,
+        request: Request,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        if not config.web_push_configured():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"error_type": "web_push_not_configured"},
+            )
+        account = await _get_account(db, current_user["user_uid"])
+        try:
+            item = await upsert_web_push_subscription(
+                db,
+                account.uid,
+                payload,
+                user_agent=request.headers.get("user-agent"),
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error_type": str(exc)},
+            ) from exc
+        return {"status": "ok", "subscription": item}
+
+    @notifications.post("/web-push/subscriptions/remove")
+    async def unregister_web_push_subscription(
+        payload: WebPushSubscriptionRemoveRequest,
+        current_user: dict = Depends(auth_middle),
+        db: AsyncSession = Depends(Database.session_generator),
+    ):
+        account = await _get_account(db, current_user["user_uid"])
+        removed = await remove_web_push_subscription(db, account.uid, payload.endpoint)
+        return {"status": "ok", "removed": removed}
 
     @notifications.get("")
     async def notification_list(

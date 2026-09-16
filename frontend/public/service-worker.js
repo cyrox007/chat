@@ -19,6 +19,11 @@ const isStaticAsset = (request, url) => {
     || url.pathname === '/favicon.ico';
 };
 
+const safePushUrl = (value) => {
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return '/messenger';
+  return value;
+};
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE)
@@ -83,4 +88,49 @@ self.addEventListener('fetch', (event) => {
       return cached || network;
     }),
   );
+});
+
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = {};
+  }
+
+  const title = typeof payload.title === 'string' && payload.title.trim()
+    ? payload.title.trim().slice(0, 120)
+    : 'PubChat';
+  const body = typeof payload.body === 'string' && payload.body.trim()
+    ? payload.body.trim().slice(0, 220)
+    : 'У вас есть новое уведомление.';
+  const tag = typeof payload.tag === 'string' && payload.tag.trim()
+    ? payload.tag.trim().slice(0, 120)
+    : 'pubchat-notification';
+
+  event.waitUntil(self.registration.showNotification(title, {
+    body,
+    tag,
+    renotify: false,
+    icon: '/favicons/android-chrome-192x192.png',
+    badge: '/favicons/favicon-32x32.png',
+    data: { url: safePushUrl(payload.url) },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const path = safePushUrl(event.notification?.data?.url);
+  const targetUrl = new URL(path, self.location.origin).href;
+
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const existing = windows.find((client) => new URL(client.url).origin === self.location.origin);
+    if (existing) {
+      await existing.focus();
+      if ('navigate' in existing) await existing.navigate(targetUrl);
+      return;
+    }
+    if (self.clients.openWindow) await self.clients.openWindow(targetUrl);
+  })());
 });

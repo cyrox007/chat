@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 
 from database import Database
@@ -54,6 +54,36 @@ class MessageNotificationPreference(Database.Base):
     web_push_space = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WebPushSubscription(Database.Base):
+    """One browser/device PushSubscription owned by an Account.
+
+    Endpoint and encryption keys are delivery credentials, not public profile
+    data. They are never returned in notification list projections or logs.
+    """
+
+    __tablename__ = "web_push_subscriptions"
+
+    uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    account_uid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.uid", ondelete="CASCADE"),
+        nullable=False,
+    )
+    endpoint = Column(Text, nullable=False)
+    endpoint_hash = Column(String(64), nullable=False)
+    p256dh = Column(String(256), nullable=False)
+    auth = Column(String(128), nullable=False)
+    user_agent = Column(String(500), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_seen_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("endpoint_hash", name="uq_web_push_subscriptions_endpoint_hash"),
+        Index("ix_web_push_subscriptions_account", "account_uid", "updated_at"),
+    )
 
 
 class ExternalDeliveryLedger(Database.Base):

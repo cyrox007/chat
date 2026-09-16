@@ -2,13 +2,13 @@
 
 ## Текущий статус
 
-Released: **`0.6.8-alpha.1`**.
+Released: **`0.6.9-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
-Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression и durable unread-Messenger email delivery.
+Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression, durable unread-Messenger email delivery и Web Push/PWA Messenger delivery.
 
-Следующий активный Stage 6.3 slice — **Web Push / PWA delivery**: per-device subscriptions, VAPID provider, service-worker push/click flow, opt-in UX и terminal subscription cleanup. После него — delivery observability/browser matrix и оставшиеся beta gates.
+Следующий launch-critical workstream — **production-grade moderation / Trust & Safety**: единый report flow, moderator queue, evidence boundaries, scoped actions, audit trail и appeals end-to-end. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
 
 Отдельно зафиксированы два обязательных launch workstream, которые раньше были недооценены: **production-grade moderation / Trust & Safety** и **устойчивая монетизация / unit economics**. Текущий Report/ModerationAction/Appeal foundation полезен, но сам по себе не является готовой операционной системой модерации. PubChat также не может рассчитывать, что инфраструктура, поддержка и Trust & Safety будут бесконечно финансироваться только энтузиазмом команды.
 
@@ -75,6 +75,20 @@ Direct/Sentinel topology abstraction, real master+replica+3-Sentinel promotion r
 - PostgreSQL integration test фиксирует concurrent disjoint claims + expired-lease recovery;
 - legacy Messenger/Space User UID явно сопоставляется с Account через `legacy_user_uid`, Account block/privacy не смешивается с legacy identity.
 
+### Stage 6 checkpoint 10 — Web Push / PWA Messenger delivery ✅ `0.6.9-alpha.1`
+- Account-owned per-device PushSubscription model с endpoint fingerprinting и explicit register/status/remove lifecycle;
+- VAPID provider: private key backend-only, SPA получает только public key/capability;
+- browser notification permission запрашивается только после явного user gesture и никогда не появляется на bootstrap;
+- offline Web Push queue создаётся только для Messenger; offline Space chat по-прежнему не создаёт external re-engagement pressure;
+- privacy-minimal push payload не содержит private message body или sender identity и открывает только same-origin Messenger route;
+- Redis presence, opt-in, unread state и Account block/privacy повторно проверяются перед provider send;
+- общий `external_delivery_ledger` используется для Web Push с per-conversation cooldown/dedupe, `FOR UPDATE SKIP LOCKED`, expiring lease и bounded retry/backoff;
+- terminal provider responses `404/410` удаляют протухшие subscriptions;
+- отдельный systemd worker/timer выносит delivery из Uvicorn lifecycle;
+- service worker получил push/click flow без расширения static-only cache boundary;
+- logout/session teardown отвязывает local push subscription best-effort для shared-browser safety;
+- Notifications UI получил email/Web Push controls; deterministic provider/privacy/PWA guards закреплены в CI.
+
 ## Stage 6 — Pre-beta hardening 🚧 `0.6.x-alpha`
 
 ### 6.1 Data / migrations 🚧
@@ -103,9 +117,9 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ✅ durable external email ledger + SMTP provider + retry/backoff + expiring claim lease;
 - ✅ concurrent worker / `SKIP LOCKED` claim validation и expired-lease recovery;
 - ✅ external email scheduler/service unit вне web-worker lifecycle;
-- ⏳ Web Push adapter: Service Worker/Push API/Notifications API + VAPID + per-device subscription lifecycle;
-- ⏳ terminal push subscription cleanup + retry/backoff integration;
-- ⏳ notification preferences UI для email/Web Push;
+- ✅ Web Push adapter: Service Worker/Push API/Notifications API + VAPID + per-device subscription lifecycle;
+- ✅ terminal push subscription cleanup + retry/backoff integration;
+- ✅ notification preferences UI для email/Web Push;
 - ⏳ delivery metrics/health, load/idempotency profiling.
 
 ### 6.4 Discovery / performance 🚧
@@ -127,6 +141,7 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ✅ `/health/live` и dependency-aware `/health/ready`;
 - ✅ health-gated rolling deploy + staged asset-first SPA publish;
 - ✅ external Messenger email systemd scheduler/service + fail-fast provider config installer;
+- ✅ external Messenger Web Push systemd scheduler/service + VAPID preflight installer;
 - ⏳ Sentinel topology/promotion/pool metrics и alerting;
 - ⏳ email/push delivery metrics/provider health;
 - ⏳ structured logs/error tracking, incident procedure;
@@ -140,7 +155,7 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ✅ historical Safari registration defect audit;
 - ⏳ Playwright WebKit registration/login/refresh through production-like same-origin proxy;
 - ⏳ Chromium + Firefox + WebKit critical-journey matrix;
-- ⏳ notification preferences UI и PWA Web Push permission/subscription UX;
+- ✅ notification preferences UI и baseline PWA Web Push permission/subscription UX;
 - ⏳ iOS/iPadOS installed Home Screen push flow в device/browser matrix;
 - ⏳ keyboard/focus, contrast/mobile/narrow viewport, onboarding and terminology audit;
 - 🚧 error/empty/offline consistency.
@@ -214,6 +229,7 @@ Beta назначается только когда launch-critical journeys р�
 - Active context подавляет duplicate UX, но не является authorization state.
 - Notification routing не расширяет block/privacy/visibility.
 - External delivery ledger не хранит private message text или destination email.
+- Web Push payload не хранит/не раскрывает private message body или sender identity; VAPID private key остаётся server-only.
 - Background scheduler не запускается внутри каждого web worker.
 - Service worker не является storage для auth/private API data.
 - Production listener принадлежит process manager/systemd; routine deploy rolling, frontend publish staged.

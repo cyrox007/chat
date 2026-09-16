@@ -109,6 +109,31 @@ class Config:
     MESSAGE_EMAIL_FROM_EMAIL = os.getenv("MESSAGE_EMAIL_FROM_EMAIL", "").strip()
     MESSAGE_EMAIL_FROM_NAME = os.getenv("MESSAGE_EMAIL_FROM_NAME", "PubChat").strip() or "PubChat"
 
+    # Standards-based Web Push. VAPID keys are optional at application startup;
+    # the standalone push worker refuses to start until the full key pair and
+    # contact subject are configured. Payloads remain generic/privacy-minimal.
+    WEB_PUSH_VAPID_PUBLIC_KEY = os.getenv("WEB_PUSH_VAPID_PUBLIC_KEY", "").strip()
+    WEB_PUSH_VAPID_PRIVATE_KEY = os.getenv("WEB_PUSH_VAPID_PRIVATE_KEY", "").strip()
+    WEB_PUSH_VAPID_SUBJECT = os.getenv("WEB_PUSH_VAPID_SUBJECT", "").strip()
+    WEB_PUSH_TTL_SECONDS = max(60, int(os.getenv("WEB_PUSH_TTL_SECONDS", "300")))
+    WEB_PUSH_DELIVERY_MAX_ATTEMPTS = max(1, int(os.getenv("WEB_PUSH_DELIVERY_MAX_ATTEMPTS", "5")))
+    WEB_PUSH_DELIVERY_RETRY_BASE_SECONDS = max(
+        30, int(os.getenv("WEB_PUSH_DELIVERY_RETRY_BASE_SECONDS", "60"))
+    )
+    WEB_PUSH_DELIVERY_RETRY_MAX_SECONDS = max(
+        WEB_PUSH_DELIVERY_RETRY_BASE_SECONDS,
+        int(os.getenv("WEB_PUSH_DELIVERY_RETRY_MAX_SECONDS", "1800")),
+    )
+    WEB_PUSH_DELIVERY_LEASE_SECONDS = max(
+        60, int(os.getenv("WEB_PUSH_DELIVERY_LEASE_SECONDS", "180"))
+    )
+    WEB_PUSH_DELIVERY_BATCH_SIZE = max(
+        1, min(250, int(os.getenv("WEB_PUSH_DELIVERY_BATCH_SIZE", "50")))
+    )
+    WEB_PUSH_CONVERSATION_COOLDOWN_SECONDS = max(
+        30, int(os.getenv("WEB_PUSH_CONVERSATION_COOLDOWN_SECONDS", "90"))
+    )
+
     # Security. There are intentionally no production-capable default secrets.
     JWT_ACCESS_SECRET_KEY = os.getenv("JWT_ACCESS_SECRET_KEY", "")
     JWT_REFRESH_SECRET_KEY = os.getenv("JWT_REFRESH_SECRET_KEY", "")
@@ -171,6 +196,26 @@ class Config:
             raise RuntimeError("MESSAGE_EMAIL_SMTP_HOST must be configured before enabling the email worker")
         if not self.MESSAGE_EMAIL_FROM_EMAIL:
             raise RuntimeError("MESSAGE_EMAIL_FROM_EMAIL must be configured before enabling the email worker")
+
+    def web_push_configured(self) -> bool:
+        return bool(
+            self.WEB_PUSH_VAPID_PUBLIC_KEY
+            and self.WEB_PUSH_VAPID_PRIVATE_KEY
+            and self.WEB_PUSH_VAPID_SUBJECT
+        )
+
+    def ensure_web_push_settings(self) -> None:
+        if not self.WEB_PUSH_VAPID_PUBLIC_KEY:
+            raise RuntimeError("WEB_PUSH_VAPID_PUBLIC_KEY must be configured before enabling Web Push")
+        if not self.WEB_PUSH_VAPID_PRIVATE_KEY:
+            raise RuntimeError("WEB_PUSH_VAPID_PRIVATE_KEY must be configured before enabling Web Push")
+        if not self.WEB_PUSH_VAPID_SUBJECT:
+            raise RuntimeError("WEB_PUSH_VAPID_SUBJECT must be configured before enabling Web Push")
+        if not (
+            self.WEB_PUSH_VAPID_SUBJECT.startswith("mailto:")
+            or self.WEB_PUSH_VAPID_SUBJECT.startswith("https://")
+        ):
+            raise RuntimeError("WEB_PUSH_VAPID_SUBJECT must be a mailto: or https:// contact URI")
 
     def database_url(self, async_mode=False):
         driver = "postgresql+asyncpg" if async_mode else "postgresql"
