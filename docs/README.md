@@ -20,6 +20,7 @@
 - [`ui-ux-kit.md`](ui-ux-kit.md) — основная дизайн-система и UX-правила.
 - [`ui-ux-notifications.md`](ui-ux-notifications.md) — notification/reminder UX extension.
 - [`ui-ux-discovery.md`](ui-ux-discovery.md) — explainable organic discovery UX rules.
+- [`ui-ux-pwa.md`](ui-ux-pwa.md) — install/update/offline UX extension для Stage 5.6.
 
 ## Для разработчика
 
