@@ -111,15 +111,18 @@ class UnreadDmEmailNudgeTests(unittest.TestCase):
                 dialog_count=2,
             )
             message = build_unread_dm_email(request)
-            payload = message.as_string()
-            self.assertIn("7", payload)
-            self.assertIn("2", payload)
-            self.assertNotIn("secret-message-body", payload)
+            plain = message.get_body(preferencelist=("plain",)).get_content()
+            html = message.get_body(preferencelist=("html",)).get_content()
+            decoded = f"{plain}\n{html}"
+            self.assertIn("7", decoded)
+            self.assertIn("2", decoded)
+            self.assertNotIn("secret-message-body", decoded)
+            self.assertIn("/messenger", plain)
+            self.assertIn("/messenger", html)
             self.assertEqual(
                 message["Message-ID"],
                 deterministic_message_id(delivery_uid, "notify@example.test"),
             )
-            self.assertIn("/messenger", payload)
         finally:
             config.MESSAGE_EMAIL_FROM_EMAIL = previous_from_email
             config.MESSAGE_EMAIL_FROM_NAME = previous_from_name
