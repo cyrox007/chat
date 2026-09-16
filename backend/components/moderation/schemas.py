@@ -170,3 +170,26 @@ class PlatformRestrictionRevokeRequest(BaseModel):
     def clean_reason(self):
         self.reason = " ".join(self.reason.split())
         return self
+
+
+class PlatformRestrictionAppealCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    body: str = Field(min_length=10, max_length=4000)
+
+    @model_validator(mode="after")
+    def clean_body(self):
+        self.body = self.body.strip()
+        return self
+
+
+class PlatformRestrictionAppealResolveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision: AppealResolution
+    resolution: str = Field(min_length=3, max_length=4000)
+
+    @model_validator(mode="after")
+    def clean_resolution(self):
+        self.resolution = " ".join(self.resolution.split())
+        return self
