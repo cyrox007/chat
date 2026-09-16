@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 
+from components.model_registry import ensure_models_registered
 from components.notification.worker_service import (
     DEFAULT_MAX_BATCHES,
     DEFAULT_WORKER_BATCH_SIZE,
@@ -35,6 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 async def run(batch_size: int, max_batches: int) -> int:
+    ensure_models_registered()
     try:
         stats = await run_reminder_worker(
             Database.sessionmaker(),
