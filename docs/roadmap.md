@@ -2,13 +2,13 @@
 
 ## Текущий статус
 
-Released: **`0.6.5-alpha.1`**.
+Released: **`0.6.5-alpha.2`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
-PubChat остаётся alpha: PostgreSQL migration/recovery, Redis distributed/restart recovery, real multi-process Uvicorn/WebSocket rolling-restart и bounded slow-consumer backpressure baselines уже закреплены CI. До beta всё ещё нужны production-like snapshot rehearsal, member-capacity/DST hardening, Redis failover/capacity, observability, load/security и финальные accessibility/operations gates.
+PubChat остаётся alpha: PostgreSQL migration/recovery, Redis distributed/restart recovery, real multi-process Uvicorn/WebSocket rolling-restart, bounded slow-consumer backpressure и production deploy continuity уже закреплены CI. До beta всё ещё нужны production-like snapshot rehearsal, member-capacity/DST hardening, Redis failover/capacity, observability, load/security и финальные accessibility/operations gates.
 
-UX-polish коммуникационных поверхностей выполняется параллельно внутри **6.7 UX/accessibility** и не заменяет следующий инфраструктурный checkpoint **6.2 Redis failover/capacity**. Цель — улучшать основной пользовательский сценарий общения без изменения realtime/data contracts.
+UX-polish коммуникационных поверхностей выполняется параллельно внутри **6.7 UX/accessibility** и не заменяет следующий инфраструктурный checkpoint **6.2 Redis failover/capacity**. Production deploy hardening выполняется внутри **6.6 Operations / observability** и также не меняет порядок realtime checkpoint.
 
 ## Завершённые checkpoints
 
@@ -77,6 +77,15 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - deterministic tests подтверждают ordering, non-blocking overflow и timeout isolation;
 - multi-process/recovery/backup/frontend gates остаются зелёными.
 
+### Stage 6 stabilization patch — Deploy continuity & messaging UX ✅ `0.6.5-alpha.2`
+- production listener принадлежит systemd socket unit и остаётся bound при замене Uvicorn supervisor;
+- production Uvicorn работает минимум с двумя workers и routine deploy использует `SIGHUP` rolling reload;
+- `/health/live` и `/health/ready` дают liveness/dependency readiness contract;
+- CI проверяет HTTP continuity как при worker reload, так и при полном supervisor replacement за persistent inherited socket;
+- frontend строится staged и публикует `index.html` только после assets, не очищая live SPA во время build;
+- authenticated bootstrap повторяет transient network/`502`/`503`/`504` ошибки;
+- Space chat/Messenger получили compact composer, attachment shelf и первый density/interaction polish pass.
+
 ## Stage 6 — Pre-beta hardening 🚧 `0.6.x-alpha`
 
 ### 6.1 Data / migrations 🚧
@@ -124,19 +133,27 @@ Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, i
 - financial threat model до real payments.
 
 ### 6.6 Operations / observability
-- structured logs/metrics/error tracking;
-- alerting/status/incident procedure;
-- deployment/recovery runbook;
-- backup retention/encryption/off-site storage + RPO/RTO policy;
-- shared/object storage;
-- expanded PostgreSQL/Redis compatibility matrix.
+- ✅ production Uvicorn supervisor: минимум два worker при `DEBUG=False`, development reload только при `DEBUG=True`;
+- ✅ systemd-owned persistent listener `127.0.0.1:9000` переживает application supervisor restart;
+- ✅ tracked systemd service с `Restart=always` и `SIGHUP` rolling reload вместо routine full restart;
+- ✅ `/health/live` и dependency-aware `/health/ready` для PostgreSQL + production Redis;
+- ✅ health-gated deploy script и отдельный one-time installer для перехода с legacy service;
+- ✅ staged SPA publish не очищает текущий live build и переключает `index.html` последним;
+- ✅ CI rehearsal подтверждает HTTP continuity при SIGHUP и при полном supervisor replacement за persistent socket;
+- ⏳ structured logs/metrics/error tracking;
+- ⏳ alerting/status/incident procedure;
+- 🚧 deployment/recovery runbook;
+- ⏳ backup retention/encryption/off-site storage + RPO/RTO policy;
+- ⏳ shared/object storage;
+- ⏳ expanded PostgreSQL/Redis compatibility matrix.
 
 ### 6.7 UX/accessibility
 - 🚧 messaging surfaces polish v1: единый compact composer для Space chat и Messenger, встроенная attachment shelf, меньше постоянного visual chrome, desktop/mobile responsive density;
 - 🚧 desktop information panels: overlay-only close controls и более компактная secondary navigation;
+- ✅ authenticated bootstrap повторяет transient network/`502`/`503`/`504` сбои с bounded backoff вместо ложного окончательного outage state;
 - ⏳ полный keyboard/focus audit;
 - ⏳ contrast/mobile/narrow viewport pass;
-- ⏳ error/empty/offline consistency;
+- 🚧 error/empty/offline consistency;
 - ⏳ onboarding usability;
 - ⏳ terminology audit;
 - ⏳ PWA install/update browser matrix.
@@ -165,6 +182,10 @@ Beta назначается только когда launch-critical journeys р�
 - Production realtime не должен молча использовать process-local fallback.
 - Redis recovery не требует process restart; ephemeral state восстанавливается протоколом, а не становится durable.
 - Slow realtime consumer не должен блокировать fan-out другим соединениям.
+- Production HTTP listener принадлежит process manager/systemd и не должен исчезать при routine application deploy/restart.
+- Routine production deploy обновляет workers rolling reload; full application supervisor replacement не должен приводить к connection-refused на listener.
+- Frontend build не очищает live SPA до успешной staged сборки и публикации assets.
+- Rolling application deploy требует expand/contract-compatible schema changes на overlap window.
 - Communication quality first.
 - Никакой тюремной терминологии.
 - SPA — первый клиент, contracts reusable для Android/iOS.

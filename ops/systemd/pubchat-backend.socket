@@ -1,0 +1,11 @@
+[Unit]
+Description=PubChat Backend Socket
+
+[Socket]
+ListenStream=127.0.0.1:9000
+NoDelay=true
+Backlog=1024
+Service=pubchat-backend.service
+
+[Install]
+WantedBy=sockets.target

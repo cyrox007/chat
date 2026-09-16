@@ -14,6 +14,18 @@ const router = useRouter();
 const networkOnline = ref(navigator.onLine);
 const bootstrapError = ref(false);
 let authenticatedBootstrap = null;
+let bootstrapRetryTimer = null;
+let bootstrapRetryAttempt = 0;
+
+const BOOTSTRAP_RETRY_DELAYS = [1000, 2000, 5000, 10000, 30000];
+const TRANSIENT_BOOTSTRAP_STATUSES = new Set([502, 503, 504]);
+
+const clearBootstrapRetry = () => {
+	if (bootstrapRetryTimer) {
+		window.clearTimeout(bootstrapRetryTimer);
+		bootstrapRetryTimer = null;
+	}
+};
 
 const connectionNotice = computed(() => {
 	if (!store.getters.isAuth) return null;
@@ -61,6 +73,18 @@ const bootstrapAuthenticatedServices = async () => {
 	const room = store.getters['chat/getCurrentRoom'];
 	if (room?.uid) await store.dispatch('chat/connectSocket', room.uid);
 	bootstrapError.value = false;
+	bootstrapRetryAttempt = 0;
+	clearBootstrapRetry();
+};
+
+const scheduleBootstrapRetry = () => {
+	if (bootstrapRetryTimer || !store.getters.isAuth || !networkOnline.value) return;
+	const delay = BOOTSTRAP_RETRY_DELAYS[Math.min(bootstrapRetryAttempt, BOOTSTRAP_RETRY_DELAYS.length - 1)];
+	bootstrapRetryAttempt += 1;
+	bootstrapRetryTimer = window.setTimeout(() => {
+		bootstrapRetryTimer = null;
+		if (store.getters.isAuth && networkOnline.value) ensureSessionAndConnect();
+	}, delay);
 };
 
 const ensureSessionAndConnect = async () => {
@@ -69,7 +93,13 @@ const ensureSessionAndConnect = async () => {
 
 	authenticatedBootstrap = bootstrapAuthenticatedServices()
 		.catch((error) => {
-			if (error.response?.status !== 401) bootstrapError.value = true;
+			const status = error.response?.status;
+			if (status === 401) return;
+
+			bootstrapError.value = true;
+			if (!error.response || TRANSIENT_BOOTSTRAP_STATUSES.has(status)) {
+				scheduleBootstrapRetry();
+			}
 		})
 		.finally(() => {
 			authenticatedBootstrap = null;
@@ -79,6 +109,8 @@ const ensureSessionAndConnect = async () => {
 };
 
 const handleSessionExpired = async () => {
+	clearBootstrapRetry();
+	bootstrapRetryAttempt = 0;
 	await stopAuthenticatedServices();
 	await store.dispatch('clearUser');
 	if (router.currentRoute.value.name !== 'login') {
@@ -88,12 +120,16 @@ const handleSessionExpired = async () => {
 
 const handleOffline = () => {
 	networkOnline.value = false;
+	clearBootstrapRetry();
 };
 
 const handleOnline = () => {
 	networkOnline.value = true;
 	bootstrapError.value = false;
+	bootstrapRetryAttempt = 0;
+	clearBootstrapRetry();
 	if (!store.getters.isAuth) return;
+	ensureSessionAndConnect();
 	store.dispatch('messenger/reconnectIfNeeded');
 	store.dispatch('chat/reconnectIfNeeded');
 	store.dispatch('notifications/sync').catch(() => null);
@@ -108,6 +144,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+	clearBootstrapRetry();
 	store.dispatch('notifications/stopPolling');
 	window.removeEventListener('pubchat:session-expired', handleSessionExpired);
 	window.removeEventListener('offline', handleOffline);
@@ -118,6 +155,8 @@ watch(() => store.getters.isAuth, (isAuthenticated, wasAuthenticated) => {
 	if (isAuthenticated && !wasAuthenticated) {
 		ensureSessionAndConnect();
 	} else if (!isAuthenticated && wasAuthenticated) {
+		clearBootstrapRetry();
+		bootstrapRetryAttempt = 0;
 		stopAuthenticatedServices();
 	}
 });
