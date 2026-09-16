@@ -81,6 +81,16 @@ class Config:
             database=self.DB_NAME,
         ).render_as_string(hide_password=False)
 
+    def alembic_database_url(self):
+        """Return a ConfigParser-safe SQLAlchemy URL for Alembic.
+
+        Alembic stores sqlalchemy.url through Python ConfigParser. Percent-encoded
+        credentials (for example a backslash rendered as %5C) must therefore
+        escape literal percent signs as %% before set_main_option().
+        ConfigParser resolves %% back to % when the value is read.
+        """
+        return self.database_url().replace("%", "%%")
+
     # File storage
     UPLOADS_BASE_URL = f"{SERVER_HTTP_PROTOCOL}{SERVER_ADDR}/uploads/"
     MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", 10 * 1024 * 1024))
