@@ -55,10 +55,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-	<aside v-if="canInstall" class="install-prompt" aria-label="Установка PubChat">
+	<aside v-if="canInstall" class="install-prompt" role="region" aria-labelledby="pubchat-install-title">
 		<div class="install-prompt__icon" aria-hidden="true"><i class="fas fa-mobile-screen-button"></i></div>
 		<div class="install-prompt__copy">
-			<strong>PubChat можно установить</strong>
+			<strong id="pubchat-install-title">PubChat можно установить</strong>
 			<span>Откроется как отдельное приложение, без лишней вкладки браузера.</span>
 		</div>
 		<div class="install-prompt__actions">
