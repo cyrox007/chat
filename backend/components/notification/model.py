@@ -72,7 +72,7 @@ class WebPushSubscription(Database.Base):
         nullable=False,
     )
     endpoint = Column(Text, nullable=False)
-    endpoint_hash = Column(String(64), nullable=False, unique=True)
+    endpoint_hash = Column(String(64), nullable=False)
     p256dh = Column(String(256), nullable=False)
     auth = Column(String(128), nullable=False)
     user_agent = Column(String(500), nullable=True)
@@ -81,6 +81,7 @@ class WebPushSubscription(Database.Base):
     last_seen_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     __table_args__ = (
+        UniqueConstraint("endpoint_hash", name="uq_web_push_subscriptions_endpoint_hash"),
         Index("ix_web_push_subscriptions_account", "account_uid", "updated_at"),
     )
 
