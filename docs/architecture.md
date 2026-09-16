@@ -9,6 +9,7 @@ PubChat — modular monolith с отдельным Vue SPA-клиентом.
 - PostgreSQL — authoritative persistent storage.
 - Redis — ephemeral/distributed realtime storage и transport coordination.
 - HTTP API и WebSocket contracts проектируются независимо от Vue, чтобы их могли использовать будущие Android/iOS клиенты.
+- Reminder reconciliation может выполняться отдельным CLI worker process, но не живёт внутри FastAPI lifecycle.
 
 Главное правило: бизнес-правила не должны существовать только во frontend.
 
@@ -20,6 +21,7 @@ PubChat — modular monolith с отдельным Vue SPA-клиентом.
 │   ├── alembic/                 # migrations
 │   ├── components/              # доменные модели/services/schemas
 │   ├── views/                   # FastAPI HTTP/WS routers
+│   ├── workers/                 # bounded external jobs, not web lifecycle
 │   ├── services/                # compatibility/application services
 │   ├── socket_manager/          # websocket connection layer
 │   ├── tests/                   # contract/regression tests
@@ -27,8 +29,11 @@ PubChat — modular monolith с отдельным Vue SPA-клиентом.
 │   ├── database.py              # async SQLAlchemy engine/session
 │   └── settings.py              # environment configuration
 ├── frontend/
+│   ├── public/                  # manifest/service worker/static assets
+│   ├── scripts/                 # CI/static architecture guards
 │   ├── src/API/                 # HTTP/realtime client services
 │   ├── src/components/          # reusable UI
+│   ├── src/pwa/                 # PWA registration lifecycle
 │   ├── src/router/              # SPA routes
 │   ├── src/stores/              # Vuex application state
 │   ├── src/views/               # route-level screens
@@ -163,13 +168,7 @@ Reports приватны. Transparency означает понятное реш�
 
 `PersonaAppearance` и `SpaceAppearance` — cosmetic-only.
 
-Они не могут изменять:
-
-- roles;
-- permissions;
-- trust;
-- moderation power;
-- discovery ranking.
+Они не могут изменять roles, permissions, trust, moderation power или discovery ranking.
 
 ### Activities
 
@@ -177,34 +176,30 @@ Reports приватны. Transparency означает понятное реш�
 
 ### Conversation Rounds
 
-Activity-scoped social prompts:
-
-- icebreaker;
-- choice;
-- story_chain.
-
-Один open round на Activity и один response на Account+round закреплены DB constraints.
+Activity-scoped social prompts: icebreaker, choice, story_chain. Один open round на Activity и один response на Account+round закреплены DB constraints.
 
 ### Achievements
 
-`AchievementDefinition` + `AccountAchievement`.
-
-Grant выполняют только backend system hooks. Public projection не раскрывает private source/context.
+`AchievementDefinition` + `AccountAchievement`. Grant выполняют только backend system hooks. Public projection не раскрывает private source/context.
 
 ## 9. Occurrences & Notifications
 
-Выпущено в `0.5.2-alpha.1`.
+Выпущено в `0.5.2-alpha.1`, delivery foundation развивается в Stage 5.6.
 
 - `ActivityOccurrence` — bounded concrete occurrence;
 - `ActivityReminderPreference` — private Account opt-in;
-- `UserNotification` — private inbox.
+- `UserNotification` — private inbox;
+- `NotificationWorkerState` — durable cursor внешнего reconciliation worker.
 
 Recurring template остаётся источником истины. Occurrences материализуются только в ограниченном горизонте и имеют уникальность `(activity_uid, starts_at)`.
 
-Reconciliation idempotent и пригоден для двух вызывающих слоёв:
+Reconciliation idempotent и может вызываться:
 
-- SPA sync сейчас;
-- background worker/native push adapter позже.
+- SPA sync;
+- внешним `python -m workers.notification_reconciler`;
+- будущим push-delivery adapter.
+
+Reminder worker не запускается из FastAPI lifespan. Он обрабатывает bounded Account windows, хранит durable cursor и использует `FOR UPDATE SKIP LOCKED`, чтобы overlapping scheduler runs не выполняли один и тот же sweep одновременно.
 
 ## 10. Creator Support & Cosmetic Gifts
 
@@ -230,7 +225,7 @@ Reconciliation idempotent и пригоден для двух вызывающи
 - gift/entitlement не меняет trust, permissions, moderation authority или discovery ranking;
 - `0.5.3` не содержит wallet/currency/checkout/payment-provider state.
 
-Реальный money flow, если будет добавлен позже, должен стать отдельным financial domain с provider-event idempotency, fraud/refund/chargeback lifecycle и жёсткой границей между financial state и social authority.
+Реальный money flow должен стать отдельным financial domain с provider-event idempotency, fraud/refund/chargeback lifecycle и жёсткой границей между financial state и social authority.
 
 ## 11. Explainable Organic Discovery
 
@@ -244,24 +239,30 @@ Pipeline:
 canonical eligibility -> block/privacy suppression -> bounded candidate context -> organic score -> diversity -> explainable projection
 ```
 
-Сигналы organic-v1:
+Organic-v1 использует distinct recent authors, nearest allowed Activity/Event, shared tags/purpose, explicit Persona social intent, modest freshness/member-count и weak membership context.
 
-- distinct recent authors;
-- nearest allowed Activity/Event;
-- shared tags/purpose;
-- explicit Persona social intent;
-- modest freshness/member-count context;
-- weak membership/pending context.
-
-Score остаётся server-only. Клиент получает только до трёх reasons и optional upcoming context.
-
-Не используются legacy `Room.rating`, support/gifts, price/currency/payment или moderation authority.
+Score остаётся server-only. Не используются legacy `Room.rating`, support/gifts, price/currency/payment или moderation authority.
 
 Privacy rule важнее ranking: алгоритм не может сделать недопустимый Space видимым и не раскрывает upcoming details private/unlisted Space без active membership.
 
 Текущий bounded pool ограничен 200 canonical candidates и пока bias-ится к новым Spaces из-за исходной catalog ordering. До beta candidate generation должен комбинировать несколько bounded источников активности/контекста без unbounded scan.
 
-## 12. Data boundaries
+## 12. PWA и client lifecycle
+
+Stage 5.6 добавляет installable PWA shell, но не меняет источник истины.
+
+Service worker:
+
+- регистрируется только production build;
+- обслуживает navigation shell/static assets;
+- не кэширует generic fetch/XHR/API/auth/realtime responses;
+- не хранит access JWT или refresh state.
+
+Offline shell — presentation capability, а не новый data layer.
+
+Notification lifecycle централизован в Vuex `notifications` module. `App.vue` владеет start/stop polling, auth bootstrap и online reconciliation. Header не делает сетевые вызовы notifications и только отображает store state.
+
+## 13. Data boundaries
 
 ### PostgreSQL
 
@@ -271,60 +272,35 @@ Privacy rule важнее ranking: алгоритм не может сделат
 
 Не является permanent database продукта. Если Redis очищен, permanent relationships/messages/moderation/history не должны исчезать.
 
+### Browser cache / Service Worker
+
+Не является persistent product database и не должен содержать приватные API/auth данные. Его назначение — installability и static application shell.
+
 ### Local files
 
 `backend/uploads` — текущая compatibility/local development storage. Для multi-instance production требуется shared/object storage.
 
-## 13. API boundaries
+## 14. API boundaries
 
-Новые домены используют versioned prefixes, например:
-
-- `/identity/v2`;
-- `/realtime/v2`;
-- `/spaces/v1`;
-- `/social/v1`;
-- `/moderation/v1`;
-- `/appearance/v1`;
-- `/activities/v1`;
-- `/achievements/v1`;
-- `/activity-occurrences/v1`;
-- `/notifications/v1`;
-- `/support/v1`;
-- `/discovery/v1`.
+Новые домены используют versioned prefixes, например `/identity/v2`, `/realtime/v2`, `/spaces/v1`, `/social/v1`, `/moderation/v1`, `/appearance/v1`, `/activities/v1`, `/achievements/v1`, `/activity-occurrences/v1`, `/notifications/v1`, `/support/v1`, `/discovery/v1`.
 
 ORM object не является API DTO. Public/private projections должны быть явными.
 
-## 14. UI architecture
+## 15. UI architecture
 
-SPA route-driven. Основные области:
-
-- Space Discovery;
-- People;
-- Messenger;
-- Profile/Persona;
-- Space conversation;
-- Space Community;
-- Space Life;
-- Space Support;
-- Safety/Moderation;
-- Achievements;
-- Notifications.
+SPA route-driven. Основные области: Space Discovery, People, Messenger, Profile/Persona, Space conversation, Space Community, Space Life, Space Support, Safety/Moderation, Achievements и Notifications.
 
 Backend remains authoritative для permissions. Frontend route guards — только UX hint.
 
-## 15. Legacy debt
+Application-shell responsibilities живут в `App.vue`/Vuex modules, а route/header components не должны владеть global polling/reconciliation lifecycle.
 
-До beta ещё остаются compatibility зависимости от:
+## 16. Legacy debt
 
-- `users`;
-- `rooms`;
-- `room_members`;
-- `room_bans`;
-- части legacy messenger/chat models.
+До beta ещё остаются compatibility зависимости от `users`, `rooms`, `room_members`, `room_bans` и части legacy messenger/chat models.
 
 Удаление делается постепенно. Требование — data-preserving migrations и отсутствие big-bang rewrite.
 
-## 16. Non-negotiable architecture invariants
+## 17. Non-negotiable architecture invariants
 
 - Account != Persona.
 - Reputation != Permission.
@@ -335,5 +311,7 @@ Backend remains authoritative для permissions. Frontend route guards — то
 - Redis owns only ephemeral/distributed realtime state.
 - WebSocket credentials never appear in URL.
 - Browser access JWT is memory-only.
+- Service worker cannot become private API/auth storage.
+- Background scheduler is external to FastAPI web-worker lifecycle.
 - Monetary/cosmetic systems cannot modify trust/moderation authority/discovery ranking.
 - Discovery ranking cannot expand eligibility/privacy.
