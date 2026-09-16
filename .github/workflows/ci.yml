@@ -92,6 +92,40 @@ jobs:
           DB_NAME=chat_legacy_ci alembic current | grep '(head)'
           DB_NAME=chat_legacy_ci alembic check
           PUBCHAT_LEGACY_MIGRATION_INTEGRATION=1 python -m unittest tests.test_legacy_migration_integration
+      - name: Drill PostgreSQL backup and restore
+        env:
+          PUBCHAT_SOURCE_DB_NAME: chat_legacy_ci
+          PUBCHAT_RESTORE_DB_NAME: chat_restore_ci
+        run: |
+          PUBCHAT_LEGACY_DB_NAME="$PUBCHAT_RESTORE_DB_NAME" python tests/legacy_migration_fixture.py create-db
+          docker run --rm --network host \
+            -e PGPASSWORD="$DB_PASSWORD" \
+            postgres:16 \
+            pg_dump \
+              --host "$DB_HOST" \
+              --port "$DB_PORT" \
+              --username "$DB_USER" \
+              --format=custom \
+              --no-owner \
+              --no-privileges \
+              "$PUBCHAT_SOURCE_DB_NAME" > /tmp/pubchat-recovery.dump
+          test -s /tmp/pubchat-recovery.dump
+          docker run --rm -i --network host \
+            -e PGPASSWORD="$DB_PASSWORD" \
+            postgres:16 \
+            pg_restore \
+              --host "$DB_HOST" \
+              --port "$DB_PORT" \
+              --username "$DB_USER" \
+              --dbname "$PUBCHAT_RESTORE_DB_NAME" \
+              --no-owner \
+              --no-privileges < /tmp/pubchat-recovery.dump
+          DB_NAME="$PUBCHAT_RESTORE_DB_NAME" alembic current | grep '(head)'
+          DB_NAME="$PUBCHAT_RESTORE_DB_NAME" alembic check
+          PUBCHAT_LEGACY_DB_NAME="$PUBCHAT_RESTORE_DB_NAME" \
+            PUBCHAT_LEGACY_MIGRATION_INTEGRATION=1 \
+            python -m unittest tests.test_legacy_migration_integration
+          rm -f /tmp/pubchat-recovery.dump
 
   frontend-build:
     runs-on: ubuntu-latest

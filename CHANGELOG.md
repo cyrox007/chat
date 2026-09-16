@@ -2,6 +2,29 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.1-alpha.1] — 2026-09-16
+
+Stage 6 — Pre-beta hardening, checkpoint 2: PostgreSQL backup/restore recovery drill.
+
+### Recovery contract
+- fully migrated synthetic legacy rehearsal database выгружается PostgreSQL 16 `pg_dump` в custom format;
+- backup создаётся с `--no-owner --no-privileges` для переносимого restore без исходных owner/ACL;
+- dump обязан быть непустым;
+- restore выполняется в отдельную пустую `chat_restore_ci`, а не поверх source database;
+- PostgreSQL 16 `pg_restore` восстанавливает schema, Alembic revision и данные;
+- restored DB повторно проходит `alembic current` и `alembic check`;
+- те же semantic legacy assertions повторно проверяют Account/Persona/Credential/role backfill, Space settings/memberships/tags и active legacy-ban behavior уже после restore.
+
+### Documentation / boundaries
+- добавлен `docs/database-recovery-v1.md`;
+- backup считается проверенным только после успешного restore + semantic data assertions;
+- synthetic recovery drill не подменяет rehearsal на anonymized production-like snapshot;
+- retention, encryption, off-site storage, RPO/RTO и media/object-storage recovery остаются pre-beta/production задачами.
+
+Stage 6.1 всё ещё не завершён: остаются production-like snapshot rehearsal, member-capacity concurrency hardening и IANA/DST-correct recurring wall-clock semantics.
+
+Quality gate: functional exact-head CI с PostgreSQL 16 dump/restore drill → version/docs sync → повторный exact-head CI перед merge.
+
 ## [0.6.0-alpha.1] — 2026-09-16
 
 Stage 6 — Pre-beta hardening, checkpoint 1: PostgreSQL migration/integration baseline.
