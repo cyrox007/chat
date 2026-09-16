@@ -6,9 +6,9 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Текущий выпущенный checkpoint: `0.5.4-alpha.1`.
+Текущий выпущенный checkpoint: `0.5.5-alpha.1`.
 
-Следующая development-линия: `0.5.5-alpha.0` — Web application maturity.
+Следующая development-линия: `0.6.0-alpha.0` — Pre-beta hardening.
 
 Канонический номер версии находится в `VERSION`, история выпусков — в `CHANGELOG.md`.
 
@@ -25,7 +25,8 @@ PubChat — SPA-приложение для свободного общения 
 - [`docs/api-and-realtime.md`](docs/api-and-realtime.md) — HTTP API и WebSocket;
 - [`docs/security-and-privacy.md`](docs/security-and-privacy.md) — security/privacy model;
 - [`docs/development.md`](docs/development.md) — разработка, миграции, тесты и CI;
-- [`docs/operations.md`](docs/operations.md) — эксплуатация;
+- [`docs/operations.md`](docs/operations.md) — эксплуатация и reminder worker;
+- [`docs/web-application-maturity-v1.md`](docs/web-application-maturity-v1.md) — PWA/offline shell и client lifecycle;
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — типовые проблемы;
 - [`docs/roadmap.md`](docs/roadmap.md) — актуальная дорожная карта;
 - [`CHANGELOG.md`](CHANGELOG.md) — история версий.
@@ -34,7 +35,7 @@ PubChat — SPA-приложение для свободного общения 
 
 Backend: Python 3.12, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL, Redis, WebSocket.
 
-Frontend: Vue 3 SPA, Vite, Vue Router, Vuex, Axios.
+Frontend: Vue 3 SPA/PWA, Vite, Vue Router, Vuex, Axios.
 
 SPA является первым клиентом; backend API и realtime contracts проектируются reusable для будущих Android/iOS клиентов.
 
@@ -50,5 +51,7 @@ SPA является первым клиентом; backend API и realtime cont
 - PostgreSQL — источник истины; Redis — ephemeral realtime слой.
 - Access JWT браузера хранится только в памяти; долговременная сессия — HttpOnly refresh-cookie.
 - Credentials не передаются в WebSocket URL.
-- Activity reminders в `0.5.2+` — opt-in in-app notifications; browser/native push появится отдельным delivery adapter позже.
-- Creator support в `0.5.3+` — бесплатные internal cosmetic gestures; реальные payments требуют отдельного financial/security review.
+- PWA service worker кэширует только shell/static assets и не является хранилищем auth/private API data.
+- Reminder worker запускается внешним scheduler'ом и не живёт внутри FastAPI web-worker lifecycle.
+- Activity reminders остаются opt-in; browser/native push появится отдельным delivery adapter позже.
+- Creator support — бесплатные internal cosmetic gestures; реальные payments требуют отдельного financial/security review.
