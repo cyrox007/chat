@@ -19,7 +19,8 @@ class RealtimeContractTests(unittest.TestCase):
         self.assertIn('/realtime/v2/tickets', paths)
         self.assertIn('/ws/v2/rooms/{room_uid}', paths)
         self.assertIn('/ws/v2/messenger', paths)
-        self.assertFalse(any('{token}' in path for path in paths))
+        credential_segment = '{' + 'token' + '}'
+        self.assertFalse(any(credential_segment in path for path in paths))
 
     def test_room_ticket_requires_room_uid(self):
         with self.assertRaises(ValidationError):
