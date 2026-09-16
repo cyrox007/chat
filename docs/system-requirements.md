@@ -7,17 +7,23 @@
 - Python `3.12`.
 - Node.js `20`.
 - npm с `package-lock.json` и установкой через `npm ci`.
-- PostgreSQL — основной persistent datastore.
-- Redis — обязателен для production realtime, distributed presence, pub/sub, rate limiting и одноразовых WebSocket tickets.
+- PostgreSQL `16` — текущий CI-проверенный persistent datastore baseline.
+- Redis `7.2` — текущий CI-проверенный production-realtime baseline.
 - Современный браузер с поддержкой ES modules, WebSocket, cookies, Service Worker, Web App Manifest и CSS `color-mix()`.
 
 CI выполняется на Ubuntu Linux. Backend requirements включают `uvloop`, поэтому для Windows рекомендуется WSL2/Linux development environment. Нативный Windows не является текущим проверенным baseline.
 
 ## PostgreSQL
 
-Проект использует SQLAlchemy 2, asyncpg и Alembic. Major-версия PostgreSQL пока не закреплена автоматическим compatibility matrix. Для разработки рекомендуется современная поддерживаемая PostgreSQL 15/16.
+Проект использует SQLAlchemy 2, asyncpg и Alembic. PostgreSQL 16 теперь фактически проходит в CI:
 
-Перед первой beta конкретная production major-версия должна быть зафиксирована и пройти migration rehearsal на копии legacy schema.
+- clean historical `alembic upgrade head`;
+- `alembic check` zero-drift gate;
+- async integration smoke;
+- synthetic legacy-data rehearsal;
+- custom-format backup/restore recovery drill.
+
+Это делает PostgreSQL 16 проверенным baseline текущей alpha-линии. Другие поддерживаемые major-версии пока не заявляются как formal compatibility matrix.
 
 Минимально необходимы:
 
@@ -28,7 +34,18 @@ CI выполняется на Ubuntu Linux. Backend requirements включаю
 
 ## Redis
 
-Redis server необходим в production. В `DEBUG=True` realtime service допускает локальные development fallback-механизмы, но они не заменяют distributed Redis operation.
+Redis server необходим в production. Redis 7.2 теперь является фактически CI-проверенным baseline для realtime v2.
+
+Dedicated integration test работает при `DEBUG=False` и проверяет на реальном Redis:
+
+- WebSocket one-time tickets и consume-once semantics;
+- ticket TTL;
+- pub/sub между независимыми realtime service instances;
+- distributed presence;
+- shared realtime rate limiting;
+- shared idempotency claims/release.
+
+В `DEBUG=True` realtime service всё ещё допускает локальные development fallback-механизмы, но они не заменяют distributed Redis operation и не используются в production-semantics integration test.
 
 Использование Redis в PubChat:
 
@@ -40,7 +57,7 @@ Redis server необходим в production. В `DEBUG=True` realtime service 
 - idempotency claims;
 - cross-worker control events.
 
-Major-версия Redis server пока не закреплена compatibility matrix. Python client указан в `backend/requirements.txt`.
+Redis restart/recovery, Sentinel/Cluster/managed topology и production capacity matrix ещё относятся к pre-beta hardening.
 
 ## CPU и память
 
@@ -51,7 +68,7 @@ Major-версия Redis server пока не закреплена compatibility
 - 8 GB RAM предпочтительно при одновременном PostgreSQL + Redis + backend + Vite;
 - несколько гигабайт свободного диска для зависимостей, БД и uploads.
 
-Это не production sizing. До beta обязательны load tests и capacity planning, включая reminder reconciliation worker.
+Это не production sizing. До beta обязательны load tests и capacity planning, включая realtime Redis и reminder reconciliation worker.
 
 ## Сеть и порты по умолчанию
 
@@ -100,7 +117,9 @@ Worker использует ту же Python/PostgreSQL среду, что backe
 ## Что пока не считается гарантированно поддерживаемым
 
 - native Windows backend без WSL2;
-- конкретный PostgreSQL/Redis major вне будущей compatibility matrix;
+- PostgreSQL major кроме CI-validated 16;
+- Redis major кроме CI-validated 7.2;
+- Redis restart/failover/Cluster/Sentinel как уже доказанные сценарии;
 - multi-region deployment;
 - object storage/CDN как уже завершённая функция;
 - browser/native push;
