@@ -10,7 +10,7 @@ PubChat — SPA-приложение для свободного общения 
 
 Текущая development-линия: `0.6.0-alpha.x` — Pre-beta hardening продолжается.
 
-Первый Stage 6 checkpoint закрепил production-like PostgreSQL 16 CI, clean historical `alembic upgrade head`, zero `alembic check` drift и real async PostgreSQL smoke. Stage 6.1 ещё не завершён: остаются representative legacy-data rehearsal, backup/restore, concurrency и DST-correct recurrence.
+Первый Stage 6 checkpoint закрепил PostgreSQL 16 CI, clean historical `alembic upgrade head`, zero `alembic check` drift, real async PostgreSQL smoke и synthetic representative legacy-data rehearsal с data assertions. Stage 6.1 ещё не завершён: остаются rehearsal на anonymized production-like snapshot, backup/restore, concurrency и DST-correct recurrence.
 
 Канонический номер версии находится в `VERSION`, история выпусков — в `CHANGELOG.md`.
 
@@ -53,6 +53,7 @@ SPA является первым клиентом; backend API и realtime cont
 - Числовой discovery score не является публичным API и не показывается пользователю.
 - PostgreSQL — источник истины; Redis — ephemeral realtime слой.
 - Clean migration correctness проверяется на реальной PostgreSQL в CI; `create_all()` не заменяет Alembic rehearsal.
+- Synthetic legacy fixture закрепляет backfill semantics, но не заменяет rehearsal на production-like snapshot.
 - Access JWT браузера хранится только в памяти; долговременная сессия — HttpOnly refresh-cookie.
 - Credentials не передаются в WebSocket URL.
 - PWA service worker кэширует только shell/static assets и не является хранилищем auth/private API data.
