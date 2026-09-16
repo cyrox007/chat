@@ -2,11 +2,11 @@
 
 ## Текущий статус
 
-Released: **`0.6.2-alpha.1`**.
+Released: **`0.6.3-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
-PubChat остаётся alpha: основные продуктовые контуры сформированы, PostgreSQL migration/recovery baseline и Redis production-semantics integration baseline уже закреплены CI. До beta всё ещё нужны production-like snapshot rehearsal, concurrency/DST hardening, Redis restart/recovery и multi-process WebSocket tests, observability, load/security и финальные accessibility/operations gates.
+PubChat остаётся alpha: PostgreSQL migration/recovery и Redis distributed/restart recovery baselines уже закреплены CI. До beta всё ещё нужны production-like snapshot rehearsal, member-capacity/DST hardening, реальные multi-process WebSocket/rolling-restart scenarios, slow-client/backpressure, observability, load/security и финальные accessibility/operations gates.
 
 ## Завершённые checkpoints
 
@@ -31,50 +31,37 @@ Earned achievements и Conversation Rounds без score/winner/prize/stake, ин
 ### Stage 5.3 — Activity Occurrences & Notifications ✅ `0.5.2-alpha.1`
 Bounded occurrences, opt-in reminders, private notification inbox, idempotent reconciliation и notification UX.
 
-Известное alpha-ограничение: recurring Activity пока UTC-anchored и не хранит IANA timezone name. DST-correct wall-clock recurrence входит в pre-beta hardening.
-
 ### Stage 5.4 — Creator Support & Cosmetic Gifts ✅ `0.5.3-alpha.1`
 Consent-first internal gifts, append-only support ledger, cosmetic entitlements и Persona/Space support UI без real-money/payment authority.
 
 ### Stage 5.5 — Discovery Quality ✅ `0.5.4-alpha.1`
-Eligibility-first organic discovery, explainable reasons, distinct-author activity signal, privacy-aware upcoming context, bounded candidate pool и no-paid/no-gift ranking boundary.
+Eligibility-first organic discovery, explainable reasons, privacy-aware ranking и no-paid/no-gift ranking boundary.
 
 ### Stage 5.6 — Web Application Maturity ✅ `0.5.5-alpha.1`
-Installable PWA shell, external reminder worker, centralized notification lifecycle и PWA/cache/lifecycle regression guards.
+Installable PWA shell, external reminder worker, centralized notification lifecycle и regression guards.
 
 ### Stage 6 checkpoint 1 — PostgreSQL migration/integration baseline ✅ `0.6.0-alpha.1`
-- PostgreSQL 16 service в backend CI;
-- clean-database historical `alembic upgrade head`;
-- zero model/schema drift через `alembic check`;
-- synthetic representative legacy-data rehearsal с semantic assertions;
-- DB URL special-character safety;
-- explicit ORM registry для standalone processes;
-- real async PostgreSQL smoke.
+PostgreSQL 16 clean historical migration, zero drift, synthetic legacy rehearsal, async smoke и standalone ORM registry.
 
 ### Stage 6 checkpoint 2 — PostgreSQL recovery baseline ✅ `0.6.1-alpha.1`
-- PostgreSQL 16 custom-format `pg_dump`;
-- restore в отдельную database;
-- restored Alembic head + zero drift;
-- повторные legacy semantic assertions;
-- recovery contract в `database-recovery-v1.md`.
+Portable custom-format dump/restore в отдельную DB с повторными Alembic/schema/data assertions.
 
 ### Stage 6 checkpoint 3 — Redis realtime baseline ✅ `0.6.2-alpha.1`
-- Redis 7.2 service в backend CI;
-- realtime integration smoke принудительно работает при `DEBUG=False`;
-- два независимых `RealtimeService` instance используют общий distributed state;
-- one-time ticket issue/consume/TTL проверяется cross-instance;
-- presence register/query/unregister проверяется cross-instance;
-- rate-limit counter нельзя обойти сменой worker;
-- idempotency claim/release разделяется между workers;
-- Redis pub/sub доставляет protocol-v2 event между независимыми instances;
-- production fallback boundary закреплён документом `redis-realtime-integration-v1.md`.
+Redis 7.2 при `DEBUG=False`: distributed tickets/TTL, presence, rate-limit, idempotency и cross-instance pub/sub.
+
+### Stage 6 checkpoint 4 — Redis restart recovery ✅ `0.6.3-alpha.1`
+- CI реально останавливает Redis 7.2 service container;
+- outage в production semantics возвращает `RealtimeUnavailable` и не включает local fallback;
+- тот же Redis container запускается снова;
+- те же `RealtimeService` objects восстанавливают ticket issue/consume без process restart;
+- pub/sub listener автоматически пересоздаёт subscription после restart;
+- test cleanup гарантированно возвращает Redis в рабочее состояние;
+- PostgreSQL migration/recovery и frontend gates продолжают проходить в том же pipeline.
 
 ## Stage 6 — Pre-beta hardening 🚧 `0.6.x-alpha`
 
-Обязательный milestone перед beta. Новые social/product mechanics не являются приоритетом: задача — доказать корректность, переносимость и эксплуатационную готовность уже построенных контуров.
-
 ### 6.1 Data / migrations 🚧
-- ✅ PostgreSQL 16 integration environment в CI;
+- ✅ PostgreSQL 16 integration environment;
 - ✅ historical clean migration chain;
 - ✅ zero model/schema drift;
 - ✅ synthetic representative legacy-data rehearsal;
@@ -86,56 +73,52 @@ Installable PWA shell, external reminder worker, centralized notification lifecy
 ### 6.2 Redis / realtime reliability 🚧
 - ✅ Redis 7.2 integration tests без development fallback;
 - ✅ distributed ticket/presence/rate-limit/idempotency semantics;
-- ✅ cross-instance Redis pub/sub delivery;
-- ⏳ Redis restart/failure recovery без process restart;
-- ⏳ потеря/восстановление pub/sub subscription;
-- ⏳ реальные multi-process WebSocket scenarios;
-- ⏳ slow-client/backpressure scenarios под нагрузкой;
-- ⏳ reconnect после rolling restart.
+- ✅ cross-instance pub/sub delivery;
+- ✅ Redis restart/failure visibility без process-local fallback;
+- ✅ command-path recovery на тех же service objects;
+- ✅ automatic pub/sub resubscription после Redis restart;
+- ⏳ реальные multi-process Uvicorn/WebSocket scenarios;
+- ⏳ rolling-restart client reconnect;
+- ⏳ slow-client/backpressure под нагрузкой;
+- ⏳ Redis failover topology/capacity tests.
 
 ### 6.3 Notification worker 🚧
-- ✅ baseline integration smoke с реальным PostgreSQL и durable worker state;
-- concurrent worker/`SKIP LOCKED` validation;
-- cursor recovery/restart tests;
-- load/idempotency profiling;
-- worker metrics/health operational contract;
-- подготовка delivery adapter boundary для browser/native push без включения push по умолчанию.
+- ✅ baseline PostgreSQL integration smoke;
+- ⏳ concurrent worker/`SKIP LOCKED` validation;
+- ⏳ cursor recovery/restart tests;
+- ⏳ load/idempotency profiling;
+- ⏳ worker metrics/health contract.
 
 ### 6.4 Discovery / performance
 - multi-source bounded candidate generation вместо newest-catalog bias;
 - query/DB profiling;
 - ranking latency/load tests;
-- privacy/block regression под большим candidate set;
-- отсутствие paid/support influence сохраняется invariant.
+- privacy/block regression под большим candidate set.
 
 ### 6.5 Security/privacy
 - session/cookie/CSRF review;
-- upload/media validation/storage review;
+- upload/media review;
 - moderation/report/appeal privacy audit;
-- Account block coverage по всем social surfaces;
+- Account block coverage audit;
 - privacy side-channel review;
 - secret/logging review;
-- financial threat model до любых real payment flows.
+- financial threat model до real payments.
 
 ### 6.6 Operations / observability
-- structured logs;
-- HTTP/realtime/worker metrics;
-- error tracking;
-- alerting;
-- status/incident procedure;
+- structured logs/metrics/error tracking;
+- alerting/status/incident procedure;
 - deployment/recovery runbook;
 - backup retention/encryption/off-site storage + RPO/RTO policy;
-- shared/object storage strategy;
-- расширенная PostgreSQL/Redis compatibility matrix beyond current CI baselines.
+- shared/object storage;
+- expanded PostgreSQL/Redis compatibility matrix.
 
 ### 6.7 UX/accessibility
 - полный keyboard/focus audit;
-- contrast/accessibility pass;
-- mobile/narrow viewport pass;
+- contrast/mobile/narrow viewport pass;
 - error/empty/offline consistency;
 - onboarding usability;
 - terminology audit;
-- PWA install/update flow на Chrome/Edge/Safari-supported paths.
+- PWA install/update browser matrix.
 
 ## Beta
 
@@ -159,8 +142,7 @@ Beta назначается только когда launch-critical journeys р�
 - Migration correctness проверяется реальной PostgreSQL.
 - Backup correctness включает restore + data assertions.
 - Production realtime не должен молча использовать process-local fallback.
-- Redis rate-limit/idempotency/presence semantics должны быть distributed.
-- Synthetic fixtures не подменяют rehearsal на production-like snapshot.
+- Redis recovery не требует process restart; ephemeral state восстанавливается протоколом, а не становится durable.
 - Communication quality first.
 - Никакой тюремной терминологии.
 - SPA — первый клиент, contracts reusable для Android/iOS.
