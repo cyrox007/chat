@@ -6,6 +6,8 @@ BACKEND_DIR="$PROJECT_DIR/backend"
 FRONTEND_DIR="$PROJECT_DIR/frontend"
 SERVICE_NAME="${PUBCHAT_SERVICE_NAME:-pubchat-backend}"
 HEALTH_URL="${PUBCHAT_HEALTH_URL:-http://127.0.0.1:9000/health/ready}"
+STAGED_DIST="$FRONTEND_DIR/dist.next"
+LIVE_DIST="$FRONTEND_DIR/dist"
 
 cd "$PROJECT_DIR"
 
@@ -34,14 +36,31 @@ echo "==> Database migrations"
 "$BACKEND_DIR/venv/bin/python" -m alembic upgrade head
 "$BACKEND_DIR/venv/bin/python" -m alembic current
 
-echo "==> Frontend build"
+echo "==> Frontend staged build"
 cd "$FRONTEND_DIR"
 if [[ -f package-lock.json ]]; then
   npm ci
 else
   npm install
 fi
-npm run build
+rm -rf "$STAGED_DIST"
+npm run build -- --outDir "$STAGED_DIST"
+test -s "$STAGED_DIST/index.html"
+
+# Keep the currently served build intact until the replacement build is fully
+# complete. Publish hashed/static files first and index.html last. Old hashed
+# assets are intentionally retained so already-open tabs never lose a file they
+# still reference during a deployment.
+mkdir -p "$LIVE_DIST"
+(
+  cd "$STAGED_DIST"
+  tar --exclude='./index.html' -cf - .
+) | (
+  cd "$LIVE_DIST"
+  tar -xf -
+)
+install -m 0644 "$STAGED_DIST/index.html" "$LIVE_DIST/index.html"
+rm -rf "$STAGED_DIST"
 
 echo "==> Verify production service supports rolling reload"
 if ! sudo systemctl cat "$SERVICE_NAME" | grep -q 'ExecReload=.*/kill -HUP'; then
