@@ -4,7 +4,7 @@
 
 ## Implementation status
 
-Message policy/active-context baseline выпущен как `0.6.7-alpha.1`, durable unread-Messenger email delivery — как `0.6.8-alpha.1`:
+Message policy/active-context baseline выпущен как `0.6.7-alpha.1`, durable unread-Messenger email delivery — как `0.6.8-alpha.1`, Web Push/PWA Messenger delivery — как `0.6.9-alpha.1`:
 
 - ✅ account-level message notification preferences + deterministic online/offline/active-context policy tests;
 - ✅ Redis-backed connection-scoped Messenger active context, Space active context через distributed room presence и sound mapping в SPA;
@@ -12,8 +12,10 @@ Message policy/active-context baseline выпущен как `0.6.7-alpha.1`, du
 - ✅ offline Space external re-engagement запрещён server-side policy;
 - ✅ durable email delivery ledger + scheduled unread-DM candidate worker;
 - ✅ SMTP provider abstraction + expiring claims + retry/backoff + systemd scheduler;
-- ⏳ Web Push subscription/delivery adapter и browser/device matrix;
-- ⏳ delivery/provider metrics и preferences UI для external channels.
+- ✅ Web Push subscription/delivery adapter, VAPID provider, service-worker push/click flow и device lifecycle;
+- ✅ terminal push subscription cleanup + bounded retry/backoff + explicit user-gesture permission UX;
+- ✅ Notifications UI для email/Web Push external-channel preferences;
+- ⏳ delivery/provider metrics и production browser/device matrix.
 
 ## Базовая матрица
 
@@ -60,7 +62,7 @@ Account-level `MessageNotificationPreference` хранит независимы�
 - Space chat sound;
 - unread Messenger email nudge;
 - Web Push Messenger;
-- Web Push Space flag для будущего adapter policy.
+- Web Push Space flag, который пока не разрешает offline Space delivery.
 
 Текущий baseline API:
 
@@ -69,7 +71,7 @@ GET   /notifications/v1/message-preferences
 PATCH /notifications/v1/message-preferences
 ```
 
-External/re-engagement defaults выключены. Отключение внешнего adapter не отключает сам unread/message state. Наличие preference для будущего Space Web Push не разрешает offline Space re-engagement: текущая server-side policy возвращает для offline Space external delivery `false`.
+External/re-engagement defaults выключены. Отключение внешнего adapter не отключает сам unread/message state. Наличие `web_push_space` preference не разрешает offline Space re-engagement: текущая server-side policy возвращает для offline Space external delivery `false`.
 
 ## Unread Messenger nudge по email
 
@@ -105,7 +107,7 @@ Ledger намеренно не хранит destination email и private message
 
 Worker использует `FOR UPDATE SKIP LOCKED` и expiring claim lease. Claim берётся непосредственно перед обработкой одной записи, поэтому медленный SMTP batch не заставляет leases следующих элементов истекать раньше времени. Expired claim может быть восстановлен другим worker после crash.
 
-Retryable provider failures получают bounded exponential backoff; terminal failures завершаются как `failed`; opt-out/read/block transition — `suppressed`. Возврат пользователя online переносит запись обратно в `pending` без расходования retry budget.
+Retryable provider failures получают bounded exponential backoff; terminal failures завершаются как `failed`; opt-out/read/block transition — `suppressed`. Возврат пользователя online переносит email delivery без расходования retry budget.
 
 SMTP по своей природе не обеспечивает абсолютный exactly-once в crash-after-send окне. PubChat использует stable RFC Message-ID на delivery UID, но не утверждает, что внешний relay гарантированно дедуплицирует повторную попытку.
 
@@ -113,15 +115,24 @@ SMTP по своей природе не обеспечивает абсолют
 
 ## Web Push / PWA
 
-Следующий adapter — standards-based Web Push поверх существующего service worker:
+Web Push adapter выпущен checkpoint `0.6.9-alpha.1` поверх существующего service worker и общего durable ledger.
+
+Основные правила:
 
 - Push API + Notifications API + Service Worker;
 - subscription привязана к Account/device и может быть отозвана;
 - permission запрашивается только после явного действия пользователя, не при первом открытии сайта;
-- VAPID/private keys остаются только на server side;
-- payload минимальный и privacy-safe; полное содержание сообщения не требуется;
-- push click открывает разрешённый destination, после чего backend заново проверяет auth/privacy/block state;
-- expired/unsubscribed endpoints удаляются после terminal provider response.
+- VAPID private key остаётся только на server side, frontend получает только public key/capability;
+- payload минимальный и privacy-safe: без message body и sender identity;
+- push click разрешает только same-origin Messenger destination;
+- before-send worker повторно проверяет Redis presence, opt-in, unread state и block/privacy;
+- terminal provider response `404/410` удаляет expired/unsubscribed endpoint;
+- retryable provider failures используют bounded exponential backoff;
+- queueing имеет per-conversation cooldown/dedupe, поэтому входящий burst не создаёт push на каждое сообщение;
+- logout/session teardown удаляет local subscription best-effort, чтобы shared browser не наследовал endpoint предыдущего Account;
+- Space chat для offline Account не создаёт push queue независимо от preference flag.
+
+Подробный contract: [`web-push-delivery-v1.md`](web-push-delivery-v1.md).
 
 Mobile/iOS behavior проверяется отдельной browser/device matrix и не считается доказанным только наличием Service Worker API в коде.
 
@@ -133,7 +144,7 @@ Mobile/iOS behavior проверяется отдельной browser/device mat
 - notification body не является authorization token;
 - active-context suppression не является authorization decision;
 - external delivery не раскрывает sender/message content сверх необходимого;
-- re-engagement имеет Account-level cooldown;
+- re-engagement имеет Account/conversation cooldown;
 - отсутствие пользователя не является поводом уведомлять его о каждом сообщении Space.
 
 ## Implementation slices
@@ -142,5 +153,6 @@ Mobile/iOS behavior проверяется отдельной browser/device mat
 2. ✅ Redis active-context signal и sound mapping в SPA — `0.6.7-alpha.1`.
 3. ✅ Durable email delivery ledger + scheduled unread-DM candidate worker — `0.6.8-alpha.1`.
 4. ✅ SMTP provider + claim lease + retry/backoff + systemd scheduler — `0.6.8-alpha.1`.
-5. ⏳ Web Push subscription model, VAPID adapter, service-worker push/click flow.
+5. ✅ Web Push subscription model, VAPID adapter, service-worker push/click flow — `0.6.9-alpha.1`.
 6. ⏳ Browser/device matrix: Chromium, Firefox, Safari macOS и installed mobile PWA scenarios.
+7. ⏳ Delivery/provider metrics, alerting и larger-scale idempotency/load profiling.
