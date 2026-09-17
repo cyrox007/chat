@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.identity.model import Persona
@@ -131,6 +131,7 @@ def moderation_ai_public_config() -> dict:
         "enabled": enabled,
         "provider": provider if enabled else AI_PROVIDER_DISABLED,
         "schema_version": AI_SCHEMA_VERSION,
+        "max_assessments_per_report": moderation_ai_config.max_assessments_per_report,
     }
 
 
@@ -247,13 +248,31 @@ async def create_moderation_ai_assessment(
             detail={"error_type": "moderation_ai_not_configured"},
         )
 
+    assessment_count = int(
+        (
+            await db.execute(
+                select(func.count(ModerationAIRecommendation.uid)).where(
+                    ModerationAIRecommendation.report_uid == report.uid
+                )
+            )
+        ).scalar_one()
+        or 0
+    )
+    if assessment_count >= moderation_ai_config.max_assessments_per_report:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_type": "moderation_ai_assessment_limit_reached",
+                "max_assessments_per_report": moderation_ai_config.max_assessments_per_report,
+            },
+        )
+
     evidence = await _ai_evidence_payload(db, report)
     provider_payload = {
         "report": {
             "source_type": report.source_type,
             "reported_category": report.category,
             "priority": report.priority,
-            "reporter_description": _bounded_text(report.description),
         },
         "evidence": evidence,
         "constraints": {
