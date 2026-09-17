@@ -31,10 +31,20 @@ class PlatformRestrictionContractTests(unittest.TestCase):
     def test_only_server_enforced_capabilities_are_exposed(self):
         self.assertEqual(
             ENFORCEMENT_READY_CAPABILITIES,
-            frozenset({"messenger.send", "space.chat.send", "media.upload"}),
+            frozenset(
+                {
+                    "messenger.send",
+                    "space.chat.send",
+                    "media.upload",
+                    "space.create",
+                    "space.join",
+                    "invitation.send",
+                }
+            ),
         )
         self.assertNotIn("account.access", ENFORCEMENT_READY_CAPABILITIES)
         self.assertNotIn("profile.edit", ENFORCEMENT_READY_CAPABILITIES)
+        self.assertNotIn("discovery.publish", ENFORCEMENT_READY_CAPABILITIES)
 
     def test_restriction_appeal_is_one_per_account_and_restriction(self):
         names = {
