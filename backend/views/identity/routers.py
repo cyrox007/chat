@@ -22,6 +22,7 @@ from components.identity.service import (
     update_primary_persona,
     update_privacy,
 )
+from components.moderation.policy import assert_allowed
 from components.social.privacy import can_view_profile
 from database import Database
 from settings import config
@@ -172,6 +173,7 @@ def install(app: FastAPI):
         current_user: dict = Depends(auth_middle),
         db: AsyncSession = Depends(Database.session_generator),
     ):
+        await assert_allowed(db, current_user["user_uid"], "profile.edit")
         account = await get_account_by_uid(db, current_user["user_uid"])
         return {"status": "ok", **(await update_primary_persona(db, account, payload))}
 
@@ -181,6 +183,8 @@ def install(app: FastAPI):
         current_user: dict = Depends(auth_middle),
         db: AsyncSession = Depends(Database.session_generator),
     ):
+        # Safety/privacy controls remain available even when public Persona edits
+        # are restricted; moderation must not trap a user in an unsafe state.
         account = await get_account_by_uid(db, current_user["user_uid"])
         return {"status": "ok", **(await update_privacy(db, account, payload))}
 
