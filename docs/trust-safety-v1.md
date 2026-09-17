@@ -37,6 +37,47 @@
 
 Иерархия не заменяет permissions. Например, высокий authority level сам по себе не даёт права на permanent restriction или `account.access`, если соответствующий permission отсутствует.
 
+## Разделение platform moderation permissions
+
+Начиная с checkpoint `0.6.12-alpha.1`, доступ к Trust & Safety queue и punitive authority разделены явно. `moderation.platform.manage` означает право войти в platform moderation surface, но сам по себе больше не должен давать право применять или отменять санкции.
+
+Первая action-permission taxonomy:
+
+| Permission | Назначение | Baseline moderator | Admin |
+| --- | --- | --- | --- |
+| `moderation.platform.manage` | доступ к platform Trust & Safety queue/context | да | да |
+| `moderation.platform.restrict` | выдача обычных temporary capability restrictions | да | да |
+| `moderation.platform.revoke` | прямое снятие restrictions в пределах hierarchy | да | да |
+| `moderation.platform.appeal.review` | claim/review platform restriction appeals | да | да |
+| `moderation.platform.permanent` | выдача/review/revoke бессрочных restrictions | нет | да |
+| `moderation.platform.account_access` | выдача/review/revoke full Account suspension | нет | да |
+
+Backend проверяет эти права повторно на action boundary; скрытие кнопки во frontend не является security control.
+
+### Правила выдачи restriction
+
+Для любого punitive action одновременно требуются:
+
+1. `moderation.platform.manage`;
+2. `moderation.platform.restrict`;
+3. `actor_authority > target_authority`;
+4. дополнительные elevated permissions для sensitive action.
+
+Для `expires_at = NULL` дополнительно требуется `moderation.platform.permanent`. Для `account.access` дополнительно требуется `moderation.platform.account_access`; эта capability остаётся только platform-scoped.
+
+### Правила прямого revoke
+
+Снять активную санкцию недостаточно просто потому, что текущий actor выше target. Требуются:
+
+- `moderation.platform.manage`;
+- `moderation.platform.revoke`;
+- текущий `actor_authority > target_authority`;
+- текущий `actor_authority >= restriction.actor_authority_level`, сохранённого в момент исходного решения;
+- для permanent sanction — `moderation.platform.permanent`;
+- для `account.access` — `moderation.platform.account_access`.
+
+Таким образом moderator может исправить temporary решение другого moderator того же authority, но не может отменить sanction, выданную admin. Пересмотр более сильного решения должен выполняться actor с не меньшей authority либо через соответствующий appeal-review path.
+
 ## Capability restrictions вместо одного общего ban
 
 Основной механизм — ограничение конкретных возможностей Account. Это позволяет не блокировать весь аккаунт там, где достаточно точечной санкции.
@@ -105,7 +146,7 @@ await moderation_policy.assert_allowed(
 
 При выдаче restriction:
 
-- capability доступна только actor с `moderation.platform.account_access` и достаточным authority;
+- capability доступна только actor с `moderation.platform.restrict`, `moderation.platform.account_access` и достаточным authority;
 - существующие Identity v2 sessions получают `revoked_at` в той же DB-транзакции, что и durable restriction;
 - legacy device sessions деактивируются там, где существует legacy identity bridge;
 - после commit публикуется distributed realtime control event, закрывающий уже открытые Messenger/Space sockets на всех workers;
@@ -201,19 +242,27 @@ AI получает тот же или более узкий evidence envelope, 
 Appeal:
 
 - связан с конкретным action/restriction;
-- не рассматривается тем же moderator, если доступен другой reviewer соответствующего authority;
-- reviewer должен иметь authority не ниже требуемого для исходного действия;
+- reviewer должен иметь отдельный `moderation.platform.appeal.review`;
+- не рассматривается тем же moderator, если доступен другой eligible reviewer;
+- reviewer authority должна быть не ниже `restriction.actor_authority_level`, то есть уровня исходного решения;
+- permanent appeal дополнительно требует `moderation.platform.permanent`;
+- appeal на `account.access` дополнительно требует `moderation.platform.account_access`;
 - overturn не удаляет исходное решение, а revoke-ит restriction и пишет audit event;
 - AI может подготовить summary, но не является финальным appeal reviewer.
+
+Discovery независимого reviewer ищет только Account, у которых действительно есть appeal-review permission и которые проходят sensitive-action authority checks. Один общий `moderation.platform.manage` больше не считается достаточным.
 
 `account.access` сохраняет appeal path даже когда все обычные product routes закрыты.
 
 ## Enforcement hierarchy examples
 
-- `moderator(50)` → `user(0)`: разрешено в пределах permissions модератора;
+- `moderator(50)` + restrict permission → `user(0)`: temporary restriction разрешён;
 - `moderator(50)` → `moderator(50)`: запрещено;
 - `moderator(50)` → `admin(100)`: запрещено;
 - `admin(100)` → `moderator(50)`: возможно при соответствующем permission;
+- `moderator(50)` с revoke permission может снять temporary sanction, выданную другим `moderator(50)`, если target ниже обоих;
+- `moderator(50)` не может снять sanction, выданную `admin(100)`, даже если target — `user(0)`;
+- Account с одним `moderation.platform.manage`, но без `moderation.platform.restrict/revoke/appeal.review`, может иметь queue access, но не punitive authority;
 - Space moderator без platform role → обычный Account вне его Space: platform restriction запрещён;
 - AI → любой Account: recommendation разрешена, punitive authority отсутствует.
 
@@ -224,9 +273,10 @@ Appeal:
 3. ✅ Durable platform capability restrictions: scope, duration/permanent, revoke and enforcement API.
 4. ✅ Enforcement hooks в Messenger/Space chat/uploads/invitations/Space creation/discovery/account session + HTTP/realtime path.
 5. ✅ Human moderator action UX + target-visible explanation + restriction appeal linkage baseline.
-6. ⏳ AI assessment model + provider-neutral adapter + moderator recommendation UI.
-7. ⏳ Anti-abuse automation signals и, только после отдельного review, optional short-lived system protection holds.
-8. ⏳ Metrics, privacy/retention, incident rehearsal and launch gate.
+6. ✅ Permission/hierarchy hardening: queue access отделён от issue/revoke/appeal-review; higher-authority decisions защищены от lower-authority revoke; permanent/account-access остаются elevated.
+7. ⏳ AI assessment model + provider-neutral adapter + moderator recommendation UI.
+8. ⏳ Anti-abuse automation signals и, только после отдельного review, optional short-lived system protection holds.
+9. ⏳ Metrics, privacy/retention, incident rehearsal and launch gate.
 
 ## Beta gate
 
@@ -234,6 +284,6 @@ Trust & Safety считается beta-ready только если проход�
 
 `report → triage/AI assist → human claim/review → hierarchy/permission check → restriction → runtime enforcement → audit → target notification → appeal → independent review/revoke/uphold`.
 
-Human enforcement/appeal baseline уже существует, включая full Account suspension. Следующие beta-critical риски — permission hierarchy hardening, AI-assist boundary implementation, anti-abuse/metrics/retention и incident rehearsal.
+Human enforcement/appeal baseline уже существует, включая full Account suspension и explicit punitive permission boundaries. Следующие beta-critical риски — AI-assist boundary implementation, anti-abuse/metrics/retention и incident rehearsal.
 
 Существование таблиц или AI-классификатора без реального server-side capability enforcement не считается готовой модерацией.
