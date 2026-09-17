@@ -2,22 +2,44 @@ import inspect
 import unittest
 
 from pydantic import ValidationError
+from starlette.requests import Request
 
 from app import app
 from components.auth.middleware import auth_middle
 from components.auth.permissions import validate_profile_update
 from components.discovery.moderation import discover_spaces_with_moderation
-from components.moderation.account_access import ACCOUNT_ACCESS_HTTP_EXEMPTIONS
+from components.moderation.account_access import (
+    ACCOUNT_ACCESS_HTTP_EXEMPTIONS,
+    is_account_access_http_exempt,
+)
 from components.moderation.model import PlatformRestrictionAppeal
 from components.moderation.policy import issue_platform_restriction
 from components.moderation.schemas import (
     PlatformRestrictionAppealCreateRequest,
     PlatformRestrictionAppealResolveRequest,
 )
+from socket_manager.account_control import install_account_control
 from views.identity.routers import install as install_identity_routes
 from views.moderation.restriction_routers import ENFORCEMENT_READY_CAPABILITIES
 from views.realtime.ws_auth import authenticate_websocket
 from views.spaces.routers import install as install_space_routes
+
+
+def _request(method: str, path: str) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": method,
+            "scheme": "https",
+            "path": path,
+            "raw_path": path.encode(),
+            "query_string": b"",
+            "headers": [],
+            "client": ("127.0.0.1", 12345),
+            "server": ("test", 443),
+        }
+    )
 
 
 class PlatformRestrictionContractTests(unittest.TestCase):
@@ -63,6 +85,7 @@ class PlatformRestrictionContractTests(unittest.TestCase):
         auth_source = inspect.getsource(auth_middle)
         issue_source = inspect.getsource(issue_platform_restriction)
         websocket_source = inspect.getsource(authenticate_websocket)
+        disconnect_source = inspect.getsource(install_account_control)
 
         self.assertIn('"profile.edit"', identity_source)
         self.assertIn('"profile.edit"', legacy_profile_source)
@@ -75,6 +98,8 @@ class PlatformRestrictionContractTests(unittest.TestCase):
         self.assertIn("revoke_account_sessions", issue_source)
         self.assertIn("disconnect_account_realtime", issue_source)
         self.assertIn("active_account_access_restriction", websocket_source)
+        self.assertIn("private_manager.disconnect", disconnect_source)
+        self.assertIn("room_manager.disconnect", disconnect_source)
 
     def test_account_access_exemptions_are_narrow_and_appeal_focused(self):
         self.assertEqual(
@@ -85,6 +110,14 @@ class PlatformRestrictionContractTests(unittest.TestCase):
                 ("GET", "/trust-safety/v1/me/restriction-appeals"),
             },
         )
+        self.assertTrue(is_account_access_http_exempt(_request("GET", "/identity/v2/me")))
+        self.assertTrue(
+            is_account_access_http_exempt(
+                _request("POST", "/trust-safety/v1/restrictions/00000000-0000-0000-0000-000000000001/appeals")
+            )
+        )
+        self.assertFalse(is_account_access_http_exempt(_request("GET", "/spaces/v1")))
+        self.assertFalse(is_account_access_http_exempt(_request("POST", "/realtime/v2/tickets")))
 
     def test_restriction_appeal_is_one_per_account_and_restriction(self):
         names = {
