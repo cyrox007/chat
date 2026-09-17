@@ -23,6 +23,20 @@ _PERMISSION_NAMES = (
 
 
 def upgrade() -> None:
+    # Earlier migrations seeded permission IDs explicitly (including 4 and 5),
+    # which does not advance PostgreSQL's SERIAL sequence. Repair the sequence
+    # before relying on implicit IDs so both clean and already-migrated databases
+    # allocate the next free primary key.
+    op.execute(
+        """
+        SELECT setval(
+            pg_get_serial_sequence('platform_permissions', 'id'),
+            COALESCE((SELECT MAX(id) FROM platform_permissions), 1),
+            true
+        )
+        """
+    )
+
     op.execute(
         """
         INSERT INTO platform_permissions (name, description) VALUES
