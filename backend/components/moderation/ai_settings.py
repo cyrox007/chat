@@ -12,6 +12,7 @@ class ModerationAIConfig:
     model: str
     timeout_seconds: float
     max_text_chars: int
+    max_assessments_per_report: int
 
     def configured(self) -> bool:
         if self.provider == "disabled":
@@ -30,6 +31,10 @@ def load_moderation_ai_config() -> ModerationAIConfig:
         model=os.getenv("MODERATION_AI_MODEL", "").strip(),
         timeout_seconds=max(1.0, float(os.getenv("MODERATION_AI_TIMEOUT_SECONDS", "15"))),
         max_text_chars=max(256, min(20000, int(os.getenv("MODERATION_AI_MAX_TEXT_CHARS", "4000")))),
+        max_assessments_per_report=max(
+            1,
+            min(20, int(os.getenv("MODERATION_AI_MAX_ASSESSMENTS_PER_REPORT", "3"))),
+        ),
     )
 
 
