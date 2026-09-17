@@ -4,15 +4,19 @@ import unittest
 from pydantic import ValidationError
 
 from app import app
+from components.auth.middleware import auth_middle
 from components.auth.permissions import validate_profile_update
 from components.discovery.moderation import discover_spaces_with_moderation
+from components.moderation.account_access import ACCOUNT_ACCESS_HTTP_EXEMPTIONS
 from components.moderation.model import PlatformRestrictionAppeal
+from components.moderation.policy import issue_platform_restriction
 from components.moderation.schemas import (
     PlatformRestrictionAppealCreateRequest,
     PlatformRestrictionAppealResolveRequest,
 )
 from views.identity.routers import install as install_identity_routes
 from views.moderation.restriction_routers import ENFORCEMENT_READY_CAPABILITIES
+from views.realtime.ws_auth import authenticate_websocket
 from views.spaces.routers import install as install_space_routes
 
 
@@ -46,16 +50,19 @@ class PlatformRestrictionContractTests(unittest.TestCase):
                     "invitation.send",
                     "profile.edit",
                     "discovery.publish",
+                    "account.access",
                 }
             ),
         )
-        self.assertNotIn("account.access", ENFORCEMENT_READY_CAPABILITIES)
 
-    def test_http_mutation_and_discovery_hooks_exist_before_capability_is_exposed(self):
+    def test_http_mutation_discovery_and_account_access_hooks_exist_before_capability_is_exposed(self):
         identity_source = inspect.getsource(install_identity_routes)
         legacy_profile_source = inspect.getsource(validate_profile_update)
         spaces_source = inspect.getsource(install_space_routes)
         discovery_source = inspect.getsource(discover_spaces_with_moderation)
+        auth_source = inspect.getsource(auth_middle)
+        issue_source = inspect.getsource(issue_platform_restriction)
+        websocket_source = inspect.getsource(authenticate_websocket)
 
         self.assertIn('"profile.edit"', identity_source)
         self.assertIn('"profile.edit"', legacy_profile_source)
@@ -64,6 +71,20 @@ class PlatformRestrictionContractTests(unittest.TestCase):
         self.assertIn('"invitation.send"', spaces_source)
         self.assertIn('"discovery.publish"', discovery_source)
         self.assertIn('"account.access"', discovery_source)
+        self.assertIn("assert_http_account_access", auth_source)
+        self.assertIn("revoke_account_sessions", issue_source)
+        self.assertIn("disconnect_account_realtime", issue_source)
+        self.assertIn("active_account_access_restriction", websocket_source)
+
+    def test_account_access_exemptions_are_narrow_and_appeal_focused(self):
+        self.assertEqual(
+            set(ACCOUNT_ACCESS_HTTP_EXEMPTIONS),
+            {
+                ("GET", "/identity/v2/me"),
+                ("GET", "/trust-safety/v1/me/restrictions"),
+                ("GET", "/trust-safety/v1/me/restriction-appeals"),
+            },
+        )
 
     def test_restriction_appeal_is_one_per_account_and_restriction(self):
         names = {
