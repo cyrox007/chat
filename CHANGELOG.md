@@ -2,6 +2,47 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.11-alpha.1] — 2026-09-17
+
+Stage 6.8 checkpoint 2 — end-to-end `account.access` platform suspension.
+
+- сильнейшая moderation capability `account.access` переведена из schema-only состояния в реальный server-side enforcement и разрешена только в platform scope;
+- выдача suspension по-прежнему требует `moderation.platform.account_access`, обычного platform moderation permission и строгого `actor_authority > target_authority`;
+- при выдаче ограничения существующие Identity v2 sessions отзываются в той же транзакции, legacy device sessions деактивируются;
+- короткоживущий stateless access JWT не позволяет обойти suspension: каждый authenticated HTTP request повторно проверяет durable PostgreSQL restriction;
+- доступ под suspension ограничен минимальным Safety-контуром: identity bootstrap, просмотр собственного ограничения, создание/просмотр своей апелляции и logout;
+- login/refresh могут создать restricted session, чтобы Account не терял право узнать причину санкции и подать апелляцию;
+- realtime ticket re-check выполняется после consume one-time ticket, закрывая гонку «ticket выдан непосредственно перед suspension»;
+- уже открытые Messenger/Space WebSocket соединения отключаются distributed `account_control` событием во всех Uvicorn workers; Redis transport failure не отменяет durable sanction;
+- SPA получила отдельный restricted Safety Center с причиной, сроком, appeal state и logout вместо доступа к обычным функциям PubChat;
+- снятие/истечение restriction не восстанавливает ранее отозванные sessions: Account проходит нормальную повторную аутентификацию;
+- PostgreSQL integration и contract tests фиксируют platform-only scope, session revocation, active/revoke semantics, узкий HTTP exemption surface и HTTP/realtime enforcement hooks.
+
+Следующий отдельный Trust & Safety task — hardening moderation hierarchy/permissions; AI-assessment остаётся последующим этапом после human authority path.
+
+Quality gate: functional exact-head CI → version/docs sync → повторный exact-head CI перед merge.
+
+## [0.6.10-alpha.1] — 2026-09-17
+
+Stage 6.8 checkpoint 1 — production-grade Trust & Safety foundation.
+
+- platform Trust & Safety intake отделён от Space-local moderation и принимает Persona, received Messenger message и Space message reports;
+- server-owned priority, duplicate/rate guard, moderator queue claim/release и privacy-bounded evidence access фиксируют операционный report flow;
+- evidence viewing и решения пишутся в append-only audit trail, а пользователь получает понятный public explanation;
+- platform roles получили authority levels (`user=0`, `moderator=50`, `admin=100`), а санкции требуют одновременно permission и `actor_authority > target_authority`;
+- добавлены durable Account-level capability restrictions с platform/Space scope, temporary/permanent duration, authority snapshots и revoke history;
+- permanent restrictions и полный `account.access` требуют отдельных elevated permissions;
+- server-side enforcement подключён для `messenger.send`, `space.chat.send`, `media.upload`, `space.create`, `space.join`, `invitation.send`, `profile.edit` и `discovery.publish`;
+- restriction API не предлагает capabilities без реального backend enforcement;
+- Safety Center показывает Account его ограничения, причину, scope и expiry;
+- platform-restriction appeals имеют отдельную queue, claim/release, authority checks и independent-review preference; overturn revoke-ит restriction, не стирая историю;
+- moderator Trust & Safety UI поддерживает report triage, evidence, restriction issue/revoke и appeal review;
+- AI-copilot boundary зафиксирован документально: AI помогает triage/evidence/recommendation, но не имеет punitive authority в beta baseline.
+
+`account.access` в этом checkpoint ещё намеренно не выдавался до появления полного session/HTTP/realtime enforcement; это закрыто в `0.6.11-alpha.1`.
+
+Quality gate: exact-head CI → release sync → exact-head CI перед merge.
+
 ## [0.6.9-alpha.1] — 2026-09-16
 
 Stage 6 checkpoint 10 — Web Push / PWA Messenger delivery.
