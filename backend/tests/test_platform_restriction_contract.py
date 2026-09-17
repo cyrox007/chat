@@ -1,14 +1,18 @@
+import inspect
 import unittest
 
 from pydantic import ValidationError
 
 from app import app
+from components.auth.permissions import validate_profile_update
 from components.moderation.model import PlatformRestrictionAppeal
 from components.moderation.schemas import (
     PlatformRestrictionAppealCreateRequest,
     PlatformRestrictionAppealResolveRequest,
 )
+from views.identity.routers import install as install_identity_routes
 from views.moderation.restriction_routers import ENFORCEMENT_READY_CAPABILITIES
+from views.spaces.routers import install as install_space_routes
 
 
 class PlatformRestrictionContractTests(unittest.TestCase):
@@ -39,12 +43,23 @@ class PlatformRestrictionContractTests(unittest.TestCase):
                     "space.create",
                     "space.join",
                     "invitation.send",
+                    "profile.edit",
                 }
             ),
         )
         self.assertNotIn("account.access", ENFORCEMENT_READY_CAPABILITIES)
-        self.assertNotIn("profile.edit", ENFORCEMENT_READY_CAPABILITIES)
         self.assertNotIn("discovery.publish", ENFORCEMENT_READY_CAPABILITIES)
+
+    def test_http_mutation_hooks_are_present_before_capability_is_exposed(self):
+        identity_source = inspect.getsource(install_identity_routes)
+        legacy_profile_source = inspect.getsource(validate_profile_update)
+        spaces_source = inspect.getsource(install_space_routes)
+
+        self.assertIn('"profile.edit"', identity_source)
+        self.assertIn('"profile.edit"', legacy_profile_source)
+        self.assertIn('"space.create"', spaces_source)
+        self.assertIn('"space.join"', spaces_source)
+        self.assertIn('"invitation.send"', spaces_source)
 
     def test_restriction_appeal_is_one_per_account_and_restriction(self):
         names = {
