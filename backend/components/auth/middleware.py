@@ -1,5 +1,7 @@
 from fastapi import HTTPException, Request, status
 
+from components.moderation.account_access import assert_http_account_access
+from database import Database
 from utils.jwt import validate_access_token
 from utils.logger import setup_logger
 
@@ -25,6 +27,21 @@ async def auth_middle(request: Request):
 
     request.state.user = user_data
     request.state.user_uid = user_data["user_uid"]
+
+    # Access JWTs are intentionally stateless and short-lived, so a platform
+    # suspension cannot rely only on refresh-token revocation. Every authenticated
+    # HTTP request re-checks the durable account.access restriction. The narrow
+    # exemption list keeps Safety/Appeal and identity bootstrap reachable.
+    session = await Database.get_session()
+    try:
+        await assert_http_account_access(
+            session,
+            request,
+            user_data["user_uid"],
+        )
+    finally:
+        await session.close()
+
     logger.info("HTTP-аутентификация успешна для пользователя %s", user_data["user_uid"])
     return user_data
 
