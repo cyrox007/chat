@@ -2,6 +2,25 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.12-alpha.1] — 2026-09-17
+
+Stage 6.8 checkpoint 3 — fine-grained platform moderation permission hierarchy.
+
+- доступ к Trust & Safety queue больше не означает автоматическое право выдавать, снимать и пересматривать санкции: добавлены отдельные `moderation.platform.restrict`, `moderation.platform.revoke` и `moderation.platform.appeal.review` permissions;
+- baseline moderator получает обычные issue/revoke/appeal-review powers, а permanent restrictions и `account.access` по-прежнему требуют отдельных elevated permissions;
+- restriction issuance требует одновременно platform moderation access, explicit issue permission и строгий `actor_authority > target_authority`;
+- direct revoke требует отдельный revoke permission, authority выше target и authority не ниже snapshot исходного issuer, поэтому peer moderator не может отменить sanction более сильного admin;
+- revoke permanent restriction и `account.access` дополнительно требует тех же elevated permissions, что нужны для чувствительного исходного решения;
+- appeal review требует отдельного review permission плюс существующие authority/sensitivity checks; independent-review search учитывает только реально eligible reviewers;
+- action endpoints переведены с generic moderator dependency на specific action dependencies, а capability discovery возвращает только те capabilities, которые текущий moderator действительно может выдать;
+- миграция `k0a6d4f88010` после исторического explicit-ID seed синхронизирует sequence `platform_permissions_id_seq`, устраняя collision при clean migration;
+- PostgreSQL integration проверяет denial для manage-only custom role, peer-moderator revoke, запрет override admin sanction, elevated permanent/account-access permissions и explicit appeal-review permission;
+- moderator UI использует server-provided permission flags, чтобы не предлагать actor действия, которые backend всё равно отклонит.
+
+Следующий Stage 6.8 slice — provider-neutral AI assessment / copilot layer; punitive authority остаётся только у human policy path.
+
+Quality gate: functional exact-head CI #528 green before release-doc sync; final exact-head CI required before merge.
+
 ## [0.6.11-alpha.1] — 2026-09-17
 
 Stage 6.8 checkpoint 2 — end-to-end `account.access` platform suspension.
