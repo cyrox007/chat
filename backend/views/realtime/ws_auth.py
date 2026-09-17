@@ -6,8 +6,10 @@ from fastapi import WebSocket, status
 from pydantic import ValidationError
 from starlette.websockets import WebSocketDisconnect
 
+from components.moderation.account_access import active_account_access_restriction
 from components.realtime import realtime_service
 from components.realtime.schemas import RealtimeAuthFrame
+from database import Database
 from settings import config
 from utils.logger import setup_logger
 
@@ -56,6 +58,21 @@ async def authenticate_websocket(
     )
     if not ticket_payload:
         await websocket.close(code=4401, reason="Invalid or expired realtime ticket")
+        return None
+
+    # A ticket may have been issued milliseconds before a platform suspension.
+    # Re-check PostgreSQL after consuming it so account.access cannot be bypassed
+    # with a previously issued one-time ticket.
+    session = await Database.get_session()
+    try:
+        restriction = await active_account_access_restriction(
+            session,
+            ticket_payload["account_uid"],
+        )
+    finally:
+        await session.close()
+    if restriction is not None:
+        await websocket.close(code=4003, reason="Account access restricted")
         return None
 
     user_data = {
