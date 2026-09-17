@@ -47,7 +47,7 @@
 
 - [`identity-v2.md`](identity-v2.md) — Account/Persona/Credential/Session/Privacy.
 - [`realtime-v2.md`](realtime-v2.md) — tickets, Redis pub/sub, presence, reconnect.
-- [`trust-safety-v1.md`](trust-safety-v1.md) — platform report intake, иерархия ролей, capability restrictions, runtime enforcement, audit/appeals и AI-copilot boundaries (`0.6.10-alpha.1` foundation; `0.6.11-alpha.1` full `account.access` suspension).
+- [`trust-safety-v1.md`](trust-safety-v1.md) — platform report intake, иерархия ролей, capability restrictions, runtime enforcement, audit/appeals и AI-copilot boundaries (`0.6.10-alpha.1` foundation; `0.6.11-alpha.1` full `account.access`; `0.6.12-alpha.1` permission/hierarchy hardening candidate).
 - [`product-identity-v1.md`](product-identity-v1.md) — Persona/Space appearance и recurring Activities.
 - [`social-engagement-v2.md`](social-engagement-v2.md) — earned achievements и Conversation Rounds.
 - [`activity-occurrences-v1.md`](activity-occurrences-v1.md) — occurrences/reminders/inbox.
@@ -59,6 +59,6 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Текущий release checkpoint: `0.6.11-alpha.1` — end-to-end `account.access` platform suspension поверх Trust & Safety foundation `0.6.10-alpha.1`.
+Release candidate текущей ветки: `0.6.12-alpha.1`; последний выпущенный `main` checkpoint — `0.6.11-alpha.1` до финального exact-head CI и merge PR #32.
 
-Текущая development-линия: `0.6.x-alpha`. Следующая отдельная Trust & Safety задача — hardening moderator hierarchy/permissions; затем provider-neutral AI assessment storage/adapter, anti-abuse/metrics/retention. Параллельно продолжаются browser/security/observability и unit-economics/monetization planning.
+Текущая development-линия: `0.6.x-alpha`. После permission/hierarchy hardening следующая отдельная Trust & Safety задача — provider-neutral AI assessment storage/adapter + moderator recommendation workflow, затем anti-abuse/metrics/retention. Параллельно продолжаются browser/security/observability и unit-economics/monetization planning.
