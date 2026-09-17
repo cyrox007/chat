@@ -30,6 +30,7 @@ def create_app() -> FastAPI:
     from views.identity import routers as identity_routes
     from views.messenger import routers as http_routers_messenger
     from views.messenger import ws_routers as ws_routers_messenger
+    from views.moderation import ai_routers as moderation_ai_routes
     from views.moderation import restriction_routers as moderation_restriction_routes
     from views.moderation import routers as moderation_routes
     from views.notifications import routers as notification_routes
@@ -73,6 +74,7 @@ def create_app() -> FastAPI:
     spaces_routes.install(app)
     moderation_routes.install(app)
     moderation_restriction_routes.install(app)
+    moderation_ai_routes.install(app)
     engagement_routes.install(app)
     engagement_round_routes.install(app)
     http_routes_chat.install(app)
