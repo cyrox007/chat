@@ -16,6 +16,7 @@ from components.moderation.model import (
 )
 from components.moderation.policy import (
     ACCOUNT_ACCESS_PERMISSION,
+    APPEAL_REVIEW_PERMISSION,
     PERMANENT_RESTRICTION_PERMISSION,
     PLATFORM_MODERATION_PERMISSION,
     account_has_platform_permission,
@@ -227,6 +228,11 @@ async def _reviewer_is_eligible(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"error_type": "platform_moderation_permission_required"},
         )
+    if not await account_has_platform_permission(db, reviewer.uid, APPEAL_REVIEW_PERMISSION):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error_type": "appeal_review_permission_required"},
+        )
     reviewer_level = await effective_authority_level(db, reviewer.uid)
     if reviewer_level < restriction.actor_authority_level:
         raise HTTPException(
@@ -269,7 +275,7 @@ async def _independent_reviewer_available(
         .join(PlatformPermission, PlatformPermission.id == RolePermission.permission_id)
         .join(Account, Account.uid == AccountRole.account_uid)
         .where(
-            PlatformPermission.name == PLATFORM_MODERATION_PERMISSION,
+            PlatformPermission.name == APPEAL_REVIEW_PERMISSION,
             Account.status == "active",
             Account.deleted_at.is_(None),
             AccountRole.account_uid != exclude_account_uid,
@@ -391,6 +397,7 @@ async def release_platform_restriction_appeal(
             detail={"error_type": "platform_restriction_appeal_not_owned"},
         )
     restriction = await _load_restriction(db, appeal.restriction_uid)
+    await _reviewer_is_eligible(db, reviewer, restriction)
     appeal.reviewer_account_uid = None
     appeal.updated_at = datetime.utcnow()
     await _audit_restriction(

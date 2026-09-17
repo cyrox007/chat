@@ -2,13 +2,13 @@
 
 ## Текущий статус
 
-Released: **`0.6.11-alpha.1`**.
+Released: **`0.6.12-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
-Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression, durable unread-Messenger email delivery, Web Push/PWA Messenger delivery и Trust & Safety account suspension enforcement.
+Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression, durable unread-Messenger email delivery, Web Push/PWA Messenger delivery, full `account.access` enforcement и fine-grained platform moderation permission boundaries.
 
-Следующий отдельный Trust & Safety task — **hardening moderation hierarchy/permissions**. После него — provider-neutral AI assessment/c copilot layer, anti-spam/raid signals, moderation metrics/privacy-retention и incident rehearsal. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
+Следующий отдельный Trust & Safety task — **provider-neutral AI assessment / copilot layer**. После него — anti-spam/raid signals, media/upload abuse workflow, moderation metrics/privacy-retention и incident rehearsal. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
 
 Отдельно зафиксированы два обязательных launch workstream, которые раньше были недооценены: **production-grade moderation / Trust & Safety** и **устойчивая монетизация / unit economics**. PubChat не может считать наличие таблиц moderation готовой системой и не может рассчитывать, что инфраструктура, поддержка и Trust & Safety будут бесконечно финансироваться только энтузиазмом команды.
 
@@ -112,6 +112,16 @@ Direct/Sentinel topology abstraction, real master+replica+3-Sentinel promotion r
 - revoke/expiry не оживляет ранее отозванную session: требуется нормальная повторная аутентификация;
 - PostgreSQL integration и contract tests фиксируют session/HTTP/realtime/scope semantics.
 
+### Stage 6.8 checkpoint 3 — Moderation permission hierarchy ✅ `0.6.12-alpha.1`
+- platform queue access отделён от authority выдавать санкции: добавлены `moderation.platform.restrict`, `moderation.platform.revoke` и `moderation.platform.appeal.review`;
+- обычный moderator может выдавать и снимать только те restrictions, для которых у него есть соответствующий action permission и достаточный authority;
+- permanent restriction и `account.access` сохраняют отдельные elevated permissions и не становятся доступны только из-за высокого role level;
+- direct revoke требует revoke permission, authority выше target и authority не ниже snapshot исходного actor, поэтому peer moderator не может отменить решение более сильного admin;
+- appeal reviewer требует отдельного review permission плюс authority/sensitivity checks; independent-review discovery учитывает только реально eligible reviewers;
+- action endpoints используют specific dependencies вместо общего `moderation.platform.manage`, а capability discovery возвращает только реально доступные текущему actor действия;
+- Alembic migration синхронизирует permission sequence после исторического explicit-ID seed и раздаёт новые permissions базовым moderator/admin roles;
+- PostgreSQL integration фиксирует manage-only custom role denial, peer revoke, запрет override admin sanction, elevated permanent/account-access path и отдельный appeal-review permission.
+
 ## Stage 6 — Pre-beta hardening 🚧 `0.6.x-alpha`
 
 ### 6.1 Data / migrations 🚧
@@ -185,7 +195,7 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 
 ### 6.8 Trust & Safety / moderation launch readiness 🚧
 
-Базовый platform moderation контур и full `account.access` уже реализованы, но до публичной beta остаются операционные и AI-assisted слои.
+Базовый platform moderation контур, full `account.access` и fine-grained human moderation permission hierarchy уже реализованы, но до публичной beta остаются AI-assisted и операционные слои.
 
 - ✅ единый platform report flow для Persona, Messenger message и Space message; media-attachment specialization ещё впереди;
 - ✅ report taxonomy/priority baseline, duplicate collapse и rate guard;
@@ -197,7 +207,7 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ✅ immutable/auditable restriction history и отдельный revoke event;
 - ✅ platform restriction appeal queue с claim/review и independent-review preference;
 - ✅ internal moderator UX для report review, evidence, issue/revoke restrictions и appeals;
-- ⏳ hierarchy/permission hardening: более тонкое разделение временных/permanent/account-access/revoke/appeal powers и regression matrix для role changes;
+- ✅ hierarchy/permission hardening: отдельные issue/revoke/appeal-review permissions, elevated permanent/account-access powers и issuer-authority floor для revoke;
 - ⏳ AI assessment model + provider-neutral adapter + recommendation UI (`accepted / modified / rejected / not_used`);
 - ⏳ anti-spam/raid baseline: message burst, invite/DM abuse, repeated unsolicited contacts, mass-join/leave и obvious automation pressure;
 - ⏳ media/upload abuse workflow: quarantine/remove/review hooks без автоматической выдачи модератору лишних приватных данных;
@@ -260,6 +270,7 @@ Beta назначается только когда launch-critical journeys р�
 - Production listener принадлежит process manager/systemd; routine deploy rolling, frontend publish staged.
 - Rolling deploy требует expand/contract-compatible schema changes.
 - Moderation decision имеет scope/reason/audit trail и не покупается за деньги.
+- Platform queue access не означает право на sanction actions: issue/revoke/appeal review разделены explicit permissions и authority checks.
 - `account.access` является elevated platform-only capability; он не отменяет право пользователя увидеть причину и подать appeal.
 - AI moderation не является источником punitive authority в beta baseline.
 - Communication quality first; никакой тюремной терминологии.

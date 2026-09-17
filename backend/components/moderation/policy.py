@@ -33,6 +33,9 @@ from components.room.model import Room
 
 
 PLATFORM_MODERATION_PERMISSION = "moderation.platform.manage"
+RESTRICTION_ISSUE_PERMISSION = "moderation.platform.restrict"
+RESTRICTION_REVOKE_PERMISSION = "moderation.platform.revoke"
+APPEAL_REVIEW_PERMISSION = "moderation.platform.appeal.review"
 PERMANENT_RESTRICTION_PERMISSION = "moderation.platform.permanent"
 ACCOUNT_ACCESS_PERMISSION = "moderation.platform.account_access"
 
@@ -182,6 +185,11 @@ async def issue_platform_restriction(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"error_type": "platform_moderation_permission_required"},
+        )
+    if not await account_has_platform_permission(db, actor.uid, RESTRICTION_ISSUE_PERMISSION):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error_type": "restriction_issue_permission_required"},
         )
 
     actor_level, target_level = await assert_higher_authority(db, actor.uid, target.uid)
@@ -339,7 +347,40 @@ async def revoke_platform_restriction(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"error_type": "platform_moderation_permission_required"},
         )
-    await assert_higher_authority(db, actor.uid, restriction.target_account_uid)
+    if not await account_has_platform_permission(db, actor.uid, RESTRICTION_REVOKE_PERMISSION):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error_type": "restriction_revoke_permission_required"},
+        )
+
+    actor_level, _ = await assert_higher_authority(db, actor.uid, restriction.target_account_uid)
+    if actor_level < restriction.actor_authority_level:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error_type": "restriction_revoke_authority_insufficient",
+                "required_authority_level": restriction.actor_authority_level,
+                "actor_authority_level": actor_level,
+            },
+        )
+    if restriction.expires_at is None and not await account_has_platform_permission(
+        db,
+        actor.uid,
+        PERMANENT_RESTRICTION_PERMISSION,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error_type": "revoke_permanent_permission_required"},
+        )
+    if restriction.capability == "account.access" and not await account_has_platform_permission(
+        db,
+        actor.uid,
+        ACCOUNT_ACCESS_PERMISSION,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error_type": "revoke_account_access_permission_required"},
+        )
 
     now = datetime.utcnow()
     restriction.status = "revoked"
