@@ -6,19 +6,19 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Release candidate текущей ветки: `0.6.10-alpha.1`. Последний уже выпущенный `main` checkpoint остаётся `0.6.9-alpha.1` до exact-head CI и merge PR #30.
+Текущий release checkpoint: `0.6.11-alpha.1` — end-to-end `account.access` platform suspension поверх Trust & Safety foundation `0.6.10-alpha.1`.
 
 Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 
 Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery baseline, Redis 7.2 distributed realtime, restart/recovery и real Sentinel master-promotion baseline, real multi-process Uvicorn/WebSocket rehearsal с rolling restart, bounded per-socket backpressure, message-notification delivery policy с distributed active-context suppression, durable unread-Messenger email delivery и standards-based Web Push/PWA Messenger delivery. Production backend запускается за постоянным systemd-owned listener, routine deploy меняет workers rolling reload без намеренного `502` окна, а frontend публикуется staged/asset-first.
 
-Trust & Safety checkpoint `0.6.10-alpha.1` добавляет отдельный platform report/triage/evidence контур, Account-level иерархию moderation authority, capability restrictions с server-side enforcement, target-visible reason/scope/expiry и независимый appeal flow. Рабочие ограничения уже покрывают отправку Messenger/Space сообщений, messaging-media, создание/вступление/приглашения Spaces, редактирование Persona и публикацию owner-led Spaces в organic discovery. `account.access` намеренно ещё не выдаётся: полный suspension требует end-to-end session/HTTP/realtime enforcement и сохранения доступа к Safety Center/appeal/logout.
+Trust & Safety checkpoint `0.6.10-alpha.1` добавил отдельный platform report/triage/evidence контур, Account-level иерархию moderation authority, capability restrictions с server-side enforcement, target-visible reason/scope/expiry и независимый appeal flow. `0.6.11-alpha.1` завершает full `account.access` suspension: platform-only sanction отзывает существующие sessions, блокирует обычные HTTP/realtime surfaces по durable PostgreSQL restriction, отключает уже открытые WebSocket connections и оставляет затронутому Account только ограниченный Safety/appeal/logout контур.
 
-AI moderation зафиксирован как copilot: он может помогать triage, evidence summary и рекомендациями, но не является источником punitive authority в beta baseline. Следующий Trust & Safety слой — full Account suspension semantics, затем provider-neutral AI assessment storage/adapter, anti-spam/raid signals, moderation metrics/privacy-retention и incident rehearsal.
+AI moderation зафиксирован как copilot: он может помогать triage, evidence summary и рекомендациями, но не является источником punitive authority в beta baseline. Следующая отдельная Trust & Safety задача — hardening hierarchy/permissions; затем provider-neutral AI assessment storage/adapter, anti-spam/raid signals, moderation metrics/privacy-retention и incident rehearsal.
 
 Message delivery различает online presence и активный conversation/Space: лишний toast/sound подавляется, если пользователь уже смотрит тот же context. Offline external re-engagement разрешён только для Messenger по opt-in. Для давно отсутствующего Account email worker создаёт агрегированное privacy-safe напоминание по durable ledger/cooldown/retry contract, а Web Push может доставить privacy-minimal уведомление на явно подписанное устройство. Space chat по-прежнему не создаёт background notification pressure отсутствующему Account.
 
-До beta всё ещё нужны full Account access suspension semantics, AI-assisted moderation layer и anti-abuse/metrics/retention gates, rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, observability, security и финальные accessibility/browser/operations gates. Параллельно формализуются cost model и monetization boundaries, чтобы infrastructure/moderation не зависели от бессрочного ручного финансирования.
+До beta всё ещё нужны AI-assisted moderation layer и anti-abuse/metrics/retention gates, rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, observability, security и финальные accessibility/browser/operations gates. Параллельно формализуются cost model и monetization boundaries, чтобы infrastructure/moderation не зависели от бессрочного ручного финансирования.
 
 Канонический номер версии находится в `VERSION`, история выпусков — в `CHANGELOG.md`.
 
@@ -69,7 +69,8 @@ SPA является первым клиентом; backend API и realtime cont
 - Space moderator не является platform moderator.
 - Platform moderation authority определяется server-side RBAC + explicit authority hierarchy; actor не может ограничить Account с равным или более высоким authority.
 - Platform sanctions ограничивают конкретные capabilities и считаются работающими только там, где есть реальный server-side enforcement point.
-- Permanent sanctions требуют повышенного permission; `account.access` не выдаётся до полного suspension/recovery/appeal enforcement.
+- Permanent sanctions требуют повышенного permission; `account.access` — отдельная elevated capability, platform-only и требует полного suspension enforcement.
+- `account.access` отзывает существующие sessions, блокирует обычный HTTP/realtime доступ и сохраняет только минимальный Safety/appeal/logout путь; старые sessions не восстанавливаются после revoke.
 - AI moderation — copilot, а не самостоятельный punitive authority в beta baseline.
 - Деньги не покупают trust и moderation power.
 - Gifts/support не являются рейтингом и не влияют на discovery/authority.

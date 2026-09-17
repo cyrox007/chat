@@ -2,15 +2,15 @@
 
 ## Текущий статус
 
-Released: **`0.6.9-alpha.1`**.
+Released: **`0.6.11-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
-Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression, durable unread-Messenger email delivery и Web Push/PWA Messenger delivery.
+Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression, durable unread-Messenger email delivery, Web Push/PWA Messenger delivery и Trust & Safety account suspension enforcement.
 
-Следующий launch-critical workstream — **production-grade moderation / Trust & Safety**: единый report flow, moderator queue, evidence boundaries, scoped actions, audit trail и appeals end-to-end. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
+Следующий отдельный Trust & Safety task — **hardening moderation hierarchy/permissions**. После него — provider-neutral AI assessment/c copilot layer, anti-spam/raid signals, moderation metrics/privacy-retention и incident rehearsal. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
 
-Отдельно зафиксированы два обязательных launch workstream, которые раньше были недооценены: **production-grade moderation / Trust & Safety** и **устойчивая монетизация / unit economics**. Текущий Report/ModerationAction/Appeal foundation полезен, но сам по себе не является готовой операционной системой модерации. PubChat также не может рассчитывать, что инфраструктура, поддержка и Trust & Safety будут бесконечно финансироваться только энтузиазмом команды.
+Отдельно зафиксированы два обязательных launch workstream, которые раньше были недооценены: **production-grade moderation / Trust & Safety** и **устойчивая монетизация / unit economics**. PubChat не может считать наличие таблиц moderation готовой системой и не может рассчитывать, что инфраструктура, поддержка и Trust & Safety будут бесконечно финансироваться только энтузиазмом команды.
 
 ## Завершённые checkpoints
 
@@ -89,6 +89,29 @@ Direct/Sentinel topology abstraction, real master+replica+3-Sentinel promotion r
 - logout/session teardown отвязывает local push subscription best-effort для shared-browser safety;
 - Notifications UI получил email/Web Push controls; deterministic provider/privacy/PWA guards закреплены в CI.
 
+### Stage 6.8 checkpoint 1 — Trust & Safety foundation ✅ `0.6.10-alpha.1`
+- platform report intake отделён от Space-local moderation и поддерживает Persona, Messenger message и Space message reports;
+- server-owned priority, duplicate/rate guard, moderator queue claim/release и privacy-bounded evidence access;
+- append-only audit trail и target-visible public explanation;
+- platform role authority hierarchy (`user=0`, `moderator=50`, `admin=100`) + explicit moderation permissions;
+- durable Account-level capability restrictions со scope, temporary/permanent duration, revoke history и authority snapshots;
+- server-side enforcement для Messenger/Space chat, media upload, Space create/join/invite, Persona edit и organic discovery publication;
+- independent platform restriction appeal queue с overturn/revoke semantics;
+- moderator UX для triage/evidence/restrictions/appeals;
+- AI-copilot boundary закреплён: AI помогает, но не является punitive authority.
+
+### Stage 6.8 checkpoint 2 — Full Account suspension ✅ `0.6.11-alpha.1`
+- `account.access` доступен только platform-wide и требует elevated permission + strict authority hierarchy;
+- выдача suspension отзывает существующие Identity v2 sessions и legacy device sessions;
+- stateless access JWT не обходит санкцию: authenticated HTTP requests перепроверяют durable PostgreSQL restriction;
+- login/refresh поддерживают deliberately restricted session, чтобы пользователь видел причину и мог подать appeal;
+- минимальный разрешённый контур под suspension: identity bootstrap, собственное restriction state, appeal creation/history и logout;
+- realtime ticket re-check после consume закрывает гонку «ticket получен перед suspension»;
+- distributed account-control disconnect закрывает уже открытые Messenger/Space WebSocket connections во всех workers;
+- SPA переводит suspended Account в restricted Safety Center с причиной, сроком, appeal state и logout;
+- revoke/expiry не оживляет ранее отозванную session: требуется нормальная повторная аутентификация;
+- PostgreSQL integration и contract tests фиксируют session/HTTP/realtime/scope semantics.
+
 ## Stage 6 — Pre-beta hardening 🚧 `0.6.x-alpha`
 
 ### 6.1 Data / migrations 🚧
@@ -162,25 +185,27 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 
 ### 6.8 Trust & Safety / moderation launch readiness 🚧
 
-Stage 4 дал доменные сущности reports/actions/appeals, но **production-grade moderation пока не готова**. До публичного запуска нужен не только schema/API foundation, а рабочий операционный контур.
+Базовый platform moderation контур и full `account.access` уже реализованы, но до публичной beta остаются операционные и AI-assisted слои.
 
-- ⏳ единый пользовательский report flow из Persona, Messenger message, Space message, Space/profile и media attachment;
-- ⏳ report reason taxonomy, severity/priority, duplicate collapse и rate-limit против report spam;
-- ⏳ moderator queue с фильтрами, search, ownership/claim, priority и состояниями triage/in-review/resolved/escalated;
-- ⏳ безопасный evidence snapshot/reference: что именно было пожаловано, контекст, timestamps и минимально необходимая история без бесконтрольного доступа к приватной переписке;
-- ⏳ platform moderation actions по Account/content с чётким scope, сроком, reason code и human-readable explanation;
-- ⏳ Space-local moderation отдельно от platform Trust & Safety; Space moderator не получает глобальных прав;
-- ⏳ Account-level block/suspension/ban-evasion enforcement для sibling Persona и новых Persona того же Account;
-- ⏳ anti-spam/raid baseline: message burst, invite/DM abuse, repeated unsolicited contacts, mass-join/leave и очевидная automation pressure;
+- ✅ единый platform report flow для Persona, Messenger message и Space message; media-attachment specialization ещё впереди;
+- ✅ report taxonomy/priority baseline, duplicate collapse и rate guard;
+- ✅ moderator queue с ownership/claim и triage/in-review/resolved/escalated states;
+- ✅ privacy-bounded evidence snapshot/reference и audit просмотра evidence;
+- ✅ platform capability restrictions по Account с scope, сроком, reason code, public explanation и permanent/elevated permissions;
+- ✅ Space-local moderation отделена от platform Trust & Safety;
+- ✅ Account-level hierarchy + capability enforcement, включая full `account.access` session/HTTP/realtime suspension;
+- ✅ immutable/auditable restriction history и отдельный revoke event;
+- ✅ platform restriction appeal queue с claim/review и independent-review preference;
+- ✅ internal moderator UX для report review, evidence, issue/revoke restrictions и appeals;
+- ⏳ hierarchy/permission hardening: более тонкое разделение временных/permanent/account-access/revoke/appeal powers и regression matrix для role changes;
+- ⏳ AI assessment model + provider-neutral adapter + recommendation UI (`accepted / modified / rejected / not_used`);
+- ⏳ anti-spam/raid baseline: message burst, invite/DM abuse, repeated unsolicited contacts, mass-join/leave и obvious automation pressure;
 - ⏳ media/upload abuse workflow: quarantine/remove/review hooks без автоматической выдачи модератору лишних приватных данных;
-- ⏳ immutable/auditable moderation history, actor/reason/scope/duration и защита от тихого редактирования прошлых решений;
-- ⏳ полноценная appeal queue, повторная проверка другим moderator/admin там, где это уместно, и защита от бесконечного appeal spam;
-- ⏳ internal moderator UX: быстрый context review, linked reports/history, но без публичного social score и без автоматического «вердикта» на основе reputation;
-- ⏳ moderation metrics: queue age, response time, action/appeal counts, overturned decisions, abuse-rate signals; без KPI, стимулирующих модераторов выдавать больше санкций;
-- ⏳ privacy/retention policy для reports/evidence и redaction/export procedures;
-- ⏳ load/incident rehearsal: spam-wave/raid, moderator backlog, Redis/backend outage во время incident response.
+- ⏳ moderation metrics: queue age, response time, action/appeal counts, overturned decisions, AI recommendation outcomes; без KPI, стимулирующих больше санкций;
+- ⏳ privacy/retention policy для reports/evidence/AI envelopes и redaction/export procedures;
+- ⏳ load/incident rehearsal: spam-wave/raid, moderator backlog, AI/provider outage, Redis/backend outage во время incident response.
 
-**Beta gate:** нельзя считать модерацию готовой только потому, что `Report`, `ModerationAction` и `Appeal` существуют в БД. Для публичной beta должен работать end-to-end flow «пожаловаться → очередь → решение → аудит → уведомление → апелляция» хотя бы для основных типов abuse.
+**Beta gate:** `report → triage/AI assist → human claim/review → hierarchy/permission check → restriction → runtime enforcement → audit → target notification → appeal → independent review/revoke/uphold` должен работать end-to-end для основных типов abuse.
 
 ### 6.9 Sustainable monetization / business viability 🚧
 
@@ -235,5 +260,7 @@ Beta назначается только когда launch-critical journeys р�
 - Production listener принадлежит process manager/systemd; routine deploy rolling, frontend publish staged.
 - Rolling deploy требует expand/contract-compatible schema changes.
 - Moderation decision имеет scope/reason/audit trail и не покупается за деньги.
+- `account.access` является elevated platform-only capability; он не отменяет право пользователя увидеть причину и подать appeal.
+- AI moderation не является источником punitive authority в beta baseline.
 - Communication quality first; никакой тюремной терминологии.
 - SPA — первый клиент, contracts reusable для Android/iOS.

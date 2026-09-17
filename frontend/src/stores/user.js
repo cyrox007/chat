@@ -33,6 +33,7 @@ export default {
 		getIdentity: (state) => state.identity,
 		getPersona: (state) => state.identity?.persona || null,
 		getAccount: (state) => state.identity?.account || null,
+		getAccessRestriction: (state) => state.identity?.access_restriction || null,
 		getUserStatus: (state) => (userId) => state.userStatuses[userId],
 	},
 	mutations: {
@@ -59,6 +60,11 @@ export default {
 			} else {
 				localStorage.removeItem('identity');
 			}
+		},
+		setAccessRestriction(state, restriction) {
+			if (!state.identity) state.identity = {};
+			state.identity = { ...state.identity, access_restriction: restriction || null };
+			localStorage.setItem('identity', JSON.stringify(state.identity));
 		},
 		setMultipleUserStatuses(state, statuses) {
 			state.userStatuses = { ...state.userStatuses, ...statuses };
@@ -92,6 +98,7 @@ export default {
 				persona: responseData.persona,
 				privacy: responseData.privacy,
 				role: responseData.role,
+				access_restriction: responseData.access_restriction || null,
 			});
 			commit('setAuth', true);
 		},
@@ -132,6 +139,7 @@ export default {
 					persona: response.data.persona,
 					privacy: response.data.privacy,
 					role: response.data.role,
+					access_restriction: response.data.access_restriction || null,
 				});
 				commit('setAuth', true);
 				return response.data;

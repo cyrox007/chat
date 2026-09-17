@@ -22,6 +22,7 @@ from components.identity.service import (
     update_primary_persona,
     update_privacy,
 )
+from components.moderation.account_access import account_access_projection
 from components.moderation.policy import assert_allowed
 from components.social.privacy import can_view_profile
 from database import Database
@@ -43,6 +44,23 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
     )
 
 
+async def _identity_response(db: AsyncSession, account, tokens: dict | None = None) -> dict:
+    projection = await build_identity_projection(db, account)
+    result = {
+        "status": "ok",
+        **projection,
+        "access_restriction": await account_access_projection(db, account.uid),
+    }
+    if tokens:
+        result.update(
+            {
+                "access_token": tokens["access"],
+                "token_type": "bearer",
+            }
+        )
+    return result
+
+
 def install(app: FastAPI):
     router = APIRouter(prefix="/identity/v2", tags=["identity-v2"])
 
@@ -54,14 +72,8 @@ def install(app: FastAPI):
         db: AsyncSession = Depends(Database.session_generator),
     ):
         account, tokens = await register_account(db, payload, request)
-        projection = await build_identity_projection(db, account)
         _set_refresh_cookie(response, tokens["refresh"])
-        return {
-            "status": "ok",
-            "access_token": tokens["access"],
-            "token_type": "bearer",
-            **projection,
-        }
+        return await _identity_response(db, account, tokens)
 
     @router.post("/login")
     async def login(
@@ -70,15 +82,12 @@ def install(app: FastAPI):
         response: Response,
         db: AsyncSession = Depends(Database.session_generator),
     ):
+        # A suspended Account may authenticate into a deliberately restricted
+        # session so it can inspect the sanction, appeal it, and log out. Global
+        # auth middleware denies every non-exempt authenticated surface.
         account, tokens = await authenticate_account(db, payload.identifier, payload.password, request)
-        projection = await build_identity_projection(db, account)
         _set_refresh_cookie(response, tokens["refresh"])
-        return {
-            "status": "ok",
-            "access_token": tokens["access"],
-            "token_type": "bearer",
-            **projection,
-        }
+        return await _identity_response(db, account, tokens)
 
     @router.post("/refresh")
     async def refresh(
@@ -96,6 +105,7 @@ def install(app: FastAPI):
             "access_token": tokens["access"],
             "token_type": "bearer",
             "account_uid": str(account.uid),
+            "access_restriction": await account_access_projection(db, account.uid),
         }
 
     @router.post("/logout")
@@ -114,7 +124,7 @@ def install(app: FastAPI):
         db: AsyncSession = Depends(Database.session_generator),
     ):
         account = await get_account_by_uid(db, current_user["user_uid"])
-        return {"status": "ok", **(await build_identity_projection(db, account))}
+        return await _identity_response(db, account)
 
     @router.post("/personas/batch")
     async def batch_personas(
@@ -183,8 +193,8 @@ def install(app: FastAPI):
         current_user: dict = Depends(auth_middle),
         db: AsyncSession = Depends(Database.session_generator),
     ):
-        # Safety/privacy controls remain available even when public Persona edits
-        # are restricted; moderation must not trap a user in an unsafe state.
+        # Safety/privacy controls remain available for ordinary capability restrictions,
+        # but account.access itself is caught earlier by auth_middle.
         account = await get_account_by_uid(db, current_user["user_uid"])
         return {"status": "ok", **(await update_privacy(db, account, payload))}
 

@@ -57,6 +57,18 @@ $api.interceptors.response.use(
         const detail = error.response?.data?.detail;
         const isIdentityRefresh = originalRequest?.url?.includes('/identity/v2/refresh');
         const isCsrfFailure = status === 403 && typeof detail === 'string' && detail.includes('CSRF');
+        const isAccountAccessRestriction = (
+            status === 403
+            && detail
+            && typeof detail === 'object'
+            && detail.error_type === 'account_access_restricted'
+        );
+
+        if (isAccountAccessRestriction) {
+            store.commit('setAccessRestriction', detail.restriction || null);
+            window.dispatchEvent(new CustomEvent('pubchat:account-access-restricted'));
+            return Promise.reject(error);
+        }
 
         if (isCsrfFailure && !originalRequest?._csrfRetry) {
             originalRequest._csrfRetry = true;
@@ -87,6 +99,10 @@ $api.interceptors.response.use(
                 );
                 const accessToken = refreshResponse.data.access_token;
                 setAccessToken(accessToken);
+                if (refreshResponse.data.access_restriction) {
+                    store.commit('setAccessRestriction', refreshResponse.data.access_restriction);
+                    window.dispatchEvent(new CustomEvent('pubchat:account-access-restricted'));
+                }
                 originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                 processQueue(null, accessToken);
                 return $api(originalRequest);

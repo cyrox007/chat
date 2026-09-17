@@ -42,6 +42,7 @@ ENFORCEMENT_READY_CAPABILITIES: frozenset[str] = frozenset(
         "invitation.send",
         "profile.edit",
         "discovery.publish",
+        "account.access",
     }
 )
 

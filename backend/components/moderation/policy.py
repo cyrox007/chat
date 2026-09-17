@@ -14,6 +14,10 @@ from components.identity.model import (
     PlatformRole,
     RolePermission,
 )
+from components.moderation.account_access import (
+    disconnect_account_realtime,
+    revoke_account_sessions,
+)
 from components.moderation.model import (
     PlatformRestriction,
     PlatformRestrictionAuditEvent,
@@ -32,9 +36,9 @@ PLATFORM_MODERATION_PERMISSION = "moderation.platform.manage"
 PERMANENT_RESTRICTION_PERMISSION = "moderation.platform.permanent"
 ACCOUNT_ACCESS_PERMISSION = "moderation.platform.account_access"
 
-# These are contract-level capabilities. Runtime enforcement is wired into domain
-# services in the next implementation slice; a DB row alone must never be treated
-# as a working sanction until the corresponding server-side guard is present.
+# These are contract-level capabilities. A capability becomes issuable only when
+# the restriction router exposes it after the real server-side enforcement point
+# has been implemented and covered by tests.
 PLATFORM_CAPABILITIES = frozenset(
     {
         "messenger.send",
@@ -192,15 +196,21 @@ async def issue_platform_restriction(
             detail={"error_type": "permanent_restriction_permission_required"},
         )
 
-    if payload.capability == "account.access" and not await account_has_platform_permission(
-        db,
-        actor.uid,
-        ACCOUNT_ACCESS_PERMISSION,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error_type": "account_access_permission_required"},
-        )
+    if payload.capability == "account.access":
+        if payload.scope_type != "platform" or payload.scope_uid is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"error_type": "account_access_must_be_platform_scoped"},
+            )
+        if not await account_has_platform_permission(
+            db,
+            actor.uid,
+            ACCOUNT_ACCESS_PERMISSION,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error_type": "account_access_permission_required"},
+            )
 
     if payload.scope_type == "space":
         room_result = await db.execute(select(Room.uid).where(Room.uid == payload.scope_uid).limit(1))
@@ -283,8 +293,21 @@ async def issue_platform_restriction(
             context_room_uid=payload.scope_uid if payload.scope_type == "space" else None,
         )
     )
+
+    if payload.capability == "account.access":
+        # Revoke all sessions in the same transaction as the durable sanction.
+        # Existing access JWTs are additionally blocked by auth_middle on every
+        # authenticated request, so session revocation is not the only control.
+        await revoke_account_sessions(db, target)
+
     await db.commit()
     await db.refresh(restriction)
+
+    if payload.capability == "account.access":
+        # Cross-worker disconnect is best-effort transport acceleration. If Redis
+        # is down, per-frame WebSocket checks still fail closed against PostgreSQL.
+        await disconnect_account_realtime(target.uid, payload.public_explanation)
+
     return restriction_projection(restriction)
 
 

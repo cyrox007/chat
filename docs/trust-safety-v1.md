@@ -1,6 +1,6 @@
 # Trust & Safety v1 — иерархическая модерация и AI-copilot
 
-Этот документ фиксирует целевую модель модерации PubChat для Stage 6.8. Она расширяет существующие Space-local `ModerationReport` / `ModerationAction` / `ModerationAppeal` и новую platform Trust & Safety queue, но не смешивает локальные полномочия Space с глобальной властью платформы.
+Этот документ фиксирует целевую модель модерации PubChat для Stage 6.8. Она расширяет существующие Space-local `ModerationReport` / `ModerationAction` / `ModerationAppeal` и platform Trust & Safety queue, но не смешивает локальные полномочия Space с глобальной властью платформы.
 
 ## Основная идея
 
@@ -14,7 +14,7 @@
 
 ## Иерархия платформенных ролей
 
-`PlatformRole` получает явный `authority_level`. При нескольких ролях эффективный уровень Account — максимальный уровень его активных platform roles.
+`PlatformRole` имеет явный `authority_level`. При нескольких ролях эффективный уровень Account — максимальный уровень его активных platform roles.
 
 Начальный baseline:
 
@@ -35,7 +35,7 @@
 - одна Persona не позволяет обойти restriction: platform restrictions применяются к `Account`;
 - изменение роли target после выдачи санкции не стирает audit trail и не делает старое решение несуществующим.
 
-Иерархия не заменяет permissions. Например, высокий authority level сам по себе не даёт права на permanent ban, если соответствующий permission/policy отсутствует.
+Иерархия не заменяет permissions. Например, высокий authority level сам по себе не даёт права на permanent restriction или `account.access`, если соответствующий permission отсутствует.
 
 ## Capability restrictions вместо одного общего ban
 
@@ -63,6 +63,8 @@ Restriction имеет scope:
 - `space` — действует только в одном Space;
 - в будущем возможны более узкие scopes, если появится доказанная необходимость.
 
+`account.access` является только platform-scoped capability. Попытка создать её с Space scope отклоняется уже schema boundary и дополнительно проверяется service layer.
+
 Space-local moderation продолжает использовать Space membership/role rules. Platform moderator может применять platform restrictions только через Trust & Safety контур и не наследует автоматически права owner/moderator внутри конкретного Space.
 
 ## Срок
@@ -81,11 +83,12 @@ Space-local moderation продолжает использовать Space membe
 
 Restriction enforcement выполняется server-side на границе domain action. Frontend только отражает состояние и объяснение.
 
-Целевой API внутреннего enforcement layer:
+Базовый внутренний enforcement API:
 
 ```python
 await moderation_policy.assert_allowed(
-    account_uid=account_uid,
+    db,
+    account_uid,
     capability="messenger.send",
     scope_type="platform",
     scope_uid=None,
@@ -94,11 +97,45 @@ await moderation_policy.assert_allowed(
 
 Перед выполнением чувствительного действия service запрашивает активные restrictions. UI-disable без server check не является security control.
 
-Для часто вызываемых realtime paths допустим краткоживущий Redis cache, но PostgreSQL остаётся durable source of truth; revoke/issue invalidates cache.
+Для часто вызываемых realtime paths в будущем допустим краткоживущий Redis cache, но PostgreSQL остаётся durable source of truth; revoke/issue должен invalidatе cache. В текущем `account.access` path authoritative check выполняется непосредственно по PostgreSQL.
+
+## Full Account suspension — `account.access`
+
+`account.access` — не обычный UI-ban. Он закрывает Account по нескольким независимым границам, чтобы старый токен, другая Persona или уже открытый socket не обходили решение.
+
+При выдаче restriction:
+
+- capability доступна только actor с `moderation.platform.account_access` и достаточным authority;
+- существующие Identity v2 sessions получают `revoked_at` в той же DB-транзакции, что и durable restriction;
+- legacy device sessions деактивируются там, где существует legacy identity bridge;
+- после commit публикуется distributed realtime control event, закрывающий уже открытые Messenger/Space sockets на всех workers;
+- если Redis недоступен, sanction не откатывается: PostgreSQL остаётся authoritative, а realtime уже работает в degraded/fail-closed режиме.
+
+После выдачи:
+
+- каждый authenticated HTTP request повторно проверяет active `account.access`, поэтому ещё живой stateless access JWT не является обходом;
+- обычный `/realtime/v2/tickets` недоступен через тот же HTTP guard;
+- one-time ticket, выданный прямо перед sanction, повторно проверяется по PostgreSQL после ticket consume во время WebSocket auth;
+- остальные capability guards рассматривают `account.access` как глобальный wildcard restriction;
+- sibling/new Persona того же Account не меняет target restriction.
+
+### Restricted Safety session
+
+Полное suspension не должно лишать Account возможности понять решение и оспорить его. Поэтому login/refresh допускают создание **restricted session**, но global HTTP guard разрешает только минимальный контур:
+
+- `GET /identity/v2/me` — bootstrap и получение `access_restriction`;
+- `GET /trust-safety/v1/me/restrictions` — причина/scope/expiry/history;
+- `POST /trust-safety/v1/restrictions/{restriction_uid}/appeals` — одна апелляция на конкретное restriction;
+- `GET /trust-safety/v1/me/restriction-appeals` — состояние и результат апелляции;
+- logout остаётся доступен как unauthenticated-cookie operation.
+
+Остальные authenticated HTTP routes получают `403 account_access_restricted`. SPA переводит Account в отдельный Restricted Safety Center вместо обычного приложения.
+
+После revoke или expiry старые отозванные sessions **не восстанавливаются**. Пользователь проходит нормальную повторную аутентификацию; это не позволяет resurrection старого refresh token.
 
 ## Trust & Safety action
 
-Platform action должен хранить минимум:
+Platform action хранит минимум:
 
 - target Account;
 - actor Account;
@@ -159,7 +196,7 @@ AI получает тот же или более узкий evidence envelope, 
 
 ## Appeals
 
-Любая значимая временная или permanent platform restriction должна быть видна затронутому Account с понятной причиной и сроком.
+Любая значимая временная или permanent platform restriction видна затронутому Account с понятной причиной и сроком.
 
 Appeal:
 
@@ -168,6 +205,8 @@ Appeal:
 - reviewer должен иметь authority не ниже требуемого для исходного действия;
 - overturn не удаляет исходное решение, а revoke-ит restriction и пишет audit event;
 - AI может подготовить summary, но не является финальным appeal reviewer.
+
+`account.access` сохраняет appeal path даже когда все обычные product routes закрыты.
 
 ## Enforcement hierarchy examples
 
@@ -180,19 +219,21 @@ Appeal:
 
 ## Implementation slices
 
-1. Platform report intake/queue + append-only audit baseline.
-2. Role hierarchy (`authority_level`) и server-side permission/authority resolver.
-3. Durable platform capability restrictions: scope, duration/permanent, revoke and enforcement API.
-4. Enforcement hooks в Messenger/Space chat/uploads/invitations/Space creation/discovery/account session path.
-5. Human moderator action UX + target-visible explanation + appeal linkage.
-6. AI assessment model + provider-neutral adapter + moderator recommendation UI.
-7. Anti-abuse automation signals и, только после отдельного review, optional short-lived system protection holds.
-8. Metrics, privacy/retention, incident rehearsal and launch gate.
+1. ✅ Platform report intake/queue + append-only audit baseline.
+2. ✅ Role hierarchy (`authority_level`) и server-side permission/authority resolver baseline.
+3. ✅ Durable platform capability restrictions: scope, duration/permanent, revoke and enforcement API.
+4. ✅ Enforcement hooks в Messenger/Space chat/uploads/invitations/Space creation/discovery/account session + HTTP/realtime path.
+5. ✅ Human moderator action UX + target-visible explanation + restriction appeal linkage baseline.
+6. ⏳ AI assessment model + provider-neutral adapter + moderator recommendation UI.
+7. ⏳ Anti-abuse automation signals и, только после отдельного review, optional short-lived system protection holds.
+8. ⏳ Metrics, privacy/retention, incident rehearsal and launch gate.
 
 ## Beta gate
 
 Trust & Safety считается beta-ready только если проходит end-to-end:
 
 `report → triage/AI assist → human claim/review → hierarchy/permission check → restriction → runtime enforcement → audit → target notification → appeal → independent review/revoke/uphold`.
+
+Human enforcement/appeal baseline уже существует, включая full Account suspension. Следующие beta-critical риски — permission hierarchy hardening, AI-assist boundary implementation, anti-abuse/metrics/retention и incident rehearsal.
 
 Существование таблиц или AI-классификатора без реального server-side capability enforcement не считается готовой модерацией.

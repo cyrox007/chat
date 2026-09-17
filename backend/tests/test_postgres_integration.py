@@ -8,6 +8,7 @@ from components.model_registry import ensure_models_registered
 from components.notification.model import NotificationWorkerState
 from components.notification.worker_service import WORKER_NAME_ACTIVITY_REMINDERS, lock_worker_state
 from database import Database
+from tests.test_account_access_postgres_integration import AccountAccessPostgresIntegrationTests  # noqa: F401
 from tests.test_platform_restriction_appeals_postgres_integration import (  # noqa: F401
     PlatformRestrictionAppealPostgresIntegrationTests,
 )
