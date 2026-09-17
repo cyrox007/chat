@@ -6,15 +6,19 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Текущий выпущенный checkpoint: `0.6.9-alpha.1`.
+Release candidate текущей ветки: `0.6.10-alpha.1`. Последний уже выпущенный `main` checkpoint остаётся `0.6.9-alpha.1` до exact-head CI и merge PR #30.
 
 Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 
 Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery baseline, Redis 7.2 distributed realtime, restart/recovery и real Sentinel master-promotion baseline, real multi-process Uvicorn/WebSocket rehearsal с rolling restart, bounded per-socket backpressure, message-notification delivery policy с distributed active-context suppression, durable unread-Messenger email delivery и standards-based Web Push/PWA Messenger delivery. Production backend запускается за постоянным systemd-owned listener, routine deploy меняет workers rolling reload без намеренного `502` окна, а frontend публикуется staged/asset-first.
 
+Trust & Safety checkpoint `0.6.10-alpha.1` добавляет отдельный platform report/triage/evidence контур, Account-level иерархию moderation authority, capability restrictions с server-side enforcement, target-visible reason/scope/expiry и независимый appeal flow. Рабочие ограничения уже покрывают отправку Messenger/Space сообщений, messaging-media, создание/вступление/приглашения Spaces, редактирование Persona и публикацию owner-led Spaces в organic discovery. `account.access` намеренно ещё не выдаётся: полный suspension требует end-to-end session/HTTP/realtime enforcement и сохранения доступа к Safety Center/appeal/logout.
+
+AI moderation зафиксирован как copilot: он может помогать triage, evidence summary и рекомендациями, но не является источником punitive authority в beta baseline. Следующий Trust & Safety слой — full Account suspension semantics, затем provider-neutral AI assessment storage/adapter, anti-spam/raid signals, moderation metrics/privacy-retention и incident rehearsal.
+
 Message delivery различает online presence и активный conversation/Space: лишний toast/sound подавляется, если пользователь уже смотрит тот же context. Offline external re-engagement разрешён только для Messenger по opt-in. Для давно отсутствующего Account email worker создаёт агрегированное privacy-safe напоминание по durable ledger/cooldown/retry contract, а Web Push может доставить privacy-minimal уведомление на явно подписанное устройство. Space chat по-прежнему не создаёт background notification pressure отсутствующему Account.
 
-До beta всё ещё нужны production-grade moderation/Trust & Safety end-to-end flow, rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, observability, security и финальные accessibility/browser/operations gates. Параллельно формализуются cost model и monetization boundaries, чтобы infrastructure/moderation не зависели от бессрочного ручного финансирования.
+До beta всё ещё нужны full Account access suspension semantics, AI-assisted moderation layer и anti-abuse/metrics/retention gates, rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, observability, security и финальные accessibility/browser/operations gates. Параллельно формализуются cost model и monetization boundaries, чтобы infrastructure/moderation не зависели от бессрочного ручного финансирования.
 
 Канонический номер версии находится в `VERSION`, история выпусков — в `CHANGELOG.md`.
 
@@ -36,6 +40,7 @@ Message delivery различает online presence и активный conversa
 - [`docs/message-notification-delivery-v1.md`](docs/message-notification-delivery-v1.md) — online/offline message routing, active context и external delivery policy;
 - [`docs/message-email-delivery-v1.md`](docs/message-email-delivery-v1.md) — durable unread-Messenger email queue/provider/retry/systemd contract;
 - [`docs/web-push-delivery-v1.md`](docs/web-push-delivery-v1.md) — per-device Web Push/VAPID/service-worker/provider/privacy contract;
+- [`docs/trust-safety-v1.md`](docs/trust-safety-v1.md) — hierarchical platform moderation, capability restrictions, enforcement/appeals и AI-copilot boundaries;
 - [`docs/browser-compatibility-v1.md`](docs/browser-compatibility-v1.md) — browser launch matrix и Safari registration audit;
 - [`docs/prebeta-hardening-v1.md`](docs/prebeta-hardening-v1.md) — Stage 6 PostgreSQL/migration hardening baseline;
 - [`docs/database-recovery-v1.md`](docs/database-recovery-v1.md) — PostgreSQL backup/restore contract;
@@ -62,9 +67,13 @@ SPA является первым клиентом; backend API и realtime cont
 - `Account != Persona`.
 - Reputation/achievements не дают permissions.
 - Space moderator не является platform moderator.
+- Platform moderation authority определяется server-side RBAC + explicit authority hierarchy; actor не может ограничить Account с равным или более высоким authority.
+- Platform sanctions ограничивают конкретные capabilities и считаются работающими только там, где есть реальный server-side enforcement point.
+- Permanent sanctions требуют повышенного permission; `account.access` не выдаётся до полного suspension/recovery/appeal enforcement.
+- AI moderation — copilot, а не самостоятельный punitive authority в beta baseline.
 - Деньги не покупают trust и moderation power.
 - Gifts/support не являются рейтингом и не влияют на discovery/authority.
-- Organic discovery сначала применяет privacy/eligibility, а затем ranking.
+- Organic discovery сначала применяет privacy/eligibility/moderation eligibility, а затем ranking.
 - Числовой discovery score не является публичным API и не показывается пользователю.
 - PostgreSQL — источник истины; Redis — ephemeral realtime слой.
 - Production realtime не должен молча переходить в process-local fallback.
