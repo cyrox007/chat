@@ -68,17 +68,31 @@
 					<div class="record-title"><strong>{{ capabilityLabel(restriction.capability) }}</strong><span :class="`status status--${restriction.status}`">{{ restrictionStatusLabel(restriction.status) }}</span></div>
 					<p>{{ restriction.public_explanation }}</p>
 					<small>{{ restriction.scope_type === 'space' ? 'Только выбранное пространство' : 'Вся платформа' }} · {{ restriction.expires_at ? `до ${formatDate(restriction.expires_at)}` : 'без установленного срока' }}</small>
+					<button v-if="canAppealRestriction(restriction)" type="button" class="appeal-link" @click="openRestrictionAppeal(restriction.uid)"><i class="fas fa-scale-balanced"></i>Оспорить ограничение</button>
+					<div v-if="restrictionAppealUid === restriction.uid" class="appeal-form">
+						<textarea v-model.trim="restrictionAppealBody" rows="3" maxlength="4000" placeholder="Опишите, почему platform-level ограничение нужно пересмотреть"></textarea>
+						<div><button type="button" @click="restrictionAppealUid = null">Отмена</button><button class="ui-button" type="button" :disabled="restrictionAppealBody.length < 10 || restrictionAppealSubmitting" @click="submitRestrictionAppeal(restriction)">{{ restrictionAppealSubmitting ? 'Отправляем…' : 'Отправить' }}</button></div>
+					</div>
 				</div>
 			</article>
 			<div v-if="!restrictions.length" class="state-block state-block--compact"><i class="fas fa-user-shield"></i><strong>Ограничений возможностей нет</strong><span>Здесь будут видны platform-level ограничения вашего Account, их причина и срок.</span></div>
 		</section>
 
 		<section v-else class="record-list">
-			<article v-for="appeal in appeals" :key="appeal.uid" class="record-card">
-				<div class="record-icon"><i class="fas fa-scale-balanced"></i></div>
-				<div><div class="record-title"><strong>Апелляция на: {{ actionLabel(appeal.action_type) }}</strong><span :class="`status status--${appeal.status}`">{{ appealStatusLabel(appeal.status) }}</span></div><p>{{ appeal.body }}</p><div v-if="appeal.resolution" class="resolution"><strong>Решение по апелляции</strong><span>{{ appeal.resolution }}</span></div><small>{{ formatDate(appeal.created_at) }}</small></div>
+			<article v-for="appeal in restrictionAppeals" :key="`platform-${appeal.uid}`" class="record-card">
+				<div class="record-icon"><i class="fas fa-user-shield"></i></div>
+				<div>
+					<div class="record-title"><strong>Platform: {{ capabilityLabel(appeal.restriction?.capability) }}</strong><span :class="`status status--${appeal.status}`">{{ appealStatusLabel(appeal.status) }}</span></div>
+					<p>{{ appeal.body }}</p>
+					<div v-if="appeal.resolution" class="resolution"><strong>Решение по апелляции</strong><span>{{ appeal.resolution }}</span></div>
+					<small>{{ appeal.restriction?.public_explanation }} · {{ formatDate(appeal.created_at) }}</small>
+				</div>
 			</article>
-			<div v-if="!appeals.length" class="state-block state-block--compact"><i class="fas fa-scale-balanced"></i><strong>Апелляций нет</strong><span>Апелляция доступна из карточки конкретного moderation-action.</span></div>
+			<article v-for="appeal in appeals" :key="`space-${appeal.uid}`" class="record-card">
+				<div class="record-icon"><i class="fas fa-scale-balanced"></i></div>
+				<div><div class="record-title"><strong>Space: {{ actionLabel(appeal.action_type) }}</strong><span :class="`status status--${appeal.status}`">{{ appealStatusLabel(appeal.status) }}</span></div><p>{{ appeal.body }}</p><div v-if="appeal.resolution" class="resolution"><strong>Решение по апелляции</strong><span>{{ appeal.resolution }}</span></div><small>{{ formatDate(appeal.created_at) }}</small></div>
+			</article>
+			<div v-if="!appeals.length && !restrictionAppeals.length" class="state-block state-block--compact"><i class="fas fa-scale-balanced"></i><strong>Апелляций нет</strong><span>Апелляцию можно подать из карточки конкретного решения или platform-level ограничения.</span></div>
 		</section>
 	</main>
 </template>
@@ -96,6 +110,7 @@ const reports = ref([]);
 const actions = ref([]);
 const restrictions = ref([]);
 const appeals = ref([]);
+const restrictionAppeals = ref([]);
 const memberSpaces = ref([]);
 const members = ref([]);
 const membersLoading = ref(false);
@@ -105,6 +120,9 @@ const notice = ref(null);
 const appealActionUid = ref(null);
 const appealBody = ref('');
 const appealSubmitting = ref(false);
+const restrictionAppealUid = ref(null);
+const restrictionAppealBody = ref('');
+const restrictionAppealSubmitting = ref(false);
 const reportDraft = reactive({ space_uid: '', target_account_uid: '', category: 'harassment', description: '' });
 
 const currentUserUid = computed(() => store.getters.getUser?.uid);
@@ -113,26 +131,29 @@ const tabs = computed(() => [
 	{ value: 'reports', label: 'Мои жалобы', count: reports.value.length },
 	{ value: 'actions', label: 'Решения Space', count: actions.value.length },
 	{ value: 'restrictions', label: 'Ограничения', count: restrictions.value.length },
-	{ value: 'appeals', label: 'Апелляции', count: appeals.value.length },
+	{ value: 'appeals', label: 'Апелляции', count: appeals.value.length + restrictionAppeals.value.length },
 ]);
 const appealByAction = computed(() => new Set(appeals.value.map((item) => item.action_uid)));
+const appealByRestriction = computed(() => new Set(restrictionAppeals.value.map((item) => item.restriction_uid)));
 
 const flash = (message, type = 'success') => { notice.value = { message, type }; window.setTimeout(() => { if (notice.value?.message === message) notice.value = null; }, 3500); };
 
 const loadSafety = async () => {
 	loading.value = true;
 	try {
-		const [reportsResponse, actionsResponse, restrictionsResponse, appealsResponse, spacesResponse] = await Promise.all([
+		const [reportsResponse, actionsResponse, restrictionsResponse, appealsResponse, restrictionAppealsResponse, spacesResponse] = await Promise.all([
 			ModerationService.myReports({ limit: 100 }),
 			ModerationService.myActions({ limit: 100 }),
 			ModerationService.myRestrictions({ include_inactive: true, limit: 100 }),
 			ModerationService.myAppeals({ limit: 100 }),
+			ModerationService.myRestrictionAppeals({ limit: 100 }),
 			SpacesService.list({ limit: 50 }),
 		]);
 		reports.value = reportsResponse.data.reports || [];
 		actions.value = actionsResponse.data.actions || [];
 		restrictions.value = restrictionsResponse.data.restrictions || [];
 		appeals.value = appealsResponse.data.appeals || [];
+		restrictionAppeals.value = restrictionAppealsResponse.data.appeals || [];
 		memberSpaces.value = (spacesResponse.data.spaces || []).filter((space) => space.viewer_membership?.status === 'active' || space.viewer_membership?.role === 'owner');
 	} catch (error) { console.error(error); flash('Не удалось загрузить центр безопасности.', 'error'); } finally { loading.value = false; }
 };
@@ -168,6 +189,26 @@ const submitAppeal = async (action) => {
 		const type = error.response?.data?.detail?.error_type;
 		flash(type === 'moderation_appeal_exists' ? 'Апелляция на это решение уже существует.' : 'Не удалось отправить апелляцию.', 'error');
 	} finally { appealSubmitting.value = false; }
+};
+
+const canAppealRestriction = (restriction) => restriction.status !== 'revoked' && !appealByRestriction.value.has(restriction.uid);
+const openRestrictionAppeal = (restrictionUid) => { restrictionAppealUid.value = restrictionUid; restrictionAppealBody.value = ''; };
+const submitRestrictionAppeal = async (restriction) => {
+	restrictionAppealSubmitting.value = true;
+	try {
+		await ModerationService.appealRestriction(restriction.uid, restrictionAppealBody.value);
+		const response = await ModerationService.myRestrictionAppeals({ limit: 100 });
+		restrictionAppeals.value = response.data.appeals || [];
+		restrictionAppealUid.value = null; restrictionAppealBody.value = ''; activeTab.value = 'appeals'; flash('Апелляция на ограничение отправлена на независимый пересмотр.');
+	} catch (error) {
+		const type = error.response?.data?.detail?.error_type;
+		const message = type === 'platform_restriction_appeal_exists'
+			? 'Апелляция на это ограничение уже существует.'
+			: type === 'platform_restriction_already_revoked'
+				? 'Ограничение уже снято.'
+				: 'Не удалось отправить апелляцию.';
+		flash(message, 'error');
+	} finally { restrictionAppealSubmitting.value = false; }
 };
 
 const categoryLabel = (value) => ({ spam: 'Спам', harassment: 'Оскорбления / преследование', sexual: 'Сексуальный контент', violence: 'Угрозы / насилие', privacy: 'Нарушение приватности', other: 'Другое' }[value] || value);
