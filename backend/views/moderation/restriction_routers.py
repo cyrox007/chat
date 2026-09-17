@@ -40,6 +40,7 @@ ENFORCEMENT_READY_CAPABILITIES: frozenset[str] = frozenset(
         "space.create",
         "space.join",
         "invitation.send",
+        "profile.edit",
     }
 )
 
