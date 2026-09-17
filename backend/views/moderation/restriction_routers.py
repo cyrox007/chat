@@ -33,7 +33,14 @@ from database import Database
 # Only capabilities with a real server-side enforcement point may be issued.
 # Expand this set in the same commit that adds the corresponding domain guard.
 ENFORCEMENT_READY_CAPABILITIES: frozenset[str] = frozenset(
-    {"messenger.send", "space.chat.send", "media.upload"}
+    {
+        "messenger.send",
+        "space.chat.send",
+        "media.upload",
+        "space.create",
+        "space.join",
+        "invitation.send",
+    }
 )
 
 
