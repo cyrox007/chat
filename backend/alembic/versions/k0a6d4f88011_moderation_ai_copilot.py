@@ -17,6 +17,9 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+_AI_PERMISSION = "moderation.platform.ai.assess"
+
+
 def upgrade() -> None:
     op.create_table(
         "moderation_ai_recommendations",
@@ -76,8 +79,41 @@ def upgrade() -> None:
         unique=False,
     )
 
+    op.execute(
+        """
+        INSERT INTO platform_permissions (name, description)
+        VALUES ('moderation.platform.ai.assess', 'Request and review advisory AI moderation assessments')
+        ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description
+        """
+    )
+    op.execute(
+        """
+        INSERT INTO role_permissions (role_id, permission_id)
+        SELECT role_id, permission_id
+        FROM (
+            SELECT 2 AS role_id, id AS permission_id
+            FROM platform_permissions WHERE name = 'moderation.platform.ai.assess'
+            UNION ALL
+            SELECT 3 AS role_id, id AS permission_id
+            FROM platform_permissions WHERE name = 'moderation.platform.ai.assess'
+        ) grants
+        ON CONFLICT DO NOTHING
+        """
+    )
+
 
 def downgrade() -> None:
+    op.execute(
+        """
+        DELETE FROM role_permissions
+        WHERE permission_id IN (
+            SELECT id FROM platform_permissions WHERE name = 'moderation.platform.ai.assess'
+        )
+        """
+    )
+    op.execute(
+        "DELETE FROM platform_permissions WHERE name = 'moderation.platform.ai.assess'"
+    )
     op.drop_index(
         "ix_moderation_ai_requester_created",
         table_name="moderation_ai_recommendations",
