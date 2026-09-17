@@ -121,7 +121,8 @@ async def require_admin(request: Request):
 
 async def validate_profile_update(request: Request):
     """
-    Protect the legacy profile endpoint from IDOR and mass assignment.
+    Protect the legacy profile endpoint from IDOR, mass assignment and active
+    Account-level profile.edit restrictions.
 
     This dependency exists only while old clients finish migrating to
     /identity/v2/persona. New code must not add fields to this allow-list.
@@ -170,5 +171,15 @@ async def validate_profile_update(request: Request):
                 "fields": forbidden_fields,
             },
         )
+
+    # Local import keeps the legacy auth compatibility layer from becoming a
+    # dependency of the moderation policy module.
+    from components.moderation.policy import assert_allowed
+
+    session = await Database.get_session()
+    try:
+        await assert_allowed(session, user_data["user_uid"], "profile.edit")
+    finally:
+        await session.close()
 
     return user_data
