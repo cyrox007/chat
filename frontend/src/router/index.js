@@ -11,6 +11,7 @@ const router = createRouter({
 		{ path: '/invitations', name: 'invitations', component: () => import('../views/InvitationsView.vue'), meta: { title: 'Приглашения — PubChat', requestAuth: true } },
 		{ path: '/notifications', name: 'notifications', component: () => import('../views/NotificationsView.vue'), meta: { title: 'Напоминания — PubChat', requestAuth: true } },
 		{ path: '/safety', name: 'safety', component: () => import('../views/SafetyCenterView.vue'), meta: { title: 'Безопасность — PubChat', requestAuth: true } },
+		{ path: '/safety/restricted', name: 'restricted-safety', component: () => import('../views/RestrictedSafetyCenterView.vue'), meta: { title: 'Ограничение доступа — PubChat', requestAuth: true } },
 		{ path: '/trust-safety', name: 'trust-safety-queue', component: () => import('../views/TrustSafetyQueueView.vue'), meta: { title: 'Trust & Safety — PubChat', requestAuth: true, requiresPlatformModerator: true } },
 		{ path: '/persona-style', name: 'persona-style', component: () => import('../views/PersonaStyleView.vue'), meta: { title: 'Стиль образа — PubChat', requestAuth: true } },
 		{ path: '/achievements', name: 'achievements', component: () => import('../views/AchievementsView.vue'), meta: { title: 'Достижения — PubChat', requestAuth: true } },
@@ -42,12 +43,21 @@ router.beforeEach((to, from, next) => {
 	const store = useStore();
 	const isAuthenticated = Boolean(store.getters.isAuth);
 	const userRole = store.getters.getUser?.global_role;
+	const accessRestricted = Boolean(store.getters.getAccessRestriction);
 
 	if (to.matched.some((record) => record.meta.requestGuest)) {
-		return isAuthenticated ? next({ name: 'chats' }) : next();
+		return isAuthenticated
+			? next({ name: accessRestricted ? 'restricted-safety' : 'chats' })
+			: next();
 	}
 	if (to.matched.some((record) => record.meta.requestAuth)) {
 		if (!isAuthenticated) return next({ name: 'login' });
+		if (accessRestricted && to.name !== 'restricted-safety') {
+			return next({ name: 'restricted-safety' });
+		}
+		if (!accessRestricted && to.name === 'restricted-safety') {
+			return next({ name: 'safety' });
+		}
 		if (to.matched.some((record) => record.meta.requiresAdmin)) {
 			if (userRole !== 'admin' && userRole !== 'superadmin') return next({ name: 'chats' });
 		}
