@@ -47,6 +47,21 @@ PlatformCapability = Literal[
 ]
 PlatformRestrictionScope = Literal["platform", "space"]
 
+ModerationAISeverity = Literal["low", "medium", "high", "critical"]
+ModerationAIAction = Literal["none", "temporary_restriction"]
+ModerationAICapability = Literal[
+    "messenger.send",
+    "space.chat.send",
+    "media.upload",
+    "space.create",
+    "space.join",
+    "invitation.send",
+    "profile.edit",
+    "discovery.publish",
+]
+ModerationAIOutcome = Literal["not_used", "accepted", "modified", "rejected"]
+ModerationAIDurationMinutes = Literal[60, 1440, 10080, 43200]
+
 
 class ModerationReportCreateRequest(BaseModel):
     target_account_uid: Optional[UUID] = None
@@ -192,4 +207,45 @@ class PlatformRestrictionAppealResolveRequest(BaseModel):
     @model_validator(mode="after")
     def clean_resolution(self):
         self.resolution = " ".join(self.resolution.split())
+        return self
+
+
+class ModerationAIAssessment(BaseModel):
+    """Structured provider output. It is advisory and never a moderation action."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    category: TrustSafetyCategory
+    severity: ModerationAISeverity
+    confidence_percent: int = Field(ge=0, le=100)
+    summary: str = Field(min_length=3, max_length=1000)
+    recommended_action: ModerationAIAction
+    suggested_capability: Optional[ModerationAICapability] = None
+    suggested_scope_type: PlatformRestrictionScope = "platform"
+    suggested_duration_minutes: Optional[ModerationAIDurationMinutes] = None
+    rationale: str = Field(min_length=3, max_length=2000)
+
+    @model_validator(mode="after")
+    def validate_recommendation(self):
+        self.summary = " ".join(self.summary.split())
+        self.rationale = " ".join(self.rationale.split())
+        if self.recommended_action == "none":
+            if self.suggested_capability is not None or self.suggested_duration_minutes is not None:
+                raise ValueError("none action cannot contain a restriction suggestion")
+        else:
+            if self.suggested_capability is None or self.suggested_duration_minutes is None:
+                raise ValueError("temporary_restriction requires capability and duration")
+        return self
+
+
+class ModerationAIOutcomeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    outcome: ModerationAIOutcome
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+    @model_validator(mode="after")
+    def clean_note(self):
+        if self.note is not None:
+            self.note = " ".join(self.note.split()) or None
         return self
