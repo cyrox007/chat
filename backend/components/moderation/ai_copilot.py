@@ -17,13 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from components.identity.model import Persona
 from components.message.model import Message, PrivateMessage
 from components.moderation.ai_model import ModerationAIRecommendation
+from components.moderation.ai_settings import moderation_ai_config
 from components.moderation.model import TrustSafetyReport
 from components.moderation.schemas import (
     ModerationAIAssessment,
     ModerationAIOutcomeRequest,
 )
 from components.moderation.trust_safety import _audit, _require_claim_owner
-from settings import config
 
 
 AI_SCHEMA_VERSION = "v1"
@@ -109,24 +109,24 @@ class HttpJsonModerationAIProvider:
 
 
 def build_moderation_ai_provider() -> ModerationAIProvider:
-    provider = config.MODERATION_AI_PROVIDER.strip().lower()
+    provider = moderation_ai_config.provider
     if provider in {"", AI_PROVIDER_DISABLED}:
         return DisabledModerationAIProvider()
     if provider == AI_PROVIDER_HTTP_JSON:
-        if not config.moderation_ai_configured():
+        if not moderation_ai_config.configured():
             raise ModerationAIProviderError("moderation AI provider configuration is incomplete")
         return HttpJsonModerationAIProvider(
-            endpoint=config.MODERATION_AI_ENDPOINT,
-            api_key=config.MODERATION_AI_API_KEY,
-            model_name=config.MODERATION_AI_MODEL or None,
-            timeout_seconds=config.MODERATION_AI_TIMEOUT_SECONDS,
+            endpoint=moderation_ai_config.endpoint,
+            api_key=moderation_ai_config.api_key,
+            model_name=moderation_ai_config.model or None,
+            timeout_seconds=moderation_ai_config.timeout_seconds,
         )
     raise ModerationAIProviderError("unsupported moderation AI provider")
 
 
 def moderation_ai_public_config() -> dict:
-    provider = config.MODERATION_AI_PROVIDER.strip().lower() or AI_PROVIDER_DISABLED
-    enabled = provider != AI_PROVIDER_DISABLED and config.moderation_ai_configured()
+    provider = moderation_ai_config.provider or AI_PROVIDER_DISABLED
+    enabled = provider != AI_PROVIDER_DISABLED and moderation_ai_config.configured()
     return {
         "enabled": enabled,
         "provider": provider if enabled else AI_PROVIDER_DISABLED,
@@ -140,7 +140,7 @@ def _bounded_text(value: str | None) -> str | None:
     value = value.strip()
     if not value:
         return None
-    return value[: config.MODERATION_AI_MAX_TEXT_CHARS]
+    return value[: moderation_ai_config.max_text_chars]
 
 
 async def _ai_evidence_payload(db: AsyncSession, report: TrustSafetyReport) -> dict:
@@ -234,7 +234,13 @@ async def create_moderation_ai_assessment(
     provider: ModerationAIProvider | None = None,
 ) -> dict:
     report = await _require_claim_owner(db, report_uid, moderator_account_uid)
-    provider = provider or build_moderation_ai_provider()
+    try:
+        provider = provider or build_moderation_ai_provider()
+    except ModerationAIProviderError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error_type": "moderation_ai_not_configured"},
+        ) from exc
     if provider.key == AI_PROVIDER_DISABLED:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
