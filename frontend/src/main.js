@@ -15,4 +15,10 @@ app.use(router);
 
 app.mount('#app');
 
+window.addEventListener('pubchat:account-access-restricted', () => {
+	if (router.currentRoute.value.name !== 'restricted-safety') {
+		router.replace({ name: 'restricted-safety' }).catch(() => null);
+	}
+});
+
 registerPubChatServiceWorker();
