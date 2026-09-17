@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import delete, select
 
 from components.identity.model import Account, AccountRole, IdentitySession
@@ -56,21 +57,34 @@ class AccountAccessPostgresIntegrationTests(unittest.TestCase):
                 await setup_db.commit()
 
             try:
+                # Normal API input is rejected at the schema boundary before it
+                # can reach the service.
+                with self.assertRaises(ValidationError):
+                    PlatformRestrictionCreateRequest(
+                        target_account_uid=user_uid,
+                        capability="account.access",
+                        scope_type="space",
+                        scope_uid=uuid4(),
+                        reason_code="scope_test",
+                        public_explanation="Неверная область ограничения.",
+                        duration_minutes=60,
+                    )
+
+                # Keep the service-level invariant too, so an internal caller
+                # cannot bypass the Pydantic contract with a constructed model.
+                invalid_payload = PlatformRestrictionCreateRequest.model_construct(
+                    target_account_uid=user_uid,
+                    capability="account.access",
+                    scope_type="space",
+                    scope_uid=uuid4(),
+                    reason_code="scope_test",
+                    public_explanation="Неверная область ограничения.",
+                    duration_minutes=60,
+                    report_uid=None,
+                )
                 async with Database.sessionmaker()() as db:
                     with self.assertRaises(HTTPException) as context:
-                        await issue_platform_restriction(
-                            db,
-                            admin_uid,
-                            PlatformRestrictionCreateRequest(
-                                target_account_uid=user_uid,
-                                capability="account.access",
-                                scope_type="space",
-                                scope_uid=uuid4(),
-                                reason_code="scope_test",
-                                public_explanation="Неверная область ограничения.",
-                                duration_minutes=60,
-                            ),
-                        )
+                        await issue_platform_restriction(db, admin_uid, invalid_payload)
                     self.assertEqual(
                         context.exception.detail.get("error_type"),
                         "account_access_must_be_platform_scoped",
