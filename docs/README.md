@@ -47,7 +47,7 @@
 
 - [`identity-v2.md`](identity-v2.md) — Account/Persona/Credential/Session/Privacy.
 - [`realtime-v2.md`](realtime-v2.md) — tickets, Redis pub/sub, presence, reconnect.
-- [`trust-safety-v1.md`](trust-safety-v1.md) — иерархическая platform moderation, capability restrictions, audit/appeals и AI-copilot boundaries.
+- [`trust-safety-v1.md`](trust-safety-v1.md) — platform report intake, иерархия ролей, capability restrictions, runtime enforcement, audit/appeals и AI-copilot boundaries (`0.6.10-alpha.1` candidate).
 - [`product-identity-v1.md`](product-identity-v1.md) — Persona/Space appearance и recurring Activities.
 - [`social-engagement-v2.md`](social-engagement-v2.md) — earned achievements и Conversation Rounds.
 - [`activity-occurrences-v1.md`](activity-occurrences-v1.md) — occurrences/reminders/inbox.
@@ -59,6 +59,6 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Текущий release: `0.6.9-alpha.1`.
+Release candidate в текущей ветке: `0.6.10-alpha.1`; последний уже выпущенный `main` checkpoint остаётся `0.6.9-alpha.1` до merge PR #30.
 
-Текущая development-линия: `0.6.x-alpha` — Web Push/PWA Messenger delivery завершён; следующий launch-critical workstream — production-grade moderation / Trust & Safety, включая platform report intake, authority hierarchy, capability restrictions и последующий AI-copilot layer. Параллельно идут browser/security/observability gates и unit-economics/monetization planning.
+Текущая development-линия: `0.6.x-alpha` — hierarchical platform Trust & Safety foundation доводится до release gate: report/triage/evidence, Account-level capability restrictions, server-side enforcement и independent appeals. Следом идут full `account.access` semantics, AI-copilot assessment layer, anti-abuse/metrics/retention; параллельно — browser/security/observability и unit-economics/monetization planning.
