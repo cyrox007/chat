@@ -98,4 +98,28 @@ export default class ModerationService {
 	static revokeRestriction(restrictionUid, reason) {
 		return $api.post(`/trust-safety/v1/restrictions/${restrictionUid}/revoke`, { reason });
 	}
+
+	static appealRestriction(restrictionUid, body) {
+		return $api.post(`/trust-safety/v1/restrictions/${restrictionUid}/appeals`, { body });
+	}
+
+	static myRestrictionAppeals(params = {}) {
+		return $api.get('/trust-safety/v1/me/restriction-appeals', { params });
+	}
+
+	static restrictionAppeals(params = {}) {
+		return $api.get('/trust-safety/v1/restriction-appeals', { params });
+	}
+
+	static claimRestrictionAppeal(appealUid) {
+		return $api.post(`/trust-safety/v1/restriction-appeals/${appealUid}/claim`);
+	}
+
+	static releaseRestrictionAppeal(appealUid) {
+		return $api.post(`/trust-safety/v1/restriction-appeals/${appealUid}/release`);
+	}
+
+	static resolveRestrictionAppeal(appealUid, payload) {
+		return $api.patch(`/trust-safety/v1/restriction-appeals/${appealUid}`, payload);
+	}
 }
