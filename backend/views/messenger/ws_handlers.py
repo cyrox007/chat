@@ -1,13 +1,14 @@
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.decorators.db import get_session
 from components.identity.model import AccountRelationship, Persona, PrivacySettings
 from components.message.model import PrivateMessage
+from components.moderation.policy import assert_allowed
 from components.notification.message_delivery import (
     SURFACE_MESSENGER,
     get_message_notification_preferences,
@@ -136,6 +137,22 @@ def _dm_event_scope(receiver_uid: UUID) -> str:
     return f"direct-message:{receiver_uid}"
 
 
+async def _enforce_capability(
+    websocket: WebSocket,
+    db_session: AsyncSession,
+    user_uid: UUID,
+    capability: str,
+    front_id: str | None,
+) -> bool:
+    try:
+        await assert_allowed(db_session, user_uid, capability)
+        return True
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {"error_type": "capability_restricted"}
+        await websocket.send_json({"type": "error", "frontId": front_id, **detail})
+        return False
+
+
 async def _set_active_dialog_context(
     websocket: WebSocket,
     user_uid: UUID,
@@ -228,17 +245,37 @@ async def handle_send_private_message(
         )
         return
 
+    front_id = data.get("frontId")
+    if not await _enforce_capability(
+        websocket,
+        db_session,
+        sender_uid,
+        "messenger.send",
+        front_id,
+    ):
+        return
+
+    content_type = data.get("content_type", "text")
+    if content_type in {"file", "image", "video", "voice", "audio"}:
+        if not await _enforce_capability(
+            websocket,
+            db_session,
+            sender_uid,
+            "media.upload",
+            front_id,
+        ):
+            return
+
     if not await _dm_allowed(db_session, sender_uid, receiver_uid):
         await websocket.send_json(
             {
                 "type": "error",
                 "error_type": "dm_not_allowed",
-                "frontId": data.get("frontId"),
+                "frontId": front_id,
             }
         )
         return
 
-    front_id = data.get("frontId")
     scope = _dm_event_scope(receiver_uid)
     claimed = await realtime_service.claim_event(
         user_uid=sender_uid,
@@ -260,7 +297,7 @@ async def handle_send_private_message(
             db_session,
             {
                 "content": data.get("content"),
-                "content_type": data.get("content_type", "text"),
+                "content_type": content_type,
                 "sender_uid": str(sender_uid),
                 "receiver_uid": str(receiver_uid),
                 "media_metadata": data.get("media_metadata"),

@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, FastAPI, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
-from components.discovery.service import DISCOVERY_ALGORITHM, discover_spaces
+from components.discovery.moderation import discover_spaces_with_moderation
+from components.discovery.service import DISCOVERY_ALGORITHM
 from components.space.schemas import SpacePurpose
 from database import Database
 
@@ -22,7 +23,7 @@ def install(app: FastAPI) -> None:
         current_user: dict = Depends(auth_middle),
         db: AsyncSession = Depends(Database.session_generator),
     ):
-        items = await discover_spaces(
+        items = await discover_spaces_with_moderation(
             db,
             viewer_uid=current_user["user_uid"],
             query=q,

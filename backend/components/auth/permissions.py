@@ -2,7 +2,13 @@ from fastapi import HTTPException, Request, status
 from sqlalchemy import select
 
 from components.auth.middleware import auth_middle
-from components.identity.model import Account, AccountRole, PlatformRole
+from components.identity.model import (
+    Account,
+    AccountRole,
+    PlatformPermission,
+    PlatformRole,
+    RolePermission,
+)
 from database import Database
 from utils.logger import setup_logger
 
@@ -33,8 +39,7 @@ async def _current_user_data(request: Request) -> dict:
     return user_data
 
 
-async def require_admin(request: Request):
-    """Require an active platform administrator from Identity v2 RBAC."""
+async def _active_auth_account(request: Request) -> Account:
     user_data = await _current_user_data(request)
     session = await Database.get_session()
     try:
@@ -44,7 +49,56 @@ async def require_admin(request: Request):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"status": "bad", "error_type": "account_unavailable"},
             )
+        request.state.auth_account = account
+        return account
+    finally:
+        await session.close()
 
+
+async def _account_has_permission(account_uid, permission_name: str) -> bool:
+    session = await Database.get_session()
+    try:
+        result = await session.execute(
+            select(PlatformPermission.name)
+            .join(RolePermission, RolePermission.permission_id == PlatformPermission.id)
+            .join(AccountRole, AccountRole.role_id == RolePermission.role_id)
+            .where(
+                AccountRole.account_uid == account_uid,
+                PlatformPermission.name == permission_name,
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() == permission_name
+    finally:
+        await session.close()
+
+
+async def require_platform_permission(request: Request, permission_name: str) -> Account:
+    """Resolve platform authorization from server-side RBAC, never JWT role claims."""
+    account = await _active_auth_account(request)
+    if not await _account_has_permission(account.uid, permission_name):
+        logger.warning(
+            "Запрещен platform permission=%s для account=%s",
+            permission_name,
+            account.uid,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"status": "bad", "error_type": "platform_permission_required"},
+        )
+    return account
+
+
+async def require_platform_moderator(request: Request) -> Account:
+    """Require Trust & Safety authority without conflating it with Space moderation."""
+    return await require_platform_permission(request, "moderation.platform.manage")
+
+
+async def require_admin(request: Request):
+    """Require an active platform administrator from Identity v2 RBAC."""
+    account = await _active_auth_account(request)
+    session = await Database.get_session()
+    try:
         role_result = await session.execute(
             select(PlatformRole.name)
             .join(AccountRole, AccountRole.role_id == PlatformRole.id)
@@ -60,8 +114,6 @@ async def require_admin(request: Request):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"status": "bad", "error_type": "admin_required"},
             )
-
-        request.state.auth_account = account
         return account
     finally:
         await session.close()
@@ -69,7 +121,8 @@ async def require_admin(request: Request):
 
 async def validate_profile_update(request: Request):
     """
-    Protect the legacy profile endpoint from IDOR and mass assignment.
+    Protect the legacy profile endpoint from IDOR, mass assignment and active
+    Account-level profile.edit restrictions.
 
     This dependency exists only while old clients finish migrating to
     /identity/v2/persona. New code must not add fields to this allow-list.
@@ -118,5 +171,15 @@ async def validate_profile_update(request: Request):
                 "fields": forbidden_fields,
             },
         )
+
+    # Local import keeps the legacy auth compatibility layer from becoming a
+    # dependency of the moderation policy module.
+    from components.moderation.policy import assert_allowed
+
+    session = await Database.get_session()
+    try:
+        await assert_allowed(session, user_data["user_uid"], "profile.edit")
+    finally:
+        await session.close()
 
     return user_data

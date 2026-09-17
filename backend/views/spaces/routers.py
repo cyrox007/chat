@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.middleware import auth_middle
+from components.moderation.policy import assert_allowed
 from components.space.content_schemas import (
     SpaceEventCreateRequest,
     SpaceEventUpdateRequest,
@@ -89,6 +90,7 @@ def install(app: FastAPI) -> None:
         current_user: dict = Depends(auth_middle),
         db: AsyncSession = Depends(Database.session_generator),
     ):
+        await assert_allowed(db, current_user["user_uid"], "space.create")
         space = await create_space(db, current_user["user_uid"], payload)
         return {"status": "ok", "space": space}
 
@@ -174,6 +176,13 @@ def install(app: FastAPI) -> None:
         current_user: dict = Depends(auth_middle),
         db: AsyncSession = Depends(Database.session_generator),
     ):
+        await assert_allowed(
+            db,
+            current_user["user_uid"],
+            "space.join",
+            scope_type="space",
+            scope_uid=space_uid,
+        )
         space = await join_space(db, space_uid, current_user["user_uid"])
         return {"status": "ok", "space": space}
 
@@ -345,6 +354,13 @@ def install(app: FastAPI) -> None:
         current_user: dict = Depends(auth_middle),
         db: AsyncSession = Depends(Database.session_generator),
     ):
+        await assert_allowed(
+            db,
+            current_user["user_uid"],
+            "invitation.send",
+            scope_type="space",
+            scope_uid=space_uid,
+        )
         invitation = await create_invitation(
             db,
             space_uid=space_uid,
