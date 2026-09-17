@@ -20,7 +20,7 @@ Stage 6.8 checkpoint 2 — end-to-end `account.access` platform suspension.
 
 Следующий отдельный Trust & Safety task — hardening moderation hierarchy/permissions; AI-assessment остаётся последующим этапом после human authority path.
 
-Quality gate: functional exact-head CI → version/docs sync → повторный exact-head CI перед merge.
+Quality gate: exact-head CI #524 green before merge.
 
 ## [0.6.10-alpha.1] — 2026-09-17
 
@@ -89,7 +89,7 @@ Quality gate: functional exact-head CI → version/docs sync → повторн�
 
 ## [0.6.7-alpha.1] — 2026-09-16
 
-Stage 6 checkpoint 8 — message notification policy / active-context baseline.
+Stage 6 checkpoint 8 — message notification policy / active context baseline.
 
 - добавлены account-level настройки Messenger/Space in-app уведомлений и звуков, а также opt-in flags для будущих email/Web Push adapters;
 - Messenger active context хранится как connection-scoped TTL state в Redis и обновляется heartbeat/reconnect;
