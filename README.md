@@ -6,7 +6,7 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Release candidate текущей ветки: `0.6.11-alpha.1`. Последний выпущенный `main` checkpoint — `0.6.10-alpha.1`.
+Текущий release checkpoint: `0.6.11-alpha.1` — end-to-end `account.access` platform suspension поверх Trust & Safety foundation `0.6.10-alpha.1`.
 
 Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 
