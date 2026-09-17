@@ -16,7 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.identity.model import Persona
 from components.message.model import Message, PrivateMessage
-from components.moderation.model import ModerationAIRecommendation, TrustSafetyReport
+from components.moderation.ai_model import ModerationAIRecommendation
+from components.moderation.model import TrustSafetyReport
 from components.moderation.schemas import (
     ModerationAIAssessment,
     ModerationAIOutcomeRequest,
