@@ -9,6 +9,7 @@ from components.identity.model import Account
 from components.model_registry import ensure_models_registered
 from components.moderation.abuse_model import TrustSafetyAbuseSignal
 from components.moderation.abuse_signals import emit_abuse_signal, review_abuse_signal
+from components.moderation.model import PlatformRestriction
 from database import Database
 
 
@@ -76,10 +77,8 @@ class AbuseSignalPostgresIntegrationTests(unittest.TestCase):
                     # Reviewing a signal does not create a platform restriction.
                     restriction_count = (
                         await db.execute(
-                            select(__import__("components.moderation.model", fromlist=["PlatformRestriction"]).PlatformRestriction)
-                            .where(
-                                __import__("components.moderation.model", fromlist=["PlatformRestriction"]).PlatformRestriction.target_account_uid
-                                == actor_uid
+                            select(PlatformRestriction).where(
+                                PlatformRestriction.target_account_uid == actor_uid
                             )
                         )
                     ).scalars().all()
