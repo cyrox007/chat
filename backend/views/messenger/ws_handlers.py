@@ -9,6 +9,7 @@ from components.decorators.db import get_session
 from components.identity.model import AccountRelationship, Persona, PrivacySettings
 from components.message.model import PrivateMessage
 from components.moderation.policy import assert_allowed
+from components.moderation.abuse_signals import detect_dm_recipient_burst, record_rate_limit_signal
 from components.notification.message_delivery import (
     SURFACE_MESSENGER,
     get_message_notification_preferences,
@@ -114,7 +115,7 @@ async def _dm_allowed(
     return False
 
 
-async def _rate_limit_message(websocket: WebSocket, user_uid: UUID) -> bool:
+async def _rate_limit_message(websocket: WebSocket, user_uid: UUID, db_session: AsyncSession) -> bool:
     allowed = await realtime_service.allow_action(
         user_uid=user_uid,
         bucket="direct-message",
@@ -123,6 +124,14 @@ async def _rate_limit_message(websocket: WebSocket, user_uid: UUID) -> bool:
     )
     if allowed:
         return True
+    try:
+        await record_rate_limit_signal(
+            db_session,
+            legacy_user_uid=user_uid,
+            surface="messenger",
+        )
+    except Exception:
+        logger.exception("Failed to record Messenger abuse signal")
     await websocket.send_json(
         {
             "type": "rate_limited",
@@ -200,7 +209,7 @@ async def handle_private_messages(
         await private_manager.touch_connection(websocket)
 
         if action == "send_message":
-            if await _rate_limit_message(websocket, user_uid):
+            if await _rate_limit_message(websocket, user_uid, db_session):
                 await handle_send_private_message(data, user_uid, db_session, websocket)
         elif action == "mark_message_as_read":
             await handle_mark_as_read(data, user_uid, db_session, websocket)
@@ -304,6 +313,14 @@ async def handle_send_private_message(
             },
         )
         formatted_message["frontId"] = front_id
+
+        try:
+            await detect_dm_recipient_burst(
+                db_session,
+                sender_legacy_uid=sender_uid,
+            )
+        except Exception:
+            logger.exception("Failed to evaluate Messenger recipient-burst signal")
 
         sender_message = {
             **formatted_message,
