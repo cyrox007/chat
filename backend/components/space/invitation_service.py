@@ -6,6 +6,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.identity.model import Account, AccountRelationship, Persona
+from components.moderation.abuse_signals import detect_invitation_burst
 from components.room.model import RoomBan
 from components.space.membership_service import _load_membership, _load_room, _manager_context
 from components.space.model import SpaceInvitation, SpaceMembership, SpaceSettings
@@ -110,6 +111,15 @@ async def create_invitation(
 
     await db.commit()
     await db.refresh(invitation)
+    try:
+        await detect_invitation_burst(
+            db,
+            inviter_account_uid=inviter.uid,
+        )
+    except Exception:
+        # Behavioral signal collection is advisory and must never make a valid
+        # invitation fail.
+        pass
     return {
         "uid": str(invitation.uid),
         "space_uid": str(room.uid),
