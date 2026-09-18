@@ -21,6 +21,7 @@ from components.space import model as _space_model  # noqa: F401
 from components.moderation import model as _moderation_model  # noqa: F401
 from components.moderation import ai_model as _moderation_ai_model  # noqa: F401
 from components.moderation import abuse_model as _moderation_abuse_model  # noqa: F401
+from components.moderation import media_model as _moderation_media_model  # noqa: F401
 from components.engagement import model as _engagement_model  # noqa: F401
 from components.engagement import occurrence_model as _occurrence_model  # noqa: F401
 from components.engagement import round_model as _round_model  # noqa: F401

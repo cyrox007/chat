@@ -44,6 +44,7 @@ from components.notification.model import (
 from components.moderation.model import ModerationAction, ModerationAppeal, ModerationReport
 from components.moderation.ai_model import ModerationAIRecommendation
 from components.moderation.abuse_model import TrustSafetyAbuseSignal
+from components.moderation.media_model import ModerationMediaRecord
 from components.support.model import (
     CosmeticEntitlement,
     CreatorSupportProfile,
