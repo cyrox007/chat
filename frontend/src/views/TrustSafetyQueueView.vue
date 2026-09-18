@@ -20,6 +20,28 @@
 
 		<section class="appeal-review">
 			<header class="section-head">
+				<div><span class="eyebrow">Abuse signals</span><h2>Поведенческие сигналы</h2></div>
+				<span>{{ abuseSignals.length }} открытых · это evidence, а не автоматические санкции</span>
+			</header>
+			<div v-if="signalsLoading" class="state state--compact">Загружаем сигналы…</div>
+			<div v-else-if="!abuseSignals.length" class="state state--compact"><strong>Открытых сигналов нет</strong><span>Rate-limit и burst-detectors появятся здесь только после достижения порогов.</span></div>
+			<div v-else class="restriction-history">
+				<article v-for="signal in abuseSignals" :key="signal.uid" class="restriction-row">
+					<div>
+						<strong>{{ abuseSignalLabel(signal.signal_type) }} · {{ abuseSeverityLabel(signal.severity) }}</strong>
+						<span>{{ abuseSurfaceLabel(signal.surface) }} · {{ signal.observed_count }} событий/получателей за {{ abuseWindowLabel(signal.window_seconds) }}</span>
+						<small>Account {{ signal.account_uid }} · {{ formatDate(signal.last_seen_at) }}</small>
+					</div>
+					<div class="review-actions">
+						<button class="ui-button ui-button--ghost" type="button" :disabled="busy" @click="reviewSignal(signal, 'reviewed')">Просмотрено</button>
+						<button class="ui-button ui-button--ghost" type="button" :disabled="busy" @click="reviewSignal(signal, 'dismissed')">Не учитывать</button>
+					</div>
+				</article>
+			</div>
+		</section>
+
+		<section class="appeal-review">
+			<header class="section-head">
 				<div><span class="eyebrow">Appeals</span><h2>Апелляции на platform-ограничения</h2></div>
 				<span>{{ restrictionAppeals.length }} ожидают решения</span>
 			</header>
@@ -194,6 +216,8 @@ const restrictionCapabilities = ref([]);
 const restrictionAppeals = ref([]);
 const selectedAppeal = ref(null);
 const appealsLoading = ref(true);
+const abuseSignals = ref([]);
+const signalsLoading = ref(true);
 const loading = ref(true);
 const busy = ref(false);
 const notice = ref(null);
@@ -246,7 +270,26 @@ const loadRestrictionAppeals = async () => {
 		restrictionAppeals.value = [];
 	} finally { appealsLoading.value = false; }
 };
-const refreshAll = async () => { await Promise.all([loadQueue(), loadRestrictionAppeals()]); };
+const loadAbuseSignals = async () => {
+	signalsLoading.value = true;
+	try {
+		const response = await ModerationService.abuseSignals({ status: 'open', limit: 100 });
+		abuseSignals.value = response.data.signals || [];
+	} catch (error) {
+		if (error.response?.status !== 403) flash('Не удалось загрузить поведенческие сигналы.', 'error');
+		abuseSignals.value = [];
+	} finally { signalsLoading.value = false; }
+};
+const reviewSignal = async (signal, decision) => {
+	busy.value = true;
+	try {
+		await ModerationService.reviewAbuseSignal(signal.uid, { decision });
+		await loadAbuseSignals();
+		flash(decision === 'dismissed' ? 'Сигнал помечен как нерелевантный.' : 'Сигнал отмечен как просмотренный.');
+	} catch { flash('Не удалось обновить поведенческий сигнал.', 'error'); }
+	finally { busy.value = false; }
+};
+const refreshAll = async () => { await Promise.all([loadQueue(), loadRestrictionAppeals(), loadAbuseSignals()]); };
 
 const loadAIConfig = async () => {
 	try {
@@ -473,6 +516,10 @@ const decide = async () => {
 watch(() => decision.status, (value) => { if (value === 'escalated') decision.resolution_code = 'needs_platform_action'; else if (decision.resolution_code === 'needs_platform_action') decision.resolution_code = value === 'dismissed' ? 'no_violation' : 'handled'; });
 watch(() => selected.value?.source_space_uid, (value) => { if (!value && restriction.scope_type === 'space') restriction.scope_type = 'platform'; });
 
+const abuseSignalLabel = (value) => ({ message_rate_limit: 'Повторное превышение лимита сообщений', dm_distinct_recipient_burst: 'Массовые личные контакты', space_invite_recipient_burst: 'Массовые приглашения' }[value] || value);
+const abuseSeverityLabel = (value) => ({ low: 'низкий риск', medium: 'средний риск', high: 'высокий риск', critical: 'критический риск' }[value] || value);
+const abuseSurfaceLabel = (value) => ({ messenger: 'Messenger', space: 'Space chat', space_invitation: 'Приглашения в Space' }[value] || value);
+const abuseWindowLabel = (seconds) => seconds % 60 === 0 ? `${Math.round(seconds / 60)} мин.` : `${seconds} сек.`;
 const priorityLabel = (value) => ({ high: 'Высокий', normal: 'Обычный', low: 'Низкий' }[value] || value);
 const statusLabel = (value) => ({ triage: 'Новая', in_review: 'В работе', escalated: 'Эскалация', resolved: 'Решено', dismissed: 'Закрыто' }[value] || value);
 const sourceLabel = (value) => ({ persona: 'Профиль', messenger_message: 'Личное сообщение', space_message: 'Сообщение пространства' }[value] || value);
@@ -487,7 +534,7 @@ const restrictionScopeLabel = (item) => item.scope_type === 'space' ? 'конк�
 const auditLabel = (value) => ({ report_created: 'Жалоба создана', duplicate_submission: 'Повторная отправка', report_claimed: 'Взято в работу', report_released: 'Возвращено в очередь', evidence_viewed: 'Evidence просмотрен', restriction_issued: 'Применено ограничение', restriction_appeal_created: 'Создана апелляция', restriction_appeal_resolved: 'Апелляция рассмотрена', report_decided: 'Решение сохранено' }[value] || value);
 const formatDate = (value) => value ? new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '';
 
-onMounted(async () => { await Promise.all([loadQueue(), loadCapabilities(), loadRestrictionAppeals(), loadAIConfig()]); resetRestrictionDraft(); });
+onMounted(async () => { await Promise.all([loadQueue(), loadCapabilities(), loadRestrictionAppeals(), loadAbuseSignals(), loadAIConfig()]); resetRestrictionDraft(); });
 </script>
 
 <style scoped>
