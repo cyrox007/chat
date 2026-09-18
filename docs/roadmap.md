@@ -2,13 +2,13 @@
 
 ## Текущий статус
 
-Released: **`0.6.13-alpha.1`**.
+Released: **`0.6.14-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
 Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression, durable unread-Messenger email delivery, Web Push/PWA Messenger delivery, full `account.access` enforcement и fine-grained platform moderation permission boundaries.
 
-Provider-neutral AI assessment / copilot layer уже закрыт как отдельный checkpoint. Следующий Trust & Safety task — **anti-spam/raid signals**, затем media/upload abuse workflow, moderation metrics/privacy-retention и incident rehearsal. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
+Provider-neutral AI assessment / copilot и baseline anti-spam/raid behavioral signals уже закрыты отдельными checkpoints. Следующий Trust & Safety task — **media/upload abuse workflow**, затем moderation metrics/privacy-retention и incident rehearsal. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
 
 Отдельно зафиксированы два обязательных launch workstream, которые раньше были недооценены: **production-grade moderation / Trust & Safety** и **устойчивая монетизация / unit economics**. PubChat не может считать наличие таблиц moderation готовой системой и не может рассчитывать, что инфраструктура, поддержка и Trust & Safety будут бесконечно финансироваться только энтузиазмом команды.
 
@@ -133,6 +133,16 @@ Direct/Sentinel topology abstraction, real master+replica+3-Sentinel promotion r
 - moderator UI позволяет принять suggestion как черновик, взять за основу с изменением или отклонить; реальная санкция проходит обычный hierarchy/permission enforcement;
 - provider/schema/privacy/persistence/audit boundaries покрыты deterministic и PostgreSQL integration tests.
 
+### Stage 6.8 checkpoint 5 — Anti-spam / raid abuse signals ✅ `0.6.14-alpha.1`
+- durable privacy-minimal behavioral signal ledger хранит counters/window/threshold evidence без message body, private transcript и attachment URLs;
+- Messenger и Space realtime rate-limit pressure создают deduped advisory signals;
+- Messenger distinct-recipient burst выявляет массовые DM-контакты в bounded window;
+- Space invitation distinct-recipient burst выявляет invite-spam pressure;
+- все thresholds и windows конфигурируемые и имеют безопасные нижние/верхние границы;
+- moderator UI получил отдельную очередь signal evidence со статусами open/reviewed/dismissed;
+- сигнал сам по себе не создаёт restriction, не меняет authority и не является автоматическим verdict;
+- PostgreSQL integration закрепляет durable dedupe/upsert и отсутствие punitive side effects.
+
 ## Stage 6 — Pre-beta hardening 🚧 `0.6.x-alpha`
 
 ### 6.1 Data / migrations 🚧
@@ -220,7 +230,7 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ✅ internal moderator UX для report review, evidence, issue/revoke restrictions и appeals;
 - ✅ hierarchy/permission hardening: отдельные issue/revoke/appeal-review permissions, elevated permanent/account-access powers и issuer-authority floor для revoke;
 - ✅ AI assessment model + provider-neutral adapter + recommendation UI (`accepted / modified / rejected / not_used`) с privacy-minimal evidence и bounded assessment budget;
-- ⏳ anti-spam/raid baseline: message burst, invite/DM abuse, repeated unsolicited contacts, mass-join/leave и obvious automation pressure;
+- 🚧 anti-spam/raid baseline: ✅ realtime rate-limit pressure, ✅ DM distinct-recipient burst, ✅ invite-recipient burst; ⏳ repeated unsolicited-contact correlation, mass-join/leave и broader automation pressure;
 - ⏳ media/upload abuse workflow: quarantine/remove/review hooks без автоматической выдачи модератору лишних приватных данных;
 - ⏳ moderation metrics: queue age, response time, action/appeal counts, overturned decisions, AI recommendation outcomes; без KPI, стимулирующих больше санкций;
 - ⏳ privacy/retention policy для reports/evidence/AI envelopes и redaction/export procedures;
