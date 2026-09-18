@@ -6,13 +6,13 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Release candidate текущей ветки: `0.6.12-alpha.1` — hardening moderation hierarchy/permissions. Последний выпущенный `main` checkpoint — `0.6.11-alpha.1`.
+Release candidate текущей ветки: `0.6.13-alpha.1` — provider-neutral moderation AI copilot. Последний выпущенный `main` checkpoint — `0.6.12-alpha.1`.
 
 Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 
 Stage 6 уже закрепил PostgreSQL 16 migration/integration/recovery baseline, Redis 7.2 distributed realtime, restart/recovery и real Sentinel master-promotion baseline, real multi-process Uvicorn/WebSocket rehearsal с rolling restart, bounded per-socket backpressure, message-notification delivery policy с distributed active-context suppression, durable unread-Messenger email delivery и standards-based Web Push/PWA Messenger delivery. Production backend запускается за постоянным systemd-owned listener, routine deploy меняет workers rolling reload без намеренного `502` окна, а frontend публикуется staged/asset-first.
 
-Trust & Safety checkpoint `0.6.10-alpha.1` добавил отдельный platform report/triage/evidence контур, Account-level иерархию moderation authority, capability restrictions с server-side enforcement, target-visible reason/scope/expiry и независимый appeal flow. `0.6.11-alpha.1` завершил full `account.access` suspension: platform-only sanction отзывает существующие sessions, блокирует обычные HTTP/realtime surfaces по durable PostgreSQL restriction, отключает уже открытые WebSocket connections и оставляет затронутому Account только ограниченный Safety/appeal/logout контур.
+Trust & Safety checkpoint `0.6.10-alpha.1` добавил отдельный platform report/triage/evidence контур, Account-level иерархию moderation authority, capability restrictions с server-side enforcement, target-visible reason/scope/expiry и независимый appeal flow. `0.6.11-alpha.1` завершил full `account.access` suspension: platform-only sanction отзывает существующие sessions, блокирует обычные HTTP/realtime surfaces по durable PostgreSQL restriction, отключает уже открытые WebSocket connections и оставляет затронутому Account только ограниченный Safety/appeal/logout контур. `0.6.12-alpha.1` разделил queue/manage, restriction issue/revoke и appeal-review powers отдельными permissions. `0.6.13-alpha.1` добавляет provider-neutral AI-copilot: privacy-minimal advisory assessment, bounded provider budget и human outcome tracking без права AI применять санкции.
 
 `0.6.12-alpha.1` разделяет platform moderation access и punitive authority: выдача ограничений, снятие ограничений и review апелляций получают отдельные permissions. Обычный moderator может работать с временными capability restrictions только в пределах своей authority, но permanent sanctions и `account.access` остаются elevated-действиями. Снятие санкции дополнительно требует authority не ниже authority исходного решения, поэтому moderator не может отменить санкцию, выданную admin.
 
