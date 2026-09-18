@@ -25,6 +25,18 @@
 - moderator UI фиксирует human outcome как `accepted`, `modified`, `rejected` или `not_used`; даже accepted suggestion только заполняет черновик, а применение санкции идёт через обычный human restriction API с hierarchy/permission checks.
 
 
+## Реализованный anti-spam / raid signal checkpoint
+
+В `0.6.14-alpha.1` добавлен durable behavioral signal layer. Его задача — дать модератору ранние server-owned признаки злоупотребления, не превращая эвристику в автоматический приговор.
+
+- realtime rate-limit pressure в Messenger и Space создаёт deduped signal;
+- Messenger detector считает distinct recipients в bounded window и сигнализирует о массовых DM-контактах;
+- Space invitation detector считает distinct invitees в bounded window и сигнализирует о invite-spam pressure;
+- signal хранит только account reference, тип surface/signal, counters, threshold/window metadata и review state; текст сообщений, история приватного диалога и attachment URLs туда не попадают;
+- один signal можно отметить как `reviewed` или `dismissed`, но это не создаёт restriction;
+- thresholds конфигурируемые: product/Trust & Safety команда должна калибровать их по реальным false-positive/false-negative данным, а не воспринимать default как универсальную норму;
+- автоматическая санкция по одному behavioral signal запрещена baseline-контрактом. Для punitive action требуется обычный human moderation path с hierarchy, permissions, audit и appeal.
+
 ## Иерархия платформенных ролей
 
 `PlatformRole` имеет явный `authority_level`. При нескольких ролях эффективный уровень Account — максимальный уровень его активных platform roles.

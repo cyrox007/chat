@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from components.decorators.db import get_session
 from components.message.model import Message
 from components.moderation.policy import assert_allowed
+from components.moderation.abuse_signals import record_rate_limit_signal
 from components.notification.space_message_delivery import notify_online_space_members
 from components.realtime import realtime_service
 from components.room.model import Room, RoomBan, RoomMember
@@ -88,7 +89,7 @@ async def send_initial_data(
     )
 
 
-async def _rate_limit_message(websocket: WebSocket, user_uid: UUID) -> bool:
+async def _rate_limit_message(websocket: WebSocket, user_uid: UUID, db_session: AsyncSession, room_uid: UUID) -> bool:
     allowed = await realtime_service.allow_action(
         user_uid=user_uid,
         bucket="space-message",
@@ -97,6 +98,16 @@ async def _rate_limit_message(websocket: WebSocket, user_uid: UUID) -> bool:
     )
     if allowed:
         return True
+
+    try:
+        await record_rate_limit_signal(
+            db_session,
+            legacy_user_uid=user_uid,
+            surface="space",
+            scope_uid=room_uid,
+        )
+    except Exception:
+        logger.exception("Failed to record Space message abuse signal")
 
     await websocket.send_json(
         {
@@ -236,7 +247,7 @@ async def process_incoming_messages(
             ):
                 continue
 
-        if not await _rate_limit_message(websocket, user_uid):
+        if not await _rate_limit_message(websocket, user_uid, db_session, room_uid):
             continue
 
         if content_type == "text":

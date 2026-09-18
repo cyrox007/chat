@@ -2,6 +2,20 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.14-alpha.1] — 2026-09-18
+
+Stage 6.8 checkpoint 5 — privacy-minimal anti-spam / raid abuse signals.
+
+- добавлен durable `trust_safety_abuse_signals` ledger для behavioral evidence без хранения message body, private-dialog transcript или attachment URLs;
+- realtime Messenger/Space rate-limit pressure создаёт deduped advisory signal, но не автоматическую санкцию;
+- Messenger detector отслеживает burst по distinct DM recipients в bounded window как признак массовых нежелательных контактов;
+- Space invitation detector отслеживает burst по distinct invitees в bounded window как признак invite spam;
+- thresholds/window/dedupe параметры конфигурируемые и ограничены безопасными минимумами;
+- moderator API и Trust & Safety UI получили отдельную очередь behavioral signals со статусами open/reviewed/dismissed;
+- review/dismiss signal не создаёт restriction и не меняет Account permissions: punitive path остаётся только human moderation flow;
+- PostgreSQL integration проверяет durable dedupe/upsert, human review state и отсутствие side-effect restriction;
+- Alembic/model registry/schema-drift интеграция синхронизирована.
+
 ## [0.6.13-alpha.1] — 2026-09-18
 
 Stage 6.8 checkpoint 4 — provider-neutral moderation AI copilot.
