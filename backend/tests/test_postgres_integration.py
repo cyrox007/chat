@@ -11,6 +11,7 @@ from database import Database
 from tests.test_account_access_postgres_integration import AccountAccessPostgresIntegrationTests  # noqa: F401
 from tests.test_abuse_signal_postgres_integration import AbuseSignalPostgresIntegrationTests  # noqa: F401
 from tests.test_moderation_ai_postgres_integration import ModerationAIPostgresIntegrationTests  # noqa: F401
+from tests.test_moderation_media_postgres_integration import ModerationMediaPostgresIntegrationTests  # noqa: F401
 from tests.test_platform_restriction_appeals_postgres_integration import (  # noqa: F401
     PlatformRestrictionAppealPostgresIntegrationTests,
 )
