@@ -48,6 +48,7 @@ class PostgreSQLIntegrationTests(unittest.TestCase):
                         "platform_restriction_audit_events",
                         "platform_restriction_appeals",
                         "moderation_ai_recommendations",
+                        "trust_safety_abuse_signals",
                         "alembic_version",
                     )
                 }
