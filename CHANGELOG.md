@@ -2,6 +2,21 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.13-alpha.1] — 2026-09-18
+
+Stage 6.8 checkpoint 4 — provider-neutral moderation AI copilot.
+
+- добавлен отдельный permission `moderation.platform.ai.assess`; доступ к Trust & Safety queue сам по себе не даёт права использовать AI provider;
+- AI-copilot работает только с жалобой, уже взятой модератором в claim, и не имеет punitive authority;
+- provider-neutral `http_json` adapter принимает строго структурированный assessment и валидирует ответ через Pydantic schema;
+- provider payload privacy-minimal: только пожалованный Persona/message object; без Account UID, handle, sender/recipient identity, истории личного диалога, attachment URL и свободного текста описания жалобы;
+- `account.access` исключён из AI suggestion schema; AI может предложить только bounded temporary restriction или отсутствие санкции;
+- durable `moderation_ai_recommendations` хранит category/severity/confidence/summary/rationale и human outcome, но не raw prompt, raw provider response, chain-of-thought или private conversation history;
+- на одну жалобу действует bounded assessment budget, по умолчанию 3 запроса, чтобы исключить бесконтрольное provider-cost amplification;
+- moderator UI показывает AI severity/confidence/summary/rationale и позволяет явно принять предложение как черновик, взять его за основу для изменения либо отклонить; применение restriction всё равно идёт через обычный human moderation API и hierarchy/permission checks;
+- provider failure аудируется и не меняет moderation state;
+- Alembic/model registry синхронизированы; deterministic contract tests и PostgreSQL integration покрывают schema/privacy/persistence/audit/human-outcome boundaries.
+
 ## [0.6.12-alpha.1] — 2026-09-17
 
 Stage 6.8 checkpoint 3 — fine-grained platform moderation permission hierarchy.
