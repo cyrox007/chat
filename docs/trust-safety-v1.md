@@ -12,6 +12,19 @@
 
 `Reputation != Role != Moderation Power`. Authority выдаётся только server-side RBAC и не зависит от донатов, подписки, подарков, достижений или discovery score.
 
+## Реализованный AI-copilot checkpoint
+
+В `0.6.13-alpha.1` AI-copilot реализован как отдельный advisory слой поверх human moderation:
+
+- assessment доступен только модератору с `moderation.platform.ai.assess` и только для report, который уже находится в его claim;
+- provider-neutral adapter получает только пожалованный объект; Account identifiers, handles, sender/recipient identity, unrelated private-dialog history, attachment URLs и свободное описание reporter не отправляются;
+- ответ provider обязан соответствовать строгой structured schema: category, severity, confidence, summary, rationale и необязательное bounded temporary restriction suggestion;
+- `account.access`, permanent sanctions, revoke и appeal decision AI предложить или выполнить не может;
+- raw prompt, raw provider response и chain-of-thought не сохраняются;
+- на report действует ограниченный assessment budget, чтобы AI не превращался в бесконтрольный расход внешнего provider;
+- moderator UI фиксирует human outcome как `accepted`, `modified`, `rejected` или `not_used`; даже accepted suggestion только заполняет черновик, а применение санкции идёт через обычный human restriction API с hierarchy/permission checks.
+
+
 ## Иерархия платформенных ролей
 
 `PlatformRole` имеет явный `authority_level`. При нескольких ролях эффективный уровень Account — максимальный уровень его активных platform roles.
