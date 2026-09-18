@@ -2,7 +2,7 @@
 
 ## Current release
 
-`0.6.13-alpha.1`
+`0.6.14-alpha.1`
 
 Current development milestone remains `0.6.x-alpha` — Pre-beta hardening.
 
