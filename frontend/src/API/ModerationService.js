@@ -57,6 +57,14 @@ export default class ModerationService {
 		return $api.get('/trust-safety/v1/queue', { params });
 	}
 
+	static abuseSignals(params = {}) {
+		return $api.get('/trust-safety/v1/abuse-signals', { params });
+	}
+
+	static reviewAbuseSignal(signalUid, payload) {
+		return $api.patch(`/trust-safety/v1/abuse-signals/${signalUid}`, payload);
+	}
+
 	static claimTrustSafetyReport(reportUid) {
 		return $api.post(`/trust-safety/v1/reports/${reportUid}/claim`);
 	}
