@@ -47,7 +47,7 @@
 
 - [`identity-v2.md`](identity-v2.md) — Account/Persona/Credential/Session/Privacy.
 - [`realtime-v2.md`](realtime-v2.md) — tickets, Redis pub/sub, presence, reconnect.
-- [`trust-safety-v1.md`](trust-safety-v1.md) — platform report intake, иерархия ролей, capability restrictions, runtime enforcement, audit/appeals и AI-copilot boundaries (`0.6.10-alpha.1` foundation; `0.6.11-alpha.1` full `account.access`; `0.6.12-alpha.1` permission/hierarchy hardening candidate).
+- [`trust-safety-v1.md`](trust-safety-v1.md) — platform report intake, иерархия ролей, capability restrictions, runtime enforcement, audit/appeals и AI-copilot boundaries (`0.6.10-alpha.1` foundation; `0.6.11-alpha.1` full `account.access`; `0.6.12-alpha.1` permission/hierarchy hardening; `0.6.13-alpha.1` provider-neutral AI copilot).
 - [`product-identity-v1.md`](product-identity-v1.md) — Persona/Space appearance и recurring Activities.
 - [`social-engagement-v2.md`](social-engagement-v2.md) — earned achievements и Conversation Rounds.
 - [`activity-occurrences-v1.md`](activity-occurrences-v1.md) — occurrences/reminders/inbox.

@@ -42,6 +42,7 @@ from components.notification.model import (
     UserNotification,
 )
 from components.moderation.model import ModerationAction, ModerationAppeal, ModerationReport
+from components.moderation.ai_model import ModerationAIRecommendation
 from components.support.model import (
     CosmeticEntitlement,
     CreatorSupportProfile,

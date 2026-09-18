@@ -77,6 +77,22 @@ export default class ModerationService {
 		return $api.get(`/trust-safety/v1/reports/${reportUid}/audit`, { params });
 	}
 
+	static moderationAIConfig() {
+		return $api.get('/trust-safety/v1/ai-assessment/config');
+	}
+
+	static moderationAIAssessments(reportUid, params = {}) {
+		return $api.get(`/trust-safety/v1/reports/${reportUid}/ai-assessments`, { params });
+	}
+
+	static createModerationAIAssessment(reportUid) {
+		return $api.post(`/trust-safety/v1/reports/${reportUid}/ai-assessments`);
+	}
+
+	static setModerationAIOutcome(reportUid, assessmentUid, payload) {
+		return $api.patch(`/trust-safety/v1/reports/${reportUid}/ai-assessments/${assessmentUid}`, payload);
+	}
+
 	static restrictionCapabilities() {
 		return $api.get('/trust-safety/v1/restriction-capabilities');
 	}

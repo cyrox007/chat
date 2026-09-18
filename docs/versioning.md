@@ -2,7 +2,7 @@
 
 ## Current release
 
-`0.6.3-alpha.1`
+`0.6.13-alpha.1`
 
 Current development milestone remains `0.6.x-alpha` — Pre-beta hardening.
 
@@ -17,7 +17,7 @@ Before `1.0.0`, PubChat uses Semantic Versioning with an explicit readiness chan
 `MAJOR.MINOR.PATCH` for stable releases.
 
 Examples:
-- `0.6.3-alpha.1` — validated compatible hardening checkpoint inside milestone 0.6;
+- `0.6.13-alpha.1` — validated compatible hardening checkpoint inside milestone 0.6;
 - `0.6.4-alpha.0` — next compatible development slice inside the same milestone;
 - `0.9.0-beta.1` — core product flows complete and entering stabilization;
 - `1.0.0` — first stable public release.

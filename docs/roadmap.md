@@ -2,13 +2,13 @@
 
 ## Текущий статус
 
-Released: **`0.6.12-alpha.1`**.
+Released: **`0.6.13-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
 Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression, durable unread-Messenger email delivery, Web Push/PWA Messenger delivery, full `account.access` enforcement и fine-grained platform moderation permission boundaries.
 
-Следующий отдельный Trust & Safety task — **provider-neutral AI assessment / copilot layer**. После него — anti-spam/raid signals, media/upload abuse workflow, moderation metrics/privacy-retention и incident rehearsal. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
+Provider-neutral AI assessment / copilot layer уже закрыт как отдельный checkpoint. Следующий Trust & Safety task — **anti-spam/raid signals**, затем media/upload abuse workflow, moderation metrics/privacy-retention и incident rehearsal. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
 
 Отдельно зафиксированы два обязательных launch workstream, которые раньше были недооценены: **production-grade moderation / Trust & Safety** и **устойчивая монетизация / unit economics**. PubChat не может считать наличие таблиц moderation готовой системой и не может рассчитывать, что инфраструктура, поддержка и Trust & Safety будут бесконечно финансироваться только энтузиазмом команды.
 
@@ -122,6 +122,17 @@ Direct/Sentinel topology abstraction, real master+replica+3-Sentinel promotion r
 - Alembic migration синхронизирует permission sequence после исторического explicit-ID seed и раздаёт новые permissions базовым moderator/admin roles;
 - PostgreSQL integration фиксирует manage-only custom role denial, peer revoke, запрет override admin sanction, elevated permanent/account-access path и отдельный appeal-review permission.
 
+### Stage 6.8 checkpoint 4 — Moderation AI copilot ✅ `0.6.13-alpha.1`
+- provider-neutral advisory AI layer отделён от punitive moderation authority;
+- отдельный `moderation.platform.ai.assess` permission ограничивает доступ к provider-backed assessment;
+- AI работает только по claimed report и получает privacy-minimal evidence envelope без Account identifiers, unrelated dialog history и attachment URLs;
+- свободный reporter description не отправляется внешнему provider, чтобы не расширять PII surface сверх пожалованного объекта;
+- AI может рекомендовать только `none` или bounded temporary restriction; `account.access`, permanent sanction, revoke и appeal decision запрещены контрактом;
+- durable recommendation хранит structured summary/severity/confidence/rationale и human outcome, но не raw prompts/responses/chain-of-thought;
+- assessment budget на report ограничивает provider-cost amplification;
+- moderator UI позволяет принять suggestion как черновик, взять за основу с изменением или отклонить; реальная санкция проходит обычный hierarchy/permission enforcement;
+- provider/schema/privacy/persistence/audit boundaries покрыты deterministic и PostgreSQL integration tests.
+
 ## Stage 6 — Pre-beta hardening 🚧 `0.6.x-alpha`
 
 ### 6.1 Data / migrations 🚧
@@ -195,7 +206,7 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 
 ### 6.8 Trust & Safety / moderation launch readiness 🚧
 
-Базовый platform moderation контур, full `account.access` и fine-grained human moderation permission hierarchy уже реализованы, но до публичной beta остаются AI-assisted и операционные слои.
+Базовый platform moderation контур, full `account.access`, fine-grained human permission hierarchy и provider-neutral AI-copilot уже реализованы; до публичной beta остаются abuse-automation и операционные слои.
 
 - ✅ единый platform report flow для Persona, Messenger message и Space message; media-attachment specialization ещё впереди;
 - ✅ report taxonomy/priority baseline, duplicate collapse и rate guard;
@@ -208,7 +219,7 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ✅ platform restriction appeal queue с claim/review и independent-review preference;
 - ✅ internal moderator UX для report review, evidence, issue/revoke restrictions и appeals;
 - ✅ hierarchy/permission hardening: отдельные issue/revoke/appeal-review permissions, elevated permanent/account-access powers и issuer-authority floor для revoke;
-- ⏳ AI assessment model + provider-neutral adapter + recommendation UI (`accepted / modified / rejected / not_used`);
+- ✅ AI assessment model + provider-neutral adapter + recommendation UI (`accepted / modified / rejected / not_used`) с privacy-minimal evidence и bounded assessment budget;
 - ⏳ anti-spam/raid baseline: message burst, invite/DM abuse, repeated unsolicited contacts, mass-join/leave и obvious automation pressure;
 - ⏳ media/upload abuse workflow: quarantine/remove/review hooks без автоматической выдачи модератору лишних приватных данных;
 - ⏳ moderation metrics: queue age, response time, action/appeal counts, overturned decisions, AI recommendation outcomes; без KPI, стимулирующих больше санкций;
