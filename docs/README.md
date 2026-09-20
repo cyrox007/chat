@@ -59,6 +59,8 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Release candidate текущей ветки: `0.6.15-alpha.1`; последний выпущенный `main` checkpoint — `0.6.14-alpha.1` до финального exact-head CI и merge PR #35.
+Release candidate текущей ветки: `0.6.16-alpha.1`; последний выпущенный `main` checkpoint — `0.6.15-alpha.1` до финального exact-head CI и merge PR #36.
 
-Текущая development-линия: `0.6.x-alpha`. После media moderation следующий Trust & Safety блок — moderation metrics/privacy-retention + incident rehearsal, затем калиброванная low-risk automation baseline. Параллельно продолжаются browser/security/observability и unit-economics/monetization planning.
+Текущая development-линия: `0.6.x-alpha`. Operations metrics, incident rehearsal и default-off low-risk protective-hold baseline закрыты в `0.6.16-alpha.1`; следующий Trust & Safety блок — privacy-retention/secure-expiry и production calibration. Параллельно продолжаются browser/security/observability и unit-economics/monetization planning.
+
+- `trust-safety-incident-rehearsal-v1.md` — moderation incident matrix, protective-hold safeguards и beta enablement gate.

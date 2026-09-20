@@ -19,6 +19,9 @@ from tests.test_platform_restrictions_postgres_integration import (  # noqa: F40
     PlatformRestrictionPostgresIntegrationTests,
 )
 from tests.test_trust_safety_postgres_integration import TrustSafetyPostgresIntegrationTests  # noqa: F401
+from tests.test_trust_safety_operations_postgres_integration import (  # noqa: F401
+    TrustSafetyOperationsPostgresIntegrationTests,
+)
 
 
 @unittest.skipUnless(

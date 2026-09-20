@@ -2,13 +2,13 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.15-alpha.1`**; last merged `main` checkpoint: **`0.6.14-alpha.1`**.
+Release candidate: **`0.6.16-alpha.1`**; last merged `main` checkpoint: **`0.6.15-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
 Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression, durable unread-Messenger email delivery, Web Push/PWA Messenger delivery, full `account.access` enforcement и fine-grained platform moderation permission boundaries.
 
-Provider-neutral AI assessment / copilot, baseline anti-spam/raid behavioral signals и reported-media moderation уже закрыты отдельными checkpoints. Следующий Trust & Safety task — **moderation metrics/privacy-retention + incident rehearsal**, затем только калиброванная low-risk automation baseline. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
+Provider-neutral AI assessment / copilot, anti-spam/raid behavioral signals, reported-media moderation, operations metrics, incident rehearsal и default-off low-risk protective-hold baseline уже закрыты отдельными checkpoints. Следующий Trust & Safety task — **formal privacy-retention/secure-expiry + production calibration**; protective holds остаются выключенными до human-reviewed calibration. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
 
 Отдельно зафиксированы два обязательных launch workstream, которые раньше были недооценены: **production-grade moderation / Trust & Safety** и **устойчивая монетизация / unit economics**. PubChat не может считать наличие таблиц moderation готовой системой и не может рассчитывать, что инфраструктура, поддержка и Trust & Safety будут бесконечно финансироваться только энтузиазмом команды.
 
@@ -305,4 +305,16 @@ Beta назначается только когда launch-critical journeys р�
 - moderator UI controls и PostgreSQL/filesystem integration coverage;
 - AI/automation не получают punitive media authority;
 - автоматическое deletion evidence отложено до формализованной retention policy.
+
+
+
+### Stage 6.8 checkpoint 7 — Trust & Safety operations ✅ `0.6.16-alpha.1`
+- aggregate queue/decision/appeal/AI/signal/restriction metrics без пользовательского содержимого и identifiers;
+- moderator operations dashboard и policy status;
+- incident rehearsal matrix, включая concurrent claim, AI outage, appeal overturn, account.access и media workflow;
+- default-off protective holds: ≥2 high/critical signal buckets, 5–15 минут, только Messenger send / invitations;
+- privileged Accounts и sensitive capabilities исключены;
+- per-Account serialization исключает duplicate auto-holds при concurrent detectors;
+- functional exact-head CI #579 green до release sync.
+- осталось отдельно: private moderation evidence retention/secure expiry и production calibration до enablement automation.
 

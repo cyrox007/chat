@@ -4,11 +4,13 @@ import os
 import unittest
 from uuid import uuid4
 
+from fastapi import HTTPException
 from sqlalchemy import delete, select
 
 from components.identity.model import Account, Persona
 from components.model_registry import ensure_models_registered
 from components.moderation.ai_copilot import (
+    ModerationAIProviderError,
     create_moderation_ai_assessment,
     set_moderation_ai_outcome,
 )
@@ -16,6 +18,14 @@ from components.moderation.ai_model import ModerationAIRecommendation
 from components.moderation.model import TrustSafetyAuditEvent, TrustSafetyReport
 from components.moderation.schemas import ModerationAIAssessment, ModerationAIOutcomeRequest
 from database import Database
+
+
+class FailingModerationAIProvider:
+    key = "failing_test"
+    model_name = "offline-v1"
+
+    async def assess(self, payload: dict):
+        raise ModerationAIProviderError("simulated provider outage")
 
 
 class FakeModerationAIProvider:
@@ -171,6 +181,114 @@ class ModerationAIPostgresIntegrationTests(unittest.TestCase):
                         delete(Account).where(
                             Account.uid.in_([reporter_uid, target_uid, moderator_uid])
                         )
+                    )
+                    await cleanup_db.commit()
+                await Database.dispose()
+
+        asyncio.run(run_case())
+
+
+    def test_provider_failure_is_audited_without_creating_recommendation_or_changing_claim(self):
+        async def run_case():
+            ensure_models_registered()
+            target_uid = uuid4()
+            moderator_uid = uuid4()
+            persona_uid = uuid4()
+            report_uid = uuid4()
+
+            async with Database.sessionmaker()() as setup_db:
+                setup_db.add_all(
+                    [
+                        Account(uid=target_uid, status="active", trust_level="new"),
+                        Account(uid=moderator_uid, status="active", trust_level="new"),
+                    ]
+                )
+                await setup_db.flush()
+                setup_db.add(
+                    Persona(
+                        uid=persona_uid,
+                        account_uid=target_uid,
+                        handle=f"ai-failure-{target_uid.hex[:10]}",
+                        display_name="AI failure target",
+                        bio="Reported evidence.",
+                        social_intent="open",
+                        is_primary=True,
+                    )
+                )
+                setup_db.add(
+                    TrustSafetyReport(
+                        uid=report_uid,
+                        reporter_account_uid=None,
+                        target_account_uid=target_uid,
+                        source_type="persona",
+                        source_uid=persona_uid,
+                        category="harassment",
+                        priority="normal",
+                        description="provider outage rehearsal",
+                        status="in_review",
+                        assigned_to_account_uid=moderator_uid,
+                    )
+                )
+                await setup_db.commit()
+
+            try:
+                async with Database.sessionmaker()() as db:
+                    with self.assertRaises(HTTPException) as context:
+                        await create_moderation_ai_assessment(
+                            db,
+                            report_uid,
+                            moderator_uid,
+                            provider=FailingModerationAIProvider(),
+                        )
+                    self.assertEqual(context.exception.status_code, 503)
+                    self.assertEqual(
+                        context.exception.detail["error_type"],
+                        "moderation_ai_provider_unavailable",
+                    )
+
+                async with Database.sessionmaker()() as verify_db:
+                    report = await verify_db.get(TrustSafetyReport, report_uid)
+                    self.assertEqual(report.status, "in_review")
+                    self.assertEqual(report.assigned_to_account_uid, moderator_uid)
+
+                    recommendations = (
+                        await verify_db.execute(
+                            select(ModerationAIRecommendation).where(
+                                ModerationAIRecommendation.report_uid == report_uid
+                            )
+                        )
+                    ).scalars().all()
+                    self.assertEqual(recommendations, [])
+
+                    audit_types = list(
+                        (
+                            await verify_db.execute(
+                                select(TrustSafetyAuditEvent.event_type).where(
+                                    TrustSafetyAuditEvent.report_uid == report_uid
+                                )
+                            )
+                        ).scalars().all()
+                    )
+                    self.assertIn("ai_assessment_failed", audit_types)
+                    self.assertNotIn("restriction_issued", audit_types)
+            finally:
+                async with Database.sessionmaker()() as cleanup_db:
+                    await cleanup_db.execute(
+                        delete(ModerationAIRecommendation).where(
+                            ModerationAIRecommendation.report_uid == report_uid
+                        )
+                    )
+                    await cleanup_db.execute(
+                        delete(TrustSafetyAuditEvent).where(
+                            TrustSafetyAuditEvent.report_uid == report_uid
+                        )
+                    )
+                    await cleanup_db.execute(
+                        delete(TrustSafetyReport).where(TrustSafetyReport.uid == report_uid)
+                    )
+                    await cleanup_db.execute(delete(Persona).where(Persona.uid == persona_uid))
+                    await cleanup_db.execute(
+                        delete(Account).where(Account.uid.in_([target_uid, moderator_uid]))
                     )
                     await cleanup_db.commit()
                 await Database.dispose()

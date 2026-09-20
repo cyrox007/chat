@@ -61,6 +61,10 @@ export default class ModerationService {
 		return $api.get('/trust-safety/v1/abuse-signals', { params });
 	}
 
+	static trustSafetyMetrics(params = {}) {
+		return $api.get('/trust-safety/v1/metrics', { params });
+	}
+
 	static reviewAbuseSignal(signalUid, payload) {
 		return $api.patch(`/trust-safety/v1/abuse-signals/${signalUid}`, payload);
 	}

@@ -2,6 +2,24 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.16-alpha.1] — 2026-09-20
+
+Stage 6.8 checkpoint 7 — Trust & Safety operations metrics, incident rehearsal and calibrated protective-hold baseline.
+
+- добавлен privacy-minimal aggregate endpoint `/trust-safety/v1/metrics`: queue age, average decision time, appeal overturn rate, AI outcomes, behavioral-signal backlog и human/automation restriction origins без Account ID или содержимого жалоб;
+- moderator UI показывает operational dashboard и текущий безопасный policy-status protective holds;
+- protective holds существуют как отдельный low-risk automation path, но **выключены по умолчанию** до калибровки human-reviewed false-positive rate;
+- один behavioral signal никогда не создаёт sanction: для hold нужны минимум два отдельных high/critical server-owned signal bucket в bounded lookback;
+- automation allow-list ограничен только `messenger.send` и `invitation.send`; срок всегда 5–15 минут, permanent restriction невозможен;
+- `account.access`, Space chat, media actions, profile/discovery powers, revoke и appeal decisions не входят в automation surface;
+- privileged Account с platform authority исключён из automation path;
+- Account-level `FOR UPDATE` сериализация не позволяет concurrent detectors создать дублирующий hold; каждое действие имеет audit event и может быть снято обычным human revoke/appeal path;
+- provider outage AI-copilot отдельно rehearsed: failure аудируется, recommendation/restriction не создаются, claim state не меняется;
+- добавлен `docs/trust-safety-incident-rehearsal-v1.md` с incident matrix и beta gate;
+- functional exact-head CI #579 прошёл frontend/backend/PostgreSQL/Redis/Sentinel/WebSocket/legacy migration/backup-restore gates до release-doc sync.
+
+Следующий отдельный Trust & Safety slice — формальная privacy-retention/secure-expiry policy для private moderation evidence и production calibration до возможного включения protective holds.
+
 ## [0.6.15-alpha.1] — 2026-09-20
 
 Stage 6.8 checkpoint 6 — reversible reported-media moderation workflow.
