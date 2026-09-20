@@ -85,6 +85,22 @@ export default class ModerationService {
 		return $api.get(`/trust-safety/v1/reports/${reportUid}/audit`, { params });
 	}
 
+	static moderationMediaRecords(reportUid) {
+		return $api.get(`/trust-safety/v1/reports/${reportUid}/media-records`);
+	}
+
+	static quarantineModerationMedia(reportUid, attachmentIndex, payload) {
+		return $api.post(`/trust-safety/v1/reports/${reportUid}/media/${attachmentIndex}/quarantine`, payload);
+	}
+
+	static restoreModerationMedia(reportUid, recordUid) {
+		return $api.post(`/trust-safety/v1/reports/${reportUid}/media-records/${recordUid}/restore`);
+	}
+
+	static removeModerationMedia(reportUid, recordUid, payload) {
+		return $api.post(`/trust-safety/v1/reports/${reportUid}/media-records/${recordUid}/remove`, payload);
+	}
+
 	static moderationAIConfig() {
 		return $api.get('/trust-safety/v1/ai-assessment/config');
 	}

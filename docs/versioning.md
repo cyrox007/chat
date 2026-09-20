@@ -2,7 +2,7 @@
 
 ## Current release
 
-`0.6.14-alpha.1`
+`0.6.15-alpha.1`
 
 Current development milestone remains `0.6.x-alpha` — Pre-beta hardening.
 
@@ -41,7 +41,8 @@ Checkpoint progression:
 - `0.6.0-alpha.1` — PostgreSQL migration/schema-drift/async integration baseline;
 - `0.6.1-alpha.1` — PostgreSQL backup/restore recovery drill;
 - `0.6.2-alpha.1` — Redis 7.2 distributed realtime production-semantics baseline;
-- `0.6.3-alpha.1` — real Redis restart/outage recovery without Python process restart, including pub/sub resubscription.
+- `0.6.3-alpha.1` — real Redis restart/outage recovery without Python process restart, including pub/sub resubscription;
+- `0.6.15-alpha.1` — reversible human-only reported-media moderation with private evidence storage.
 
 These checkpoints do not declare Stage 6 complete.
 

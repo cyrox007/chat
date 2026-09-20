@@ -2,6 +2,20 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.15-alpha.1] — 2026-09-20
+
+Stage 6.8 checkpoint 6 — reversible reported-media moderation workflow.
+
+- добавлен отдельный permission `moderation.platform.media.manage` для quarantine/restore/remove действий над пожалованными вложениями;
+- `moderation_media_records` хранит durable audit-oriented state без публикации private evidence path клиенту;
+- quarantine переносит локальный `/uploads` файл в приватное moderation storage и помечает attachment metadata server-side;
+- restore возвращает файл и снимает moderation marker; remove оставляет его вне публичной выдачи, сохраняя evidence copy до применения retention policy;
+- filesystem move поддерживает cross-device deployment и compensating rollback при ошибке DB commit;
+- path confinement запрещает traversal и внешние URL;
+- действия требуют claim ownership, explicit permission и authority выше target Account; AI/automation не получают punitive media authority;
+- moderator UI показывает reported attachments и даёт явные quarantine/restore/remove controls с причиной действия;
+- PostgreSQL/filesystem integration и contract tests покрывают reversible state, audit и cross-filesystem fallback.
+
 ## [0.6.14-alpha.1] — 2026-09-18
 
 Stage 6.8 checkpoint 5 — privacy-minimal anti-spam / raid abuse signals.

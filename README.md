@@ -6,7 +6,7 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Release candidate текущей ветки: `0.6.14-alpha.1` — privacy-minimal anti-spam / raid abuse signals. Последний выпущенный `main` checkpoint — `0.6.13-alpha.1`.
+Release candidate текущей ветки: `0.6.15-alpha.1` — reversible reported-media moderation workflow. Последний выпущенный `main` checkpoint — `0.6.14-alpha.1`.
 
 Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 
@@ -106,3 +106,10 @@ SPA является первым клиентом; backend API и realtime cont
 - Standalone backend processes явно инициализируют ORM model registry.
 - Activity reminders остаются opt-in; external email/Web Push delivery добавляется отдельными adapters.
 - Creator support — бесплатные internal cosmetic gestures; реальные payments требуют отдельного financial/security review.
+
+
+### Stage 6.8 checkpoint 6 — Reported media moderation ✅ `0.6.15-alpha.1`
+- reported local attachments can be quarantined out of public `/uploads`, restored, or removed from public delivery;
+- private evidence paths are server-only and retention keeps the evidence copy until a dedicated deletion policy applies;
+- every action requires report claim ownership, explicit media permission and moderation authority over the target Account;
+- moderator UI exposes deliberate human controls; AI and automation cannot perform punitive media actions.
