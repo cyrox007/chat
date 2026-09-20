@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.moderation.abuse_model import TrustSafetyAbuseSignal
@@ -58,7 +58,10 @@ async def trust_safety_metrics(
     appeals = (
         await db.execute(
             select(PlatformRestrictionAppeal.status).where(
-                PlatformRestrictionAppeal.created_at >= cutoff
+                or_(
+                    PlatformRestrictionAppeal.created_at >= cutoff,
+                    PlatformRestrictionAppeal.resolved_at >= cutoff,
+                )
             )
         )
     ).scalars().all()
@@ -73,7 +76,10 @@ async def trust_safety_metrics(
     ai_outcomes = (
         await db.execute(
             select(ModerationAIRecommendation.outcome).where(
-                ModerationAIRecommendation.created_at >= cutoff
+                or_(
+                    ModerationAIRecommendation.created_at >= cutoff,
+                    ModerationAIRecommendation.outcome_at >= cutoff,
+                )
             )
         )
     ).scalars().all()
@@ -81,7 +87,10 @@ async def trust_safety_metrics(
     signal_statuses = (
         await db.execute(
             select(TrustSafetyAbuseSignal.status).where(
-                TrustSafetyAbuseSignal.created_at >= cutoff
+                or_(
+                    TrustSafetyAbuseSignal.created_at >= cutoff,
+                    TrustSafetyAbuseSignal.reviewed_at >= cutoff,
+                )
             )
         )
     ).scalars().all()
