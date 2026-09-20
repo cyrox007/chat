@@ -102,7 +102,22 @@
 					<section v-if="evidence" class="evidence">
 						<header><strong>Пожалованный объект</strong><span>{{ evidence.available ? 'Доступен' : 'Больше недоступен' }}</span></header>
 						<template v-if="evidence.persona"><strong>{{ evidence.persona.display_name || evidence.persona.handle }}</strong><p>@{{ evidence.persona.handle }}</p><p>{{ evidence.persona.bio || 'Описание отсутствует.' }}</p></template>
-						<template v-else-if="evidence.message"><div class="message-evidence"><small>{{ formatDate(evidence.message.created_at) }}</small><p>{{ evidence.message.content || `[${evidence.message.content_type}]` }}</p></div><small>{{ evidence.context_policy === 'reported_message_only' ? 'Показано только пожалованное сообщение, без истории диалога.' : '' }}</small></template>
+						<template v-else-if="evidence.message">
+							<div class="message-evidence"><small>{{ formatDate(evidence.message.created_at) }}</small><p>{{ evidence.message.content || `[${evidence.message.content_type}]` }}</p></div>
+							<div v-if="evidenceMediaFiles.length" class="media-review">
+								<div class="media-review__head"><strong>Вложения жалобы</strong><span>Quarantine скрывает файл из публичного /uploads, но сохраняет evidence copy.</span></div>
+								<article v-for="(file, index) in evidenceMediaFiles" :key="`${index}-${file.url || file.name || 'attachment'}`" class="media-review__item">
+									<div><strong>{{ file.name || `Вложение ${index + 1}` }}</strong><span>{{ file.type || 'unknown type' }} · {{ mediaStatusLabel(mediaRecordFor(index)?.status || file.moderation_status) }}</span></div>
+									<div v-if="ownsSelected" class="review-actions">
+										<button v-if="!mediaRecordFor(index) || mediaRecordFor(index)?.status === 'restored'" class="ui-button ui-button--ghost" type="button" :disabled="mediaBusy || mediaReason.trim().length < 3" @click="quarantineMedia(index)">Карантин</button>
+										<button v-if="mediaRecordFor(index)?.status === 'quarantined'" class="ui-button ui-button--ghost" type="button" :disabled="mediaBusy" @click="restoreMedia(mediaRecordFor(index))">Восстановить</button>
+										<button v-if="mediaRecordFor(index)?.status === 'quarantined'" class="ui-button ui-button--ghost" type="button" :disabled="mediaBusy || mediaReason.trim().length < 3" @click="removeMedia(mediaRecordFor(index))">Удалить из выдачи</button>
+									</div>
+								</article>
+								<label v-if="ownsSelected">Причина действия<textarea v-model.trim="mediaReason" maxlength="1000" rows="2" placeholder="Почему вложение нужно скрыть или удалить"></textarea></label>
+							</div>
+							<small>{{ evidence.context_policy === 'reported_message_only' ? 'Показано только пожалованное сообщение, без истории диалога.' : '' }}</small>
+						</template>
 					</section>
 
 					<section v-if="ownsSelected && aiVisible" class="ai-panel">
@@ -227,6 +242,9 @@ const aiConfig = reactive({ enabled: false, provider: 'disabled', schema_version
 const aiVisible = ref(false);
 const aiAssessments = ref([]);
 const aiBusy = ref(false);
+const mediaRecords = ref([]);
+const mediaBusy = ref(false);
+const mediaReason = ref('Reported attachment requires moderator review.');
 const filters = reactive({ status: '', priority: '', assigned: 'any' });
 const decision = reactive({ status: 'resolved', resolution_code: 'handled', public_explanation: '' });
 const restriction = reactive({ capability: '', scope_type: 'platform', duration: '1440', reason_code: '', public_explanation: '' });
@@ -235,6 +253,8 @@ const appealDecision = reactive({ decision: 'uphold', resolution: '' });
 const currentAccountUid = computed(() => store.getters.getAccount?.uid || store.getters.getUser?.uid || null);
 const ownsSelected = computed(() => Boolean(selected.value?.assigned_to_account_uid && selected.value.assigned_to_account_uid === currentAccountUid.value));
 const ownsSelectedAppeal = computed(() => Boolean(selectedAppeal.value?.reviewer_account_uid && selectedAppeal.value.reviewer_account_uid === currentAccountUid.value));
+const evidenceMediaFiles = computed(() => Array.isArray(evidence.value?.message?.media_metadata?.files) ? evidence.value.message.media_metadata.files : []);
+const mediaRecordFor = (index) => mediaRecords.value.find((item) => item.attachment_index === index) || null;
 
 const flash = (message, type = 'success') => {
 	notice.value = { message, type };
@@ -290,6 +310,57 @@ const reviewSignal = async (signal, decision) => {
 	finally { busy.value = false; }
 };
 const refreshAll = async () => { await Promise.all([loadQueue(), loadRestrictionAppeals(), loadAbuseSignals()]); };
+const loadMediaRecords = async () => {
+	mediaRecords.value = [];
+	if (!selected.value || !ownsSelected.value || !evidence.value?.message) return;
+	try {
+		const response = await ModerationService.moderationMediaRecords(selected.value.uid);
+		mediaRecords.value = response.data.media_records || [];
+	} catch (error) {
+		if (error.response?.status !== 403) flash('Не удалось загрузить состояние moderation media.', 'error');
+	}
+};
+const setEvidenceMediaStatus = (index, value) => {
+	const file = evidence.value?.message?.media_metadata?.files?.[index];
+	if (!file) return;
+	if (value) file.moderation_status = value;
+	else delete file.moderation_status;
+};
+const quarantineMedia = async (index) => {
+	if (!selected.value || mediaReason.value.trim().length < 3) return;
+	mediaBusy.value = true;
+	try {
+		await ModerationService.quarantineModerationMedia(selected.value.uid, index, { reason: mediaReason.value.trim() });
+		setEvidenceMediaStatus(index, 'quarantined');
+		await Promise.all([loadMediaRecords(), loadAudit()]);
+		flash('Вложение помещено в приватный quarantine storage.');
+	} catch (error) {
+		const type = error.response?.data?.detail?.error_type;
+		const messages = { moderation_media_not_local_upload: 'Можно карантинить только локальные /uploads вложения.', moderation_media_file_missing: 'Исходный файл уже недоступен.', moderation_authority_insufficient: 'Недостаточно authority для действия над этим Account.' };
+		flash(messages[type] || 'Не удалось поместить вложение в карантин.', 'error');
+	} finally { mediaBusy.value = false; }
+};
+const restoreMedia = async (record) => {
+	mediaBusy.value = true;
+	try {
+		await ModerationService.restoreModerationMedia(selected.value.uid, record.uid);
+		setEvidenceMediaStatus(record.attachment_index, null);
+		await Promise.all([loadMediaRecords(), loadAudit()]);
+		flash('Вложение восстановлено в публичное хранилище.');
+	} catch { flash('Не удалось восстановить вложение.', 'error'); }
+	finally { mediaBusy.value = false; }
+};
+const removeMedia = async (record) => {
+	if (mediaReason.value.trim().length < 3) return;
+	mediaBusy.value = true;
+	try {
+		await ModerationService.removeModerationMedia(selected.value.uid, record.uid, { reason: mediaReason.value.trim() });
+		setEvidenceMediaStatus(record.attachment_index, 'removed');
+		await Promise.all([loadMediaRecords(), loadAudit()]);
+		flash('Вложение удалено из публичной выдачи; evidence copy сохранена по retention policy.');
+	} catch { flash('Не удалось удалить вложение из публичной выдачи.', 'error'); }
+	finally { mediaBusy.value = false; }
+};
 
 const loadAIConfig = async () => {
 	try {
@@ -374,6 +445,7 @@ const selectReport = (report) => {
 	audit.value = [];
 	targetRestrictions.value = [];
 	aiAssessments.value = [];
+	mediaRecords.value = [];
 	decision.public_explanation = '';
 	cancelRevoke();
 	resetRestrictionDraft();
@@ -447,13 +519,13 @@ const claim = async () => {
 };
 const release = async () => {
 	busy.value = true;
-	try { const response = await ModerationService.releaseTrustSafetyReport(selected.value.uid); replaceSelected(response.data.report); evidence.value = null; audit.value = []; targetRestrictions.value = []; aiAssessments.value = []; flash('Жалоба возвращена в общую очередь.'); }
+	try { const response = await ModerationService.releaseTrustSafetyReport(selected.value.uid); replaceSelected(response.data.report); evidence.value = null; audit.value = []; targetRestrictions.value = []; aiAssessments.value = []; mediaRecords.value = []; flash('Жалоба возвращена в общую очередь.'); }
 	catch { flash('Не удалось освободить жалобу.', 'error'); }
 	finally { busy.value = false; }
 };
 const loadEvidence = async () => {
 	busy.value = true;
-	try { const response = await ModerationService.trustSafetyEvidence(selected.value.uid); evidence.value = response.data.evidence; await loadAudit(); }
+	try { const response = await ModerationService.trustSafetyEvidence(selected.value.uid); evidence.value = response.data.evidence; await Promise.all([loadAudit(), loadMediaRecords()]); }
 	catch { flash('Evidence доступен только владельцу claim.', 'error'); }
 	finally { busy.value = false; }
 };
@@ -531,13 +603,14 @@ const aiOutcomeLabel = (value) => ({ not_used: 'ещё не оценено', acc
 const aiDurationLabel = (value) => ({ 60: '1 час', 1440: '24 часа', 10080: '7 дней', 43200: '30 дней' }[value] || (value ? `${value} мин.` : '—'));
 const restrictionStatusLabel = (value) => ({ active: 'активно', expired: 'завершено', revoked: 'снято' }[value] || value);
 const restrictionScopeLabel = (item) => item.scope_type === 'space' ? 'конкретное пространство' : 'вся платформа';
-const auditLabel = (value) => ({ report_created: 'Жалоба создана', duplicate_submission: 'Повторная отправка', report_claimed: 'Взято в работу', report_released: 'Возвращено в очередь', evidence_viewed: 'Evidence просмотрен', restriction_issued: 'Применено ограничение', restriction_appeal_created: 'Создана апелляция', restriction_appeal_resolved: 'Апелляция рассмотрена', report_decided: 'Решение сохранено' }[value] || value);
+const mediaStatusLabel = (value) => ({ quarantined: 'в карантине', restored: 'восстановлено', removed: 'удалено из публичной выдачи' }[value] || 'активно');
+const auditLabel = (value) => ({ report_created: 'Жалоба создана', duplicate_submission: 'Повторная отправка', report_claimed: 'Взято в работу', report_released: 'Возвращено в очередь', evidence_viewed: 'Evidence просмотрен', restriction_issued: 'Применено ограничение', restriction_appeal_created: 'Создана апелляция', restriction_appeal_resolved: 'Апелляция рассмотрена', media_quarantined: 'Вложение помещено в карантин', media_restored: 'Вложение восстановлено', media_removed: 'Вложение удалено из публичной выдачи', report_decided: 'Решение сохранено' }[value] || value);
 const formatDate = (value) => value ? new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '';
 
 onMounted(async () => { await Promise.all([loadQueue(), loadCapabilities(), loadRestrictionAppeals(), loadAbuseSignals(), loadAIConfig()]); resetRestrictionDraft(); });
 </script>
 
 <style scoped>
-.ts-shell{display:grid;gap:var(--ui-space-5);padding-bottom:var(--ui-space-8)}.ts-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(15rem,22rem);gap:var(--ui-space-5);padding:clamp(1.25rem,4vw,2.3rem);border:1px solid var(--ui-border);border-radius:var(--ui-radius-xl);background:linear-gradient(135deg,var(--ui-surface),var(--ui-primary-soft))}.eyebrow{color:var(--ui-primary);font-size:var(--ui-text-xs);font-weight:800;letter-spacing:.08em;text-transform:uppercase}.ts-hero h1,.review-head h2,.section-head h2{margin:.3rem 0 0}.ts-hero p,.review-head p{color:var(--ui-text-muted);line-height:1.55}.hero-note{align-self:center;display:flex;gap:.7rem;padding:1rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-lg);background:var(--ui-surface);color:var(--ui-text-muted);line-height:1.45}.hero-note i{color:var(--ui-primary)}.filters{display:flex;gap:.75rem;align-items:end;flex-wrap:wrap}.filters label,.decision label,.restriction-form label,.revoke-form label,.appeal-decision label{display:grid;gap:.35rem;color:var(--ui-text-muted);font-size:var(--ui-text-sm)}select,textarea,input{border:1px solid var(--ui-border);border-radius:var(--ui-radius-md);background:var(--ui-surface);color:var(--ui-text);padding:.65rem .75rem}.workspace{display:grid;grid-template-columns:minmax(17rem,25rem) minmax(0,1fr);gap:var(--ui-space-4);align-items:start}.queue-panel,.review-panel{display:grid;gap:.65rem}.review-panel{min-height:24rem;padding:var(--ui-space-4);border:1px solid var(--ui-border);border-radius:var(--ui-radius-xl);background:var(--ui-surface)}.report-card{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:.7rem;width:100%;padding:.8rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-lg);background:var(--ui-surface);color:var(--ui-text);text-align:left;cursor:pointer}.report-card.active{border-color:var(--ui-primary);box-shadow:0 0 0 2px var(--ui-primary-soft)}.report-copy{min-width:0;display:grid;gap:.15rem}.report-copy span,.report-copy small{color:var(--ui-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.priority{padding:.2rem .45rem;border-radius:var(--ui-radius-pill);font-size:.65rem;font-weight:800}.priority--high{background:var(--ui-danger-soft);color:var(--ui-danger)}.priority--normal{background:var(--ui-primary-soft);color:var(--ui-primary)}.priority--low{background:var(--ui-surface-muted);color:var(--ui-text-muted)}.review-head{display:flex;justify-content:space-between;gap:1rem}.review-head>div{min-width:0}.status-pill{align-self:start;padding:.3rem .6rem;border-radius:var(--ui-radius-pill);background:var(--ui-surface-muted);font-size:var(--ui-text-xs);font-weight:800}.review-actions{display:flex;gap:.5rem;flex-wrap:wrap}.evidence,.decision,.audit,.restriction-panel,.appeal-review,.ai-panel{display:grid;gap:.75rem;padding:1rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-lg);background:var(--ui-surface-muted)}.evidence header,.section-head{display:flex;justify-content:space-between;gap:1rem}.section-head h3{margin:.2rem 0 0}.section-head>span{max-width:18rem;color:var(--ui-text-muted);font-size:var(--ui-text-xs);text-align:right}.appeal-workspace{display:grid;grid-template-columns:minmax(15rem,22rem) minmax(0,1fr);gap:.75rem}.appeal-list,.appeal-detail{display:grid;gap:.5rem;align-content:start}.appeal-detail{min-height:9rem;padding:.75rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-md);background:var(--ui-surface)}.appeal-card{display:grid;gap:.2rem;padding:.7rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-md);background:var(--ui-surface);color:var(--ui-text);text-align:left;cursor:pointer}.appeal-card.active{border-color:var(--ui-primary)}.appeal-card span,.appeal-detail small,.appeal-detail-head span{color:var(--ui-text-muted);font-size:var(--ui-text-xs)}.appeal-detail-head{display:flex;justify-content:space-between;gap:.75rem}.appeal-detail-head>div{display:grid;gap:.2rem}.appeal-body{margin:.25rem 0;color:var(--ui-text);line-height:1.5;white-space:pre-wrap}.appeal-decision{display:grid;gap:.6rem;margin-top:.5rem}.message-evidence{padding:.8rem;border-radius:var(--ui-radius-md);background:var(--ui-surface)}.message-evidence p{white-space:pre-wrap;overflow-wrap:anywhere}.decision-grid,.restriction-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.restriction-form{display:grid;gap:.75rem}.action-note{display:flex;align-items:center;justify-content:space-between;gap:1rem}.action-note span{color:var(--ui-text-muted);font-size:var(--ui-text-xs);line-height:1.45}.restriction-history{display:grid;gap:.55rem;padding-top:.25rem}.restriction-history h4{margin:.25rem 0}.restriction-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.75rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-md);background:var(--ui-surface)}.restriction-row>div{display:grid;gap:.15rem}.restriction-row span,.restriction-row small{color:var(--ui-text-muted)}.revoke-form{display:grid;gap:.65rem;padding:.75rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-md);background:var(--ui-surface)}.revoke-form>div{display:flex;justify-content:flex-end;gap:.5rem}.audit-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px solid var(--ui-border)}.state{display:grid;place-items:center;align-content:center;gap:.4rem;min-height:10rem;padding:1rem;color:var(--ui-text-muted);text-align:center}.state--review{min-height:20rem}.state--compact{min-height:7rem}.notice{padding:.75rem 1rem;border-radius:var(--ui-radius-md);background:var(--ui-success-soft);color:var(--ui-success)}.notice--error{background:var(--ui-danger-soft);color:var(--ui-danger)}
+.ts-shell{display:grid;gap:var(--ui-space-5);padding-bottom:var(--ui-space-8)}.ts-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(15rem,22rem);gap:var(--ui-space-5);padding:clamp(1.25rem,4vw,2.3rem);border:1px solid var(--ui-border);border-radius:var(--ui-radius-xl);background:linear-gradient(135deg,var(--ui-surface),var(--ui-primary-soft))}.eyebrow{color:var(--ui-primary);font-size:var(--ui-text-xs);font-weight:800;letter-spacing:.08em;text-transform:uppercase}.ts-hero h1,.review-head h2,.section-head h2{margin:.3rem 0 0}.ts-hero p,.review-head p{color:var(--ui-text-muted);line-height:1.55}.hero-note{align-self:center;display:flex;gap:.7rem;padding:1rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-lg);background:var(--ui-surface);color:var(--ui-text-muted);line-height:1.45}.hero-note i{color:var(--ui-primary)}.filters{display:flex;gap:.75rem;align-items:end;flex-wrap:wrap}.filters label,.decision label,.restriction-form label,.revoke-form label,.appeal-decision label{display:grid;gap:.35rem;color:var(--ui-text-muted);font-size:var(--ui-text-sm)}select,textarea,input{border:1px solid var(--ui-border);border-radius:var(--ui-radius-md);background:var(--ui-surface);color:var(--ui-text);padding:.65rem .75rem}.workspace{display:grid;grid-template-columns:minmax(17rem,25rem) minmax(0,1fr);gap:var(--ui-space-4);align-items:start}.queue-panel,.review-panel{display:grid;gap:.65rem}.review-panel{min-height:24rem;padding:var(--ui-space-4);border:1px solid var(--ui-border);border-radius:var(--ui-radius-xl);background:var(--ui-surface)}.report-card{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:.7rem;width:100%;padding:.8rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-lg);background:var(--ui-surface);color:var(--ui-text);text-align:left;cursor:pointer}.report-card.active{border-color:var(--ui-primary);box-shadow:0 0 0 2px var(--ui-primary-soft)}.report-copy{min-width:0;display:grid;gap:.15rem}.report-copy span,.report-copy small{color:var(--ui-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.priority{padding:.2rem .45rem;border-radius:var(--ui-radius-pill);font-size:.65rem;font-weight:800}.priority--high{background:var(--ui-danger-soft);color:var(--ui-danger)}.priority--normal{background:var(--ui-primary-soft);color:var(--ui-primary)}.priority--low{background:var(--ui-surface-muted);color:var(--ui-text-muted)}.review-head{display:flex;justify-content:space-between;gap:1rem}.review-head>div{min-width:0}.status-pill{align-self:start;padding:.3rem .6rem;border-radius:var(--ui-radius-pill);background:var(--ui-surface-muted);font-size:var(--ui-text-xs);font-weight:800}.review-actions{display:flex;gap:.5rem;flex-wrap:wrap}.evidence,.decision,.audit,.restriction-panel,.appeal-review,.ai-panel{display:grid;gap:.75rem;padding:1rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-lg);background:var(--ui-surface-muted)}.evidence header,.section-head{display:flex;justify-content:space-between;gap:1rem}.section-head h3{margin:.2rem 0 0}.section-head>span{max-width:18rem;color:var(--ui-text-muted);font-size:var(--ui-text-xs);text-align:right}.appeal-workspace{display:grid;grid-template-columns:minmax(15rem,22rem) minmax(0,1fr);gap:.75rem}.appeal-list,.appeal-detail{display:grid;gap:.5rem;align-content:start}.appeal-detail{min-height:9rem;padding:.75rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-md);background:var(--ui-surface)}.appeal-card{display:grid;gap:.2rem;padding:.7rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-md);background:var(--ui-surface);color:var(--ui-text);text-align:left;cursor:pointer}.appeal-card.active{border-color:var(--ui-primary)}.appeal-card span,.appeal-detail small,.appeal-detail-head span{color:var(--ui-text-muted);font-size:var(--ui-text-xs)}.appeal-detail-head{display:flex;justify-content:space-between;gap:.75rem}.appeal-detail-head>div{display:grid;gap:.2rem}.appeal-body{margin:.25rem 0;color:var(--ui-text);line-height:1.5;white-space:pre-wrap}.appeal-decision{display:grid;gap:.6rem;margin-top:.5rem}.message-evidence{padding:.8rem;border-radius:var(--ui-radius-md);background:var(--ui-surface)}.message-evidence p{white-space:pre-wrap;overflow-wrap:anywhere}.media-review{display:grid;gap:.6rem;padding:.75rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-md);background:var(--ui-surface)}.media-review__head,.media-review__item{display:flex;justify-content:space-between;gap:.75rem;align-items:center}.media-review__head span,.media-review__item span{color:var(--ui-text-muted);font-size:var(--ui-text-xs)}.media-review__item>div:first-child{display:grid;gap:.15rem}.media-review label{display:grid;gap:.35rem;color:var(--ui-text-muted);font-size:var(--ui-text-sm)}.decision-grid,.restriction-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.restriction-form{display:grid;gap:.75rem}.action-note{display:flex;align-items:center;justify-content:space-between;gap:1rem}.action-note span{color:var(--ui-text-muted);font-size:var(--ui-text-xs);line-height:1.45}.restriction-history{display:grid;gap:.55rem;padding-top:.25rem}.restriction-history h4{margin:.25rem 0}.restriction-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.75rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-md);background:var(--ui-surface)}.restriction-row>div{display:grid;gap:.15rem}.restriction-row span,.restriction-row small{color:var(--ui-text-muted)}.revoke-form{display:grid;gap:.65rem;padding:.75rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius-md);background:var(--ui-surface)}.revoke-form>div{display:flex;justify-content:flex-end;gap:.5rem}.audit-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px solid var(--ui-border)}.state{display:grid;place-items:center;align-content:center;gap:.4rem;min-height:10rem;padding:1rem;color:var(--ui-text-muted);text-align:center}.state--review{min-height:20rem}.state--compact{min-height:7rem}.notice{padding:.75rem 1rem;border-radius:var(--ui-radius-md);background:var(--ui-success-soft);color:var(--ui-success)}.notice--error{background:var(--ui-danger-soft);color:var(--ui-danger)}
 @media(max-width:860px){.ts-hero,.workspace,.appeal-workspace{grid-template-columns:1fr}.queue-panel{max-height:20rem;overflow:auto}.decision-grid,.restriction-grid{grid-template-columns:1fr}.section-head,.action-note{display:grid}.section-head>span{text-align:left;max-width:none}}@media(max-width:560px){.filters>*{width:100%}.review-head,.appeal-detail-head{display:grid}.review-actions{display:grid}.review-actions .ui-button{width:100%}.restriction-row{align-items:stretch;display:grid}.revoke-form>div{display:grid}.action-note .ui-button{width:100%}}
 </style>
