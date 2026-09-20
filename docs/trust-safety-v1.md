@@ -37,6 +37,22 @@
 - thresholds конфигурируемые: product/Trust & Safety команда должна калибровать их по реальным false-positive/false-negative данным, а не воспринимать default как универсальную норму;
 - автоматическая санкция по одному behavioral signal запрещена baseline-контрактом. Для punitive action требуется обычный human moderation path с hierarchy, permissions, audit и appeal.
 
+## Реализованный reported-media moderation checkpoint
+
+В `0.6.15-alpha.1` добавлен отдельный human-only workflow для пожалованных локальных вложений.
+
+- действие доступно только actor с `moderation.platform.media.manage`, который владеет claim на report и имеет authority выше target Account;
+- поддерживаются только локальные `/uploads` attachments из Messenger/Space evidence; внешние URL и traversal paths отклоняются;
+- quarantine физически переносит файл из публичного uploads tree в private moderation storage и ставит server-side moderation marker;
+- restore возвращает quarantined файл обратно и снимает marker;
+- remove оставляет файл вне публичной выдачи, но сохраняет private evidence copy до применения отдельной retention/deletion policy;
+- private storage path никогда не возвращается frontend/API projection;
+- filesystem move работает и при разных mount/filesystem через copy+unlink fallback; DB rollback пытается компенсировать filesystem move, сохраняя evidence copy при невозможности обратного переноса;
+- каждое действие пишется в Trust & Safety audit как `media_quarantined`, `media_restored` или `media_removed`;
+- AI copilot и anti-abuse automation не имеют права выполнять эти punitive media actions.
+
+Retention baseline этого checkpoint сознательно conservative: evidence copy не удаляется автоматически. Secure deletion/expiry будет добавлена отдельным policy slice вместе с moderation privacy-retention metrics и incident rehearsal.
+
 ## Иерархия платформенных ролей
 
 `PlatformRole` имеет явный `authority_level`. При нескольких ролях эффективный уровень Account — максимальный уровень его активных platform roles.
