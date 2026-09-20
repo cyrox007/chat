@@ -96,6 +96,17 @@ async def trust_safety_metrics(
         )
     ).scalars().all()
 
+    open_signal_count = int(
+        (
+            await db.execute(
+                select(func.count(TrustSafetyAbuseSignal.uid)).where(
+                    TrustSafetyAbuseSignal.status == "open"
+                )
+            )
+        ).scalar_one()
+        or 0
+    )
+
     restriction_origins = (
         await db.execute(
             select(PlatformRestriction.origin).where(
@@ -134,7 +145,10 @@ async def trust_safety_metrics(
             "overturn_rate_percent": overturn_rate_percent,
         },
         "ai": {"outcome_counts": _counter(ai_outcomes)},
-        "abuse_signals": {"status_counts": _counter(signal_statuses)},
+        "abuse_signals": {
+            "status_counts": _counter(signal_statuses),
+            "open_count": open_signal_count,
+        },
         "restrictions": {
             "origin_counts": _counter(restriction_origins),
             "active_automation_holds": active_auto_holds,
