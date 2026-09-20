@@ -37,7 +37,7 @@
 		<section class="appeal-review">
 			<header class="section-head">
 				<div><span class="eyebrow">Abuse signals</span><h2>Поведенческие сигналы</h2></div>
-				<span>{{ abuseSignals.length }} открытых · это evidence, а не автоматические санкции</span>
+				<span>{{ abuseSignals.length }} открытых · evidence для человека; protective holds по умолчанию выключены</span>
 			</header>
 			<div v-if="signalsLoading" class="state state--compact">Загружаем сигналы…</div>
 			<div v-else-if="!abuseSignals.length" class="state state--compact"><strong>Открытых сигналов нет</strong><span>Rate-limit и burst-detectors появятся здесь только после достижения порогов.</span></div>
