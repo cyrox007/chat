@@ -35,7 +35,7 @@
 - signal хранит только account reference, тип surface/signal, counters, threshold/window metadata и review state; текст сообщений, история приватного диалога и attachment URLs туда не попадают;
 - один signal можно отметить как `reviewed` или `dismissed`, но это не создаёт restriction;
 - thresholds конфигурируемые: product/Trust & Safety команда должна калибровать их по реальным false-positive/false-negative данным, а не воспринимать default как универсальную норму;
-- автоматическая санкция по одному behavioral signal запрещена baseline-контрактом. Для punitive action требуется обычный human moderation path с hierarchy, permissions, audit и appeal.
+- автоматическая санкция по одному behavioral signal запрещена baseline-контрактом. Начиная с `0.6.16-alpha.1`, отдельный default-off protective-hold policy может создать только короткое `messenger.send`/`invitation.send` ограничение после минимум двух отдельных high/critical server-owned signal buckets; сильные sanctions остаются только human moderation path.
 
 ## Реализованный reported-media moderation checkpoint
 
@@ -51,7 +51,25 @@
 - каждое действие пишется в Trust & Safety audit как `media_quarantined`, `media_restored` или `media_removed`;
 - AI copilot и anti-abuse automation не имеют права выполнять эти punitive media actions.
 
-Retention baseline этого checkpoint сознательно conservative: evidence copy не удаляется автоматически. Secure deletion/expiry будет добавлена отдельным policy slice вместе с moderation privacy-retention metrics и incident rehearsal.
+Retention baseline этого checkpoint сознательно conservative: evidence copy не удаляется автоматически. Operations metrics и incident rehearsal закрыты в `0.6.16-alpha.1`; secure deletion/expiry остаётся отдельным privacy-retention slice.
+
+## Реализованный operations / protective-hold checkpoint
+
+В `0.6.16-alpha.1` moderation stack получил операционную обратную связь и строго ограниченный automation baseline.
+
+- `GET /trust-safety/v1/metrics` возвращает только агрегаты: active queue/age, average decision time, appeal overturn rate, AI outcomes, abuse-signal backlog, restriction origins и active auto-holds;
+- endpoint не возвращает Account/source/report identifiers, message contents или attachment metadata;
+- protective holds по умолчанию выключены через `MODERATION_PROTECTIVE_HOLDS_ENABLED=false`;
+- один signal никогда не достаточен: нужен минимум двух distinct high/critical signal buckets в bounded lookback;
+- automation allow-list содержит только `messenger.send` и `invitation.send`;
+- hold всегда временный, 5–15 минут, с `origin=automation`, audit event и обычной возможностью human revoke/appeal;
+- target с любым platform authority выше user-level исключён из automation;
+- Account row lock сериализует concurrent detectors и не позволяет stack duplicate hold одного capability;
+- `account.access`, permanent actions, media quarantine/remove, Space chat, profile/discovery restrictions, revoke и appeal decision автоматике недоступны;
+- AI provider outage аудируется без создания recommendation/restriction и без изменения claim;
+- operational rehearsal matrix зафиксирована в `docs/trust-safety-incident-rehearsal-v1.md`.
+
+Наличие policy-engine не означает его production enablement. До human-reviewed calibration он остаётся выключенным; включение — отдельное операционное решение с наблюдением false positives, appeals и moderator feedback.
 
 ## Иерархия платформенных ролей
 
