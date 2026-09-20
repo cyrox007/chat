@@ -28,7 +28,7 @@
 				<div class="metric-card"><strong>{{ operationsMetrics.queue.open_count }}</strong><span>активных жалоб</span><small>старейшая: {{ durationLabel(operationsMetrics.queue.oldest_age_seconds) }}</small></div>
 				<div class="metric-card"><strong>{{ durationLabel(operationsMetrics.queue.average_decision_seconds) }}</strong><span>среднее время решения</span><small>{{ operationsMetrics.queue.resolved_count }} решений в окне</small></div>
 				<div class="metric-card"><strong>{{ operationsMetrics.appeals.overturn_rate_percent }}%</strong><span>overturn rate</span><small>апелляции, завершённые в окне</small></div>
-				<div class="metric-card"><strong>{{ operationsMetrics.restrictions.active_automation_holds }}</strong><span>активных auto-hold</span><small>короткие anti-spam ограничения</small></div>
+				<div class="metric-card"><strong>{{ operationsMetrics.restrictions.active_automation_holds }}</strong><span>активных auto-hold</span><small>policy {{ operationsMetrics.automation.enabled ? 'включён' : 'выключен' }} · {{ operationsMetrics.automation.hold_minutes }} мин. · ≥{{ operationsMetrics.automation.min_high_signals }} high signals</small></div>
 				<div class="metric-card"><strong>{{ operationsMetrics.ai.outcome_counts.accepted || 0 }} / {{ operationsMetrics.ai.outcome_counts.modified || 0 }} / {{ operationsMetrics.ai.outcome_counts.rejected || 0 }}</strong><span>AI: принято / изменено / отклонено</span><small>AI остаётся advisory-only</small></div>
 				<div class="metric-card"><strong>{{ operationsMetrics.abuse_signals.status_counts.open || 0 }}</strong><span>открытых abuse signals</span><small>{{ operationsMetrics.abuse_signals.status_counts.dismissed || 0 }} dismissed</small></div>
 			</div>
