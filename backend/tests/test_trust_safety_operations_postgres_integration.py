@@ -63,13 +63,13 @@ class TrustSafetyOperationsPostgresIntegrationTests(unittest.TestCase):
                         TrustSafetyAbuseSignal(
                             uid=second_signal_uid,
                             account_uid=account_uid,
-                            signal_type="space_invite_recipient_burst",
-                            surface="space_invitation",
+                            signal_type="dm_distinct_recipient_burst",
+                            surface="messenger",
                             severity="high",
                             observed_count=30,
                             window_seconds=600,
                             dedupe_key=f"ops-b-{second_signal_uid}",
-                            details={"distinct_recipients": 30, "threshold": 12},
+                            details={"distinct_recipients": 30, "threshold": 8},
                             status="open",
                             first_seen_at=now,
                             last_seen_at=now,
@@ -141,23 +141,35 @@ class TrustSafetyOperationsPostgresIntegrationTests(unittest.TestCase):
                     ).scalars().all()
                     self.assertEqual(before, [])
 
-                async with Database.sessionmaker()() as db:
-                    hold = await maybe_apply_protective_hold(
-                        db, signal_uid=first_signal_uid, config=enabled
-                    )
-                    self.assertIsNotNone(hold)
-                    self.assertEqual(hold["origin"], "automation")
-                    self.assertEqual(hold["capability"], "messenger.send")
-                    self.assertNotEqual(hold["capability"], "account.access")
+                async def apply_hold(signal_uid):
+                    async with Database.sessionmaker()() as db:
+                        return await maybe_apply_protective_hold(
+                            db, signal_uid=signal_uid, config=enabled
+                        )
 
-                    row = (
+                concurrent_results = await asyncio.gather(
+                    apply_hold(first_signal_uid),
+                    apply_hold(second_signal_uid),
+                )
+                self.assertTrue(all(item is not None for item in concurrent_results))
+                self.assertEqual(
+                    {item["uid"] for item in concurrent_results},
+                    {concurrent_results[0]["uid"]},
+                )
+
+                async with Database.sessionmaker()() as db:
+                    rows = (
                         await db.execute(
                             select(PlatformRestriction).where(
                                 PlatformRestriction.target_account_uid == account_uid,
                                 PlatformRestriction.origin == "automation",
                             )
                         )
-                    ).scalar_one()
+                    ).scalars().all()
+                    self.assertEqual(len(rows), 1)
+                    row = rows[0]
+                    self.assertEqual(row.capability, "messenger.send")
+                    self.assertNotEqual(row.capability, "account.access")
                     self.assertIsNone(row.actor_account_uid)
                     self.assertIsNotNone(row.expires_at)
                     duration = row.expires_at - row.starts_at
