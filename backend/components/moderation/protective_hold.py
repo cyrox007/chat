@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from components.identity.model import Account
 from components.moderation.abuse_model import TrustSafetyAbuseSignal
 from components.moderation.automation_settings import (
     ModerationAutomationConfig,
@@ -43,6 +44,14 @@ async def maybe_apply_protective_hold(
         or signal.signal_type not in _SIGNAL_CAPABILITY
     ):
         return None
+
+    # Serialize automated decisions per Account so concurrent detectors cannot
+    # stack duplicate holds for the same capability.
+    await db.execute(
+        select(Account.uid)
+        .where(Account.uid == signal.account_uid)
+        .with_for_update()
+    )
 
     target_authority = await effective_authority_level(db, signal.account_uid)
     if target_authority != 0:
@@ -116,8 +125,8 @@ async def maybe_apply_protective_hold(
             actor_account_uid=None,
             event_type="protective_hold_issued",
             note=(
-                f"signal={signal.signal_type};corroboration={corroboration_count};"
-                f"duration_minutes={cfg.hold_minutes}"
+                f"signal_uid={signal.uid};signal_type={signal.signal_type};"
+                f"corroboration={corroboration_count};duration_minutes={cfg.hold_minutes}"
             ),
         )
     )
