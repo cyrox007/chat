@@ -1,11 +1,12 @@
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import HTTPException
 
-from components.moderation.media_service import _safe_private_path, _safe_public_path
+from components.moderation.media_service import _move_file, _safe_private_path, _safe_public_path
 
 
 class ModerationMediaContractTests(unittest.TestCase):
@@ -28,6 +29,18 @@ class ModerationMediaContractTests(unittest.TestCase):
                 _safe_public_path("/uploads/../secret.txt", upload_root=root)
             with self.assertRaises(HTTPException):
                 _safe_public_path("https://example.com/file.jpg", upload_root=root)
+
+    def test_move_file_falls_back_when_atomic_replace_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "public" / "reported.jpg"
+            destination = root / "private" / "reported.jpg"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"evidence")
+            with patch("components.moderation.media_service.os.replace", side_effect=OSError("cross-device")):
+                _move_file(source, destination)
+            self.assertFalse(source.exists())
+            self.assertEqual(destination.read_bytes(), b"evidence")
 
     def test_private_media_path_is_record_scoped(self):
         with tempfile.TemporaryDirectory() as tmp:
