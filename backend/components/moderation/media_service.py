@@ -22,6 +22,28 @@ PUBLIC_UPLOAD_ROOT = Path("uploads")
 PRIVATE_MEDIA_ROOT = Path("moderation_media")
 
 
+def _move_file(source: Path, destination: Path) -> None:
+    """Move a file safely even when moderation storage is on another filesystem."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.replace(source, destination)
+        return
+    except OSError:
+        pass
+
+    try:
+        shutil.copy2(source, destination)
+        source.unlink()
+    except OSError:
+        # Avoid leaving a partial destination behind when the source still exists.
+        if source.exists() and destination.exists():
+            try:
+                destination.unlink()
+            except OSError:
+                pass
+        raise
+
+
 def _safe_public_path(url: str, *, upload_root: Path = PUBLIC_UPLOAD_ROOT) -> tuple[Path, str]:
     if not isinstance(url, str) or not url.startswith("/uploads/"):
         raise HTTPException(
@@ -188,18 +210,12 @@ async def quarantine_report_attachment(
     private_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        os.replace(source_path, private_path)
-    except OSError:
-        # Cross-device deployments may place private moderation storage on a
-        # different filesystem.
-        try:
-            shutil.copy2(source_path, private_path)
-            source_path.unlink()
-        except OSError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={"error_type": "moderation_media_quarantine_failed"},
-            ) from exc
+        _move_file(source_path, private_path)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error_type": "moderation_media_quarantine_failed"},
+        ) from exc
 
     now = datetime.utcnow()
     record = existing or ModerationMediaRecord(
@@ -242,7 +258,12 @@ async def quarantine_report_attachment(
         await db.rollback()
         source_path.parent.mkdir(parents=True, exist_ok=True)
         if private_path.exists() and not source_path.exists():
-            os.replace(private_path, source_path)
+            try:
+                _move_file(private_path, source_path)
+            except OSError:
+                # Durable DB state was rolled back; preserve the evidence copy
+                # rather than deleting it if filesystem compensation also fails.
+                pass
         raise
     await db.refresh(record)
     return media_record_projection(record)
@@ -308,7 +329,13 @@ async def restore_report_attachment(
     if destination.exists():
         raise HTTPException(status_code=409, detail={"error_type": "moderation_media_restore_conflict"})
     destination.parent.mkdir(parents=True, exist_ok=True)
-    os.replace(source_path, destination)
+    try:
+        _move_file(source_path, destination)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error_type": "moderation_media_restore_failed"},
+        ) from exc
 
     message = await _reported_message(db, record.source_type, record.source_uid)
     if message:
@@ -329,7 +356,10 @@ async def restore_report_attachment(
         await db.rollback()
         source_path.parent.mkdir(parents=True, exist_ok=True)
         if destination.exists() and not source_path.exists():
-            os.replace(destination, source_path)
+            try:
+                _move_file(destination, source_path)
+            except OSError:
+                pass
         raise
     await db.refresh(record)
     return media_record_projection(record)
