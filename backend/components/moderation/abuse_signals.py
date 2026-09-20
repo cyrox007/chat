@@ -13,10 +13,13 @@ from components.identity.model import Account
 from components.message.model import PrivateMessage
 from components.moderation.abuse_model import TrustSafetyAbuseSignal
 from components.moderation.abuse_settings import abuse_signal_config
+from components.moderation.protective_hold import maybe_apply_protective_hold
 from components.space.model import SpaceInvitation
+from utils.logger import setup_logger
 
 
 _SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+logger = setup_logger(__name__)
 
 
 async def _account_for_legacy_uid(db: AsyncSession, legacy_user_uid: UUID) -> Account | None:
@@ -101,6 +104,7 @@ async def emit_abuse_signal(
                 ),
                 "last_seen_at": now,
                 "updated_at": now,
+                "severity": severity,
                 "details": safe_details,
             },
         )
@@ -108,6 +112,12 @@ async def emit_abuse_signal(
     )
     uid = (await db.execute(stmt)).scalar_one()
     await db.commit()
+    try:
+        await maybe_apply_protective_hold(db, signal_uid=uid)
+    except Exception:
+        # Signal collection remains advisory and available even if optional
+        # automation is misconfigured or temporarily fails.
+        logger.exception("Protective-hold evaluation failed for signal=%s", uid)
     return uid
 
 
