@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.moderation.abuse_model import TrustSafetyAbuseSignal
 from components.moderation.ai_model import ModerationAIRecommendation
+from components.moderation.automation_settings import moderation_automation_config
 from components.moderation.model import (
     PlatformRestriction,
     PlatformRestrictionAppeal,
@@ -137,5 +138,12 @@ async def trust_safety_metrics(
         "restrictions": {
             "origin_counts": _counter(restriction_origins),
             "active_automation_holds": active_auto_holds,
+        },
+        "automation": {
+            "enabled": moderation_automation_config.enabled,
+            "hold_minutes": moderation_automation_config.hold_minutes,
+            "lookback_seconds": moderation_automation_config.corroboration_lookback_seconds,
+            "min_high_signals": moderation_automation_config.min_high_signals,
+            "allowed_capabilities": ["invitation.send", "messenger.send"],
         },
     }
