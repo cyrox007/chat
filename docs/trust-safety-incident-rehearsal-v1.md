@@ -26,6 +26,7 @@
 | Два модератора одновременно claim-ят report | ровно один claim успешен | test_trust_safety_postgres_integration.py |
 | Evidence view | только claim owner; audit event обязателен | test_trust_safety_postgres_integration.py |
 | AI recommendation | advisory schema; account.access невозможен | test_moderation_ai_contract.py / test_moderation_ai_postgres_integration.py |
+| AI provider outage | 503 + audit; claim сохраняется; recommendation/restriction не создаются | test_moderation_ai_postgres_integration.py |
 | Independent appeal overturn | restriction revoked, history сохранена | test_platform_restriction_appeals_postgres_integration.py |
 | account.access | sessions revoked; Safety/appeal contour остаётся | test_account_access_postgres_integration.py |
 | Abuse signal reviewed | review не создаёт restriction | test_abuse_signal_postgres_integration.py |
