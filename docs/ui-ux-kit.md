@@ -60,6 +60,21 @@ PubChat — место отдыха. Базовая палитра строит�
 
 Legacy variables временно остаются aliases. Это позволяет переносить старый интерфейс постепенно, без одномоментного rewrite всего frontend.
 
+## Motion и асинхронная обратная связь
+
+Motion должен давать ощущение непрерывности, а не замедлять интерфейс.
+
+- route change: короткий out-in transition; progress появляется только если переход пережил небольшой delay, поэтому быстрые экраны не мигают индикатором;
+- modal/sheet: backdrop и panel двигаются как единое состояние; mobile sheet выходит снизу;
+- popover/dropdown: лёгкий fade/translate/scale с корректным transform origin;
+- loading: если данных ещё нет, показывается skeleton/state, а не ложный empty-state;
+- mutation: кнопка сохраняет размер и показывает spinner + глагол действия (`Сохраняем…`, `Создаём…`, `Подключаем…`);
+- error после async load должен иметь retry там, где повтор безопасен;
+- `prefers-reduced-motion: reduce` сокращает transitions/animations практически до нуля;
+- motion не используется как подтверждение успеха само по себе: status/error текст остаётся семантическим и доступным.
+
+Базовые классы: `ui-route`, `ui-state`, `ui-popover`, `ui-skeleton`, `ui-spinner`.
+
 ## Плотность интерфейса
 
 PubChat должен поддерживать два естественных сценария:

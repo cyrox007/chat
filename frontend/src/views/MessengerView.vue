@@ -14,7 +14,7 @@
 
 			<label class="dm-search">
 				<i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-				<input v-model.trim="searchQuery" type="search" placeholder="Найти среди разговоров" />
+				<input v-model.trim="searchQuery" type="search" placeholder="Найти среди разговоров" :disabled="dialogsLoading" />
 			</label>
 
 			<div v-if="realtimeNotice" class="dm-inline-notice" :class="`dm-inline-notice--${realtimeNotice.type}`" role="status">
@@ -22,34 +22,56 @@
 				<span>{{ realtimeNotice.message }}</span>
 			</div>
 
-			<div class="conversation-list">
-				<button
-					v-for="dialog in filteredDialogs"
-					:key="dialog.partner_id"
-					type="button"
-					class="conversation-card"
-					:class="{ 'conversation-card--active': isActiveDialog(dialog.partner_id) }"
-					@click="openConversation(dialog.partner_id)"
-				>
-					<span class="conversation-avatar">
-						<img v-if="dialog.partner?.avatar" :src="resolveAvatar(dialog.partner.avatar)" alt="" />
-						<span v-else>{{ avatarFallback(dialog.partner?.username) }}</span>
-						<span class="presence-dot" :class="{ 'presence-dot--online': isOnline(dialog.partner_id) }" aria-hidden="true"></span>
-					</span>
-					<span class="conversation-copy">
-						<strong>{{ dialog.partner?.display_name || dialog.partner?.username || 'Участник PubChat' }}</strong>
-						<small>{{ dialog.last_message || 'Начните разговор' }}</small>
-					</span>
-					<span v-if="dialog.unread_count > 0" class="unread-badge" :aria-label="`${dialog.unread_count} непрочитанных`">
-						{{ dialog.unread_count > 99 ? '99+' : dialog.unread_count }}
-					</span>
-				</button>
+			<div class="conversation-list" :aria-busy="dialogsLoading ? 'true' : 'false'">
+				<Transition name="ui-state" mode="out-in">
+					<div v-if="dialogsLoading" key="loading" class="conversation-skeleton" role="status" aria-live="polite">
+						<span class="conversation-skeleton__label">Загружаем разговоры…</span>
+						<div v-for="index in 5" :key="index" class="conversation-skeleton__row" aria-hidden="true">
+							<span class="conversation-skeleton__avatar ui-skeleton"></span>
+							<span class="conversation-skeleton__copy">
+								<span class="conversation-skeleton__line conversation-skeleton__line--name ui-skeleton"></span>
+								<span class="conversation-skeleton__line ui-skeleton"></span>
+							</span>
+						</div>
+					</div>
 
-				<div v-if="!filteredDialogs.length" class="conversation-empty">
-					<div class="conversation-empty__icon" aria-hidden="true"><i class="fas fa-message"></i></div>
-					<strong>{{ searchQuery ? 'Ничего не найдено' : 'Здесь появятся ваши разговоры' }}</strong>
-					<span v-if="!searchQuery">Личное общение в PubChat начинается из профиля или общего пространства.</span>
-				</div>
+					<div v-else-if="dialogsError" key="error" class="conversation-empty conversation-empty--error" role="alert">
+						<div class="conversation-empty__icon" aria-hidden="true"><i class="fas fa-triangle-exclamation"></i></div>
+						<strong>Не удалось загрузить разговоры</strong>
+						<span>{{ dialogsError }}</span>
+						<button class="ui-button ui-button--secondary" type="button" @click="hydrateDialogs">Повторить</button>
+					</div>
+
+					<div v-else key="content" class="conversation-list__content">
+						<button
+							v-for="dialog in filteredDialogs"
+							:key="dialog.partner_id"
+							type="button"
+							class="conversation-card"
+							:class="{ 'conversation-card--active': isActiveDialog(dialog.partner_id) }"
+							@click="openConversation(dialog.partner_id)"
+						>
+							<span class="conversation-avatar">
+								<img v-if="dialog.partner?.avatar" :src="resolveAvatar(dialog.partner.avatar)" alt="" />
+								<span v-else>{{ avatarFallback(dialog.partner?.username) }}</span>
+								<span class="presence-dot" :class="{ 'presence-dot--online': isOnline(dialog.partner_id) }" aria-hidden="true"></span>
+							</span>
+							<span class="conversation-copy">
+								<strong>{{ dialog.partner?.display_name || dialog.partner?.username || 'Участник PubChat' }}</strong>
+								<small>{{ dialog.last_message || 'Начните разговор' }}</small>
+							</span>
+							<span v-if="dialog.unread_count > 0" class="unread-badge" :aria-label="`${dialog.unread_count} непрочитанных`">
+								{{ dialog.unread_count > 99 ? '99+' : dialog.unread_count }}
+							</span>
+						</button>
+
+						<div v-if="!filteredDialogs.length" class="conversation-empty">
+							<div class="conversation-empty__icon" aria-hidden="true"><i class="fas fa-message"></i></div>
+							<strong>{{ searchQuery ? 'Ничего не найдено' : 'Здесь появятся ваши разговоры' }}</strong>
+							<span v-if="!searchQuery">Личное общение в PubChat начинается из профиля или общего пространства.</span>
+						</div>
+					</div>
+				</Transition>
 			</div>
 		</aside>
 
@@ -72,19 +94,35 @@
 					</RouterLink>
 				</header>
 
-				<div ref="messagesContainer" class="dm-stream" aria-label="История личного разговора">
-					<div v-if="getConversation(activeDialog).length === 0" class="dm-stream__empty">
-						<i class="fas fa-mug-hot" aria-hidden="true"></i>
-						<strong>Можно начать с простого «привет»</strong>
-						<span>Личные сообщения подчиняются настройкам приватности каждого участника.</span>
+				<div ref="messagesContainer" class="dm-stream" aria-label="История личного разговора" :aria-busy="conversationLoadingUid === activeDialog ? 'true' : 'false'">
+					<div v-if="conversationLoadingUid === activeDialog" class="dm-stream__loading" role="status" aria-live="polite">
+						<span>Загружаем историю…</span>
+						<div class="message-skeleton message-skeleton--left ui-skeleton" aria-hidden="true"></div>
+						<div class="message-skeleton message-skeleton--right ui-skeleton" aria-hidden="true"></div>
+						<div class="message-skeleton message-skeleton--left message-skeleton--short ui-skeleton" aria-hidden="true"></div>
 					</div>
 
-					<PrivateMessage
-						v-for="message in getConversation(activeDialog)"
-						:key="message.uid || message.frontId"
-						:message="message"
-						:ref="setObserverTarget"
-					/>
+					<div v-else-if="conversationError" class="dm-stream__empty dm-stream__empty--error" role="alert">
+						<i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+						<strong>Не удалось открыть разговор</strong>
+						<span>{{ conversationError }}</span>
+						<button class="ui-button ui-button--secondary" type="button" @click="openConversation(activeDialog)">Повторить</button>
+					</div>
+
+					<template v-else>
+						<div v-if="getConversation(activeDialog).length === 0" class="dm-stream__empty">
+							<i class="fas fa-mug-hot" aria-hidden="true"></i>
+							<strong>Можно начать с простого «привет»</strong>
+							<span>Личные сообщения подчиняются настройкам приватности каждого участника.</span>
+						</div>
+
+						<PrivateMessage
+							v-for="message in getConversation(activeDialog)"
+							:key="message.uid || message.frontId"
+							:message="message"
+							:ref="setObserverTarget"
+						/>
+					</template>
 				</div>
 
 				<div v-if="!isRealtimeReady" class="composer-state" role="status">
@@ -124,6 +162,10 @@ const searchQuery = ref('');
 const messagesContainer = ref(null);
 const observerTargets = ref([]);
 const dialogs = ref([]);
+const dialogsLoading = ref(true);
+const dialogsError = ref('');
+const conversationLoadingUid = ref(null);
+const conversationError = ref('');
 const messageComposer = ref(null);
 let intersectionObserver = null;
 
@@ -168,16 +210,30 @@ const isActiveDialog = (userId) => activeDialog.value === userId;
 const getConversation = (userId) => store.getters['messenger/getConversation'](userId);
 
 const openConversation = async (userId) => {
+	if (!userId) return;
+	conversationLoadingUid.value = userId;
+	conversationError.value = '';
 	await store.dispatch('messenger/setActiveDialog', userId);
-	await store.dispatch('messenger/requestConversation', {
-		otherUserId: userId,
-		requestId: uuidv4(),
-	});
-	await nextTick();
-	setupIntersectionObserver();
+	try {
+		await store.dispatch('messenger/requestConversation', {
+			otherUserId: userId,
+			requestId: uuidv4(),
+		});
+		await nextTick();
+		setupIntersectionObserver();
+	} catch (error) {
+		console.error('Ошибка загрузки личного разговора:', error);
+		conversationError.value = 'Проверьте соединение и попробуйте ещё раз.';
+	} finally {
+		if (conversationLoadingUid.value === userId) conversationLoadingUid.value = null;
+	}
 };
 
-const closeConversation = () => store.dispatch('messenger/setActiveDialog', null);
+const closeConversation = () => {
+	conversationLoadingUid.value = null;
+	conversationError.value = '';
+	store.dispatch('messenger/setActiveDialog', null);
+};
 
 const markMessageAsRead = (messageId) => store.dispatch('messenger/markMessageAsRead', messageId);
 
@@ -235,11 +291,20 @@ const scrollToBottom = () => {
 };
 
 const hydrateDialogs = async () => {
-	const response = await MessengerService.getDialogs();
-	if (response.data.status !== 'ok') return;
-	dialogs.value = response.data.dialogs || [];
-	const userIds = dialogs.value.map((dialog) => dialog.partner_id).filter(Boolean);
-	if (userIds.length) store.dispatch('messenger/subscribeToStatuses', userIds);
+	dialogsLoading.value = true;
+	dialogsError.value = '';
+	try {
+		const response = await MessengerService.getDialogs();
+		if (response.data.status !== 'ok') throw new Error('unexpected_dialogs_response');
+		dialogs.value = response.data.dialogs || [];
+		const userIds = dialogs.value.map((dialog) => dialog.partner_id).filter(Boolean);
+		if (userIds.length) store.dispatch('messenger/subscribeToStatuses', userIds);
+	} catch (error) {
+		console.error('Ошибка загрузки личных разговоров:', error);
+		dialogsError.value = 'Проверьте соединение и повторите загрузку.';
+	} finally {
+		dialogsLoading.value = false;
+	}
 };
 
 watch(
@@ -253,12 +318,8 @@ watch(
 );
 
 onMounted(async () => {
-	try {
-		await hydrateDialogs();
-		setupIntersectionObserver();
-	} catch (error) {
-		console.error('Ошибка загрузки личных разговоров:', error);
-	}
+	await hydrateDialogs();
+	setupIntersectionObserver();
 });
 
 onBeforeUnmount(() => {
@@ -300,6 +361,14 @@ onBeforeUnmount(() => {
 .dm-inline-notice--error { background: var(--ui-danger-soft); color: var(--ui-danger); }
 
 .conversation-list { min-height: 0; flex: 1; overflow-y: auto; padding: 0 var(--ui-space-2) var(--ui-space-3); }
+.conversation-list__content { min-height: 100%; }
+.conversation-skeleton { display: grid; gap: .35rem; padding-top: .15rem; }
+.conversation-skeleton__label { padding: .35rem .65rem .55rem; color: var(--ui-text-subtle); font-size: var(--ui-text-xs); }
+.conversation-skeleton__row { min-height: 3.8rem; display: grid; grid-template-columns: 2.35rem minmax(0, 1fr); align-items: center; gap: .625rem; padding: .4rem .6rem; }
+.conversation-skeleton__avatar { width: 2.35rem; height: 2.35rem; border-radius: 50%; }
+.conversation-skeleton__copy { min-width: 0; display: grid; gap: .42rem; }
+.conversation-skeleton__line { width: min(78%, 11rem); height: .7rem; border-radius: var(--ui-radius-pill); }
+.conversation-skeleton__line--name { width: min(58%, 8rem); height: .78rem; }
 .conversation-card { width: 100%; min-height: 4.4rem; display: grid; grid-template-columns: 2.75rem minmax(0, 1fr) auto; align-items: center; gap: var(--ui-space-3); padding: var(--ui-space-2) var(--ui-space-3); border: 0; border-radius: var(--ui-radius-lg); background: transparent; color: var(--ui-text); text-align: left; cursor: pointer; }
 .conversation-card:hover { background: var(--ui-surface-muted); }
 .conversation-card--active { background: var(--ui-primary-soft); }
@@ -316,6 +385,8 @@ onBeforeUnmount(() => {
 .conversation-empty__icon { width: 3rem; height: 3rem; display: grid; place-items: center; border-radius: 50%; background: var(--ui-surface-muted); color: var(--ui-text-subtle); }
 .conversation-empty strong { color: var(--ui-text); }
 .conversation-empty span { max-width: 17rem; font-size: var(--ui-text-xs); }
+.conversation-empty--error .conversation-empty__icon { background: var(--ui-danger-soft); color: var(--ui-danger); }
+.conversation-empty .ui-button { margin-top: var(--ui-space-2); }
 
 .dm-conversation { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--ui-bg); }
 .dm-conversation__header { min-height: 4.25rem; display: flex; align-items: center; gap: var(--ui-space-3); padding: var(--ui-space-2) var(--ui-space-4); border-bottom: 1px solid var(--ui-border); background: var(--ui-surface); }
@@ -328,7 +399,13 @@ onBeforeUnmount(() => {
 .active-persona__copy small { color: var(--ui-text-subtle); font-size: var(--ui-text-xs); }
 
 .dm-stream { min-height: 0; flex: 1; overflow-y: auto; padding: var(--ui-space-4) clamp(var(--ui-space-3), 4vw, var(--ui-space-8)); }
+.dm-stream__loading { min-height: 100%; display: flex; flex-direction: column; justify-content: center; gap: var(--ui-space-3); padding: var(--ui-space-5) 0; color: var(--ui-text-subtle); font-size: var(--ui-text-xs); }
+.message-skeleton { width: min(62%, 28rem); height: 3.2rem; border-radius: 1rem; }
+.message-skeleton--right { align-self: flex-end; width: min(54%, 24rem); }
+.message-skeleton--short { width: min(38%, 17rem); height: 2.65rem; }
 .dm-stream__empty { min-height: 100%; display: grid; place-items: center; align-content: center; gap: var(--ui-space-2); text-align: center; color: var(--ui-text-muted); }
+.dm-stream__empty--error i { background: var(--ui-danger-soft) !important; color: var(--ui-danger) !important; }
+.dm-stream__empty .ui-button { margin-top: var(--ui-space-2); }
 .dm-stream__empty i { width: 3.5rem; height: 3.5rem; display: grid; place-items: center; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: var(--ui-text-xl); }
 .dm-stream__empty strong { color: var(--ui-text); }
 .dm-stream__empty span { max-width: 28rem; font-size: var(--ui-text-sm); }

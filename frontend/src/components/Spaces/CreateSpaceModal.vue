@@ -1,6 +1,7 @@
 <template>
 	<Teleport to="body">
-		<div v-if="open" class="space-modal" role="dialog" aria-modal="true" aria-labelledby="create-space-title">
+		<Transition name="ui-modal" appear>
+		<div v-if="open" class="space-modal" role="dialog" aria-modal="true" aria-labelledby="create-space-title" :aria-busy="submitting ? 'true' : 'false'">
 			<button class="space-modal__backdrop" type="button" aria-label="Закрыть" @click="close" />
 			<form class="space-modal__panel" @submit.prevent="submit">
 				<header class="space-modal__header">
@@ -85,16 +86,17 @@
 					<button type="button" class="ui-button ui-button--ghost" :disabled="submitting" @click="close">Отмена</button>
 					<button type="submit" class="ui-button" :disabled="!canSubmit || submitting">
 						<span v-if="!submitting">Создать пространство</span>
-						<span v-else>Создаём…</span>
+						<span v-else class="submit-state"><span class="ui-spinner" aria-hidden="true"></span>Создаём…</span>
 					</button>
 				</footer>
 			</form>
 		</div>
+		</Transition>
 	</Teleport>
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 
 import SpacesService from '@/API/SpacesService';
 
@@ -169,8 +171,20 @@ watch(() => form.visibility, (visibility) => {
 	if (visibility === 'private' && form.join_policy === 'open') form.join_policy = 'request';
 });
 
+let previousBodyOverflow = '';
+
 watch(() => props.open, (open) => {
-	if (open) errorMessage.value = '';
+	if (open) {
+		errorMessage.value = '';
+		previousBodyOverflow = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+	} else {
+		document.body.style.overflow = previousBodyOverflow;
+	}
+}, { immediate: true });
+
+onBeforeUnmount(() => {
+	document.body.style.overflow = previousBodyOverflow;
 });
 </script>
 
@@ -192,10 +206,18 @@ watch(() => props.open, (open) => {
 .field textarea { resize: vertical; min-height: 6rem; }
 .form-error { grid-column: 1 / -1; display: flex; gap: var(--ui-space-2); padding: var(--ui-space-3); border-radius: var(--ui-radius-md); background: var(--ui-danger-soft); color: var(--ui-danger); font-size: var(--ui-text-sm); }
 .space-modal__footer { display: flex; justify-content: flex-end; gap: var(--ui-space-2); padding: var(--ui-space-4) var(--ui-space-5); border-top: 1px solid var(--ui-border); background: var(--ui-surface-soft); }
+.submit-state { display: inline-flex; align-items: center; gap: var(--ui-space-2); }
+.ui-modal-enter-active, .ui-modal-leave-active { transition: opacity var(--ui-motion-medium) var(--ui-ease-out); }
+.ui-modal-enter-active .space-modal__backdrop, .ui-modal-leave-active .space-modal__backdrop { transition: opacity var(--ui-motion-medium) var(--ui-ease-out), backdrop-filter var(--ui-motion-medium) var(--ui-ease-out); }
+.ui-modal-enter-active .space-modal__panel, .ui-modal-leave-active .space-modal__panel { transition: opacity var(--ui-motion-medium) var(--ui-ease-out), transform var(--ui-motion-slow) var(--ui-ease-emphasized); }
+.ui-modal-enter-from, .ui-modal-leave-to { opacity: 0; }
+.ui-modal-enter-from .space-modal__backdrop, .ui-modal-leave-to .space-modal__backdrop { opacity: 0; backdrop-filter: blur(0); }
+.ui-modal-enter-from .space-modal__panel, .ui-modal-leave-to .space-modal__panel { opacity: 0; transform: translateY(14px) scale(.985); }
 .ui-button--ghost { background: transparent; color: var(--ui-text-muted); border: 1px solid var(--ui-border); }
 @media (max-width: 640px) {
 	.space-modal { padding: 0; align-items: end; }
 	.space-modal__panel { max-height: 94dvh; border-radius: var(--ui-radius-xl) var(--ui-radius-xl) 0 0; }
+	.ui-modal-enter-from .space-modal__panel, .ui-modal-leave-to .space-modal__panel { transform: translateY(28px); }
 	.space-modal__body { grid-template-columns: 1fr; padding: var(--ui-space-4); }
 	.field--wide { grid-column: auto; }
 	.space-modal__header, .space-modal__footer { padding-inline: var(--ui-space-4); }

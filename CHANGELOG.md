@@ -2,6 +2,22 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.21-alpha.1] — 2026-09-21
+
+Stage 6 checkpoint 13 — UI motion/loading polish.
+
+- RouterView получил мягкий out-in transition и delayed/min-visible navigation progress, чтобы быстрые маршруты не мигали, а lazy/data-heavy переходы имели понятный feedback;
+- добавлены общие motion/state/popover/skeleton/spinner primitives с корректным `prefers-reduced-motion`;
+- Create Space modal теперь плавно открывает backdrop/panel, на mobile ведёт себя как sheet, блокирует body scroll и показывает pending spinner при submit;
+- persona dropdown и chevron получили плавное состояние открытия/закрытия;
+- Messenger больше не показывает ложное empty-state до загрузки: добавлены skeleton списка, skeleton истории, error/retry и pending state открытия разговора;
+- registration step, profile settings, Space discovery loading/error/results/empty и join actions получили мягкие transitions/pending feedback;
+- login/profile/registration submit-кнопки показывают явный spinner/pending state;
+- восстановлен корневой `update.sh` wrapper, делегирующий routine production update в `ops/deploy.sh`;
+- functional exact-head CI #645 fully green: backend, frontend, dependency-security и Chromium/Firefox/WebKit/mobile browser-smoke.
+
+Motion не должен замедлять приложение искусственно: progress появляется только после короткой задержки, а reduced-motion users получают практически мгновенные состояния.
+
 ## [0.6.20-alpha.1] — 2026-09-21
 
 Stage 6 checkpoint 12 — browser/security launch gate.

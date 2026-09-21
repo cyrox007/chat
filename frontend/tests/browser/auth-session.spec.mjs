@@ -18,9 +18,15 @@ const assertNoPersistedBearer = async (page) => {
 };
 
 const logout = async (page) => {
+  const routeProgress = page.locator('.route-progress');
+  await expect(routeProgress).toHaveCount(0);
+
   const trigger = page.locator('.persona-trigger');
   await expect(trigger).toBeVisible();
-  await trigger.click();
+  await trigger.focus();
+  await trigger.press('Enter');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
   const logoutItem = page.getByRole('menuitem', { name: 'Выйти' });
   await expect(logoutItem).toBeVisible();
   await logoutItem.click();

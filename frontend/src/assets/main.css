@@ -77,7 +77,11 @@
     /* Motion */
     --ui-motion-fast: 120ms;
     --ui-motion-normal: 180ms;
+    --ui-motion-medium: 240ms;
+    --ui-motion-slow: 320ms;
     --ui-ease: cubic-bezier(0.2, 0, 0, 1);
+    --ui-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ui-ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
 
     /* Layout */
     --ui-content-max: 1680px;
@@ -377,6 +381,99 @@ textarea.ui-input {
 
 .ui-reading-width {
     width: min(100%, var(--ui-reading-max));
+}
+
+/* Shared motion/state primitives. Route and async state changes should feel
+   continuous without delaying real work or hiding network latency. */
+.ui-route-enter-active {
+    transition:
+        opacity var(--ui-motion-medium) var(--ui-ease-out),
+        transform var(--ui-motion-medium) var(--ui-ease-out);
+}
+
+.ui-route-leave-active {
+    transition:
+        opacity var(--ui-motion-fast) var(--ui-ease),
+        transform var(--ui-motion-fast) var(--ui-ease);
+}
+
+.ui-route-enter-from {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+.ui-route-leave-to {
+    opacity: 0;
+    transform: translateY(-3px);
+}
+
+.ui-state-enter-active,
+.ui-state-leave-active {
+    transition:
+        opacity var(--ui-motion-normal) var(--ui-ease),
+        transform var(--ui-motion-normal) var(--ui-ease);
+}
+
+.ui-state-enter-from {
+    opacity: 0;
+    transform: translateY(5px);
+}
+
+.ui-state-leave-to {
+    opacity: 0;
+    transform: translateY(-2px);
+}
+
+.ui-popover-enter-active,
+.ui-popover-leave-active {
+    transition:
+        opacity var(--ui-motion-normal) var(--ui-ease-out),
+        filter var(--ui-motion-normal) var(--ui-ease-out);
+}
+
+.ui-popover-enter-from,
+.ui-popover-leave-to {
+    opacity: 0;
+    filter: brightness(0.98);
+}
+
+.ui-skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--ui-surface-muted);
+}
+
+.ui-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+        90deg,
+        transparent,
+        color-mix(in srgb, var(--ui-surface-raised) 72%, transparent),
+        transparent
+    );
+    animation: ui-skeleton-shimmer 1.35s ease-in-out infinite;
+}
+
+.ui-spinner {
+    width: 1em;
+    height: 1em;
+    display: inline-block;
+    flex: 0 0 auto;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: ui-spin 0.75s linear infinite;
+}
+
+@keyframes ui-spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes ui-skeleton-shimmer {
+    100% { transform: translateX(100%); }
 }
 
 @media (max-width: 720px) {

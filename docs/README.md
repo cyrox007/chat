@@ -60,9 +60,9 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Release candidate текущей ветки: `0.6.20-alpha.1`; последний выпущенный `main` checkpoint — `0.6.19-alpha.1` до финального exact-head CI и merge.
+Release candidate текущей ветки: `0.6.21-alpha.1`; последний выпущенный `main` checkpoint — `0.6.20-alpha.1` до финального exact-head CI и merge.
 
-Текущая development-линия: `0.6.x-alpha`. `0.6.20-alpha.1` закрывает automated desktop/WebKit auth-session browser gate, explicit CSRF proof и production dependency audit; real iOS/iPadOS PWA/device rehearsal, broader observability/performance и remaining pre-beta gates остаются следующей работой.
+Текущая development-линия: `0.6.x-alpha`. `0.6.21-alpha.1` добавляет единый UX motion/loading baseline поверх уже закрытого browser/security gate: route/modal/popover transitions, navigation progress, skeleton/retry/pending states и reduced-motion fallback.
 
 - `trust-safety-incident-rehearsal-v1.md` — moderation incident matrix, protective-hold safeguards и beta enablement gate.
 

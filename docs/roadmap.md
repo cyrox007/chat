@@ -2,7 +2,7 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.20-alpha.1`**; last merged `main` checkpoint: **`0.6.19-alpha.1`**.
+Release candidate: **`0.6.21-alpha.1`**; last merged `main` checkpoint: **`0.6.20-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
@@ -109,6 +109,15 @@ Direct/Sentinel topology abstraction, real master+replica+3-Sentinel promotion r
 - CI блокирует возврат `http://localhost:9000` browser fallback;
 - production dependencies проходят обязательные npm/pip vulnerability audits без allow-list исключений;
 - functional exact-head CI #637 green: dependency-security + frontend + full backend + all browser projects.
+
+### Stage 6 checkpoint 13 — UI motion / loading polish ✅ `0.6.21-alpha.1`
+- route transitions используют короткий out-in motion и delayed/min-visible progress, без искусственного ожидания быстрых переходов;
+- shared state/popover/skeleton/spinner primitives поддерживают `prefers-reduced-motion`;
+- Create Space modal, Persona dropdown, registration steps и profile settings больше не появляются/исчезают мгновенно;
+- Messenger получил честные loading skeletons, error/retry и перестал показывать ложное empty-state до ответа API;
+- ключевые login/register/profile/join/create actions показывают pending feedback;
+- root `update.sh` восстановлен как совместимый entrypoint к `ops/deploy.sh`;
+- functional exact-head CI #645 green: frontend, dependency-security, full backend и Chromium/Firefox/WebKit/mobile browser-smoke.
 
 ### Stage 6.8 checkpoint 1 — Trust & Safety foundation ✅ `0.6.10-alpha.1`
 - platform report intake отделён от Space-local moderation и поддерживает Persona, Messenger message и Space message reports;

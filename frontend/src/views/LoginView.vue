@@ -41,8 +41,9 @@
 					/>
 				</label>
 
-				<button class="ui-button ui-button--primary ui-button--block" type="submit" :disabled="isSubmitting">
-					{{ isSubmitting ? 'Входим…' : 'Войти' }}
+				<button class="ui-button ui-button--primary ui-button--block" type="submit" :disabled="isSubmitting" :aria-busy="isSubmitting ? 'true' : 'false'">
+					<span v-if="isSubmitting" class="button-pending"><span class="ui-spinner" aria-hidden="true"></span>Входим…</span>
+					<span v-else>Войти</span>
 				</button>
 			</form>
 
@@ -135,6 +136,7 @@ h1 { margin: 0; font-size: clamp(1.5rem, 5vw, 2rem); line-height: var(--ui-leadi
 .ui-notice--danger { color: var(--ui-danger); background: var(--ui-danger-soft); }
 .auth-divider { display: flex; align-items: center; gap: var(--ui-space-3); color: var(--ui-text-subtle); margin: var(--ui-space-5) 0; font-size: var(--ui-text-xs); }
 .auth-divider::before, .auth-divider::after { content: ''; height: 1px; flex: 1; background: var(--ui-border); }
+.button-pending { display: inline-flex; align-items: center; gap: var(--ui-space-2); }
 .auth-link-button { text-decoration: none; }
 .auth-footnote { margin: var(--ui-space-5) 0 0; color: var(--ui-text-subtle); font-size: var(--ui-text-xs); line-height: var(--ui-leading-normal); text-align: center; }
 @media (max-width: 560px) {
