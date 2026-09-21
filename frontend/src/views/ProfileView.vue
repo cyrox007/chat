@@ -63,6 +63,7 @@
 
 			<AchievementShelf :account-uid="profile.uid" :is-self="profile.is_self" />
 
+			<Transition name="ui-state">
 			<section v-if="profile.is_self && isEditing" class="profile-card settings-card">
 				<header class="settings-header">
 					<div>
@@ -126,12 +127,14 @@
 					</label>
 
 					<div class="settings-actions field--wide">
-						<button class="ui-button ui-button--primary" type="submit" :disabled="isSaving">
-							{{ isSaving ? 'Сохраняем…' : 'Сохранить изменения' }}
+						<button class="ui-button ui-button--primary" type="submit" :disabled="isSaving" :aria-busy="isSaving ? 'true' : 'false'">
+							<span v-if="isSaving" class="button-pending"><span class="ui-spinner" aria-hidden="true"></span>Сохраняем…</span>
+							<span v-else>Сохранить изменения</span>
 						</button>
 					</div>
 				</form>
 			</section>
+			</Transition>
 		</template>
 	</main>
 </template>
@@ -348,6 +351,7 @@ h2 { margin: 0.15rem 0 0; font-size: var(--ui-text-lg); }
 .self-chip { background: var(--ui-surface-muted); color: var(--ui-text-muted); }
 .profile-actions { display: flex; flex-direction: column; gap: var(--ui-space-2); min-width: 10rem; }
 .profile-actions a { text-decoration: none; }
+.button-pending { display: inline-flex; align-items: center; gap: var(--ui-space-2); }
 .ui-button:disabled { cursor: not-allowed; opacity: 0.55; }
 .contact-context { display: grid; grid-template-columns: minmax(12rem, 0.8fr) 1.2fr; gap: var(--ui-space-5); align-items: center; }
 .contact-context p { margin: 0; color: var(--ui-text-muted); }
