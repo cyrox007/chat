@@ -37,19 +37,20 @@
 			</div>
 		</section>
 
-		<section v-if="loading" class="discovery-state" role="status">
+		<Transition name="ui-state" mode="out-in">
+		<section v-if="loading" key="loading" class="discovery-state" role="status">
 			<div class="state-orbit"><i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i></div>
 			<strong>Ищем живые пространства…</strong>
 		</section>
 
-		<section v-else-if="errorMessage" class="discovery-state discovery-state--error">
+		<section v-else-if="errorMessage" key="error" class="discovery-state discovery-state--error">
 			<div class="state-orbit"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i></div>
 			<strong>Не удалось загрузить пространства</strong>
 			<span>{{ errorMessage }}</span>
 			<button class="ui-button" type="button" @click="loadSpaces">Повторить</button>
 		</section>
 
-		<section v-else-if="spaces.length" class="space-grid" aria-label="Пространства PubChat">
+		<section v-else-if="spaces.length" key="results" class="space-grid" aria-label="Пространства PubChat">
 			<article v-for="space in spaces" :key="space.uid" class="space-card" :class="spaceAppearanceClasses(space)">
 				<div class="space-card__topline">
 					<span class="purpose-badge"><i :class="purposeIcon(space.purpose)" aria-hidden="true"></i>{{ purposeLabel(space.purpose) }}</span>
@@ -112,18 +113,20 @@
 						:disabled="joiningUid === space.uid || space.viewer_membership?.status === 'pending' || (space.join_policy === 'invite' && !isActiveMember(space))"
 						@click="enterSpace(space)"
 					>
-						{{ actionLabel(space) }}
+						<span v-if="joiningUid === space.uid" class="button-pending"><span class="ui-spinner" aria-hidden="true"></span>{{ actionLabel(space) }}</span>
+						<span v-else>{{ actionLabel(space) }}</span>
 					</button>
 				</footer>
 			</article>
 		</section>
 
-		<section v-else class="discovery-state">
+		<section v-else key="empty" class="discovery-state">
 			<div class="state-orbit"><i class="fas fa-compass" aria-hidden="true"></i></div>
 			<strong>Подходящих пространств пока нет</strong>
 			<span>Измените фильтр или создайте своё место с понятной темой и атмосферой.</span>
 			<button class="ui-button" type="button" @click="createOpen = true">Создать первым</button>
 		</section>
+		</Transition>
 	</main>
 </template>
 
@@ -322,6 +325,7 @@ onMounted(loadSpaces);
 .filter-chip { flex: 0 0 auto; min-height: 2.3rem; padding: 0 var(--ui-space-3); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-pill); background: var(--ui-surface); color: var(--ui-text-muted); font: inherit; font-size: var(--ui-text-sm); font-weight: 700; cursor: pointer; }
 .filter-chip.active { border-color: color-mix(in srgb, var(--ui-primary) 35%, var(--ui-border)); background: var(--ui-primary-soft); color: var(--ui-primary); }
 .space-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ui-space-4); }
+.button-pending { display: inline-flex; align-items: center; gap: var(--ui-space-2); }
 .space-card { min-width: 0; display: flex; flex-direction: column; gap: var(--ui-space-4); padding: var(--ui-space-5); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-xl); background: var(--ui-surface); box-shadow: var(--ui-shadow-sm); transition: transform var(--ui-motion-normal) var(--ui-ease), box-shadow var(--ui-motion-normal) var(--ui-ease); }
 .space-card:hover { transform: translateY(-2px); box-shadow: var(--ui-shadow-md); }
 .space-card--cover-soft-gradient { background: linear-gradient(145deg, var(--ui-surface) 40%, var(--ui-primary-soft) 190%); }
