@@ -1,11 +1,16 @@
-import $api from '.';
+import $api, { API_BASE_URL } from '.';
 
 const websocketBaseUrl = () => {
     const configured = import.meta.env.VITE_API_WS_SERVER_URL;
     if (configured) return configured.replace(/\/$/, '');
 
-    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000';
-    return apiBase.replace(/^http/i, 'ws').replace(/\/$/, '');
+    if (/^https?:\/\//i.test(API_BASE_URL)) {
+        return API_BASE_URL.replace(/^http/i, 'ws').replace(/\/$/, '');
+    }
+
+    const origin = window.location.origin.replace(/^http/i, 'ws').replace(/\/$/, '');
+    const relativeBase = API_BASE_URL.startsWith('/') ? API_BASE_URL : `/${API_BASE_URL}`;
+    return `${origin}${relativeBase}`.replace(/\/$/, '');
 };
 
 export default class RealtimeService {

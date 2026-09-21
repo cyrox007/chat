@@ -18,23 +18,42 @@ Safari/WebKit давно строже других браузеров относ
 
 ## Что изменилось сейчас
 
-Текущий SPA по умолчанию использует same-origin `/api`, а production reverse proxy обслуживает frontend/API под одним сайтом. Это убирает главный cross-site-cookie риск ранней схемы.
+Начиная с `0.6.20-alpha.1` browser contract явно same-origin:
 
-Текущий CSRF cookie:
+- SPA по умолчанию использует `/api`;
+- Vite dev/preview proxy отправляет `/api` HTTP и WebSocket traffic в backend;
+- legacy fallback `http://localhost:9000` удалён из browser source и запрещён CI guard;
+- explicit cross-origin API остаётся только осознанной deployment-конфигурацией, а не fallback.
 
-- `HttpOnly`;
-- `SameSite=Lax`;
-- `Secure` при HTTPS-конфигурации;
-- `Path=/`;
-- имеет bounded lifetime.
+CSRF теперь использует две связанные части proof:
 
-Регистрация v2 и refresh session должны проверяться в реальном WebKit browser, а не только unit/API tests.
+- signed `XSRF-TOKEN` cookie: `HttpOnly`, `SameSite=Lax`, `Secure` при HTTPS, `Path=/`, bounded lifetime;
+- тот же подписанный proof возвращается `/csrf/get` с `Cache-Control: no-store`, хранится SPA только в памяти и отправляется в `X-CSRF-Token` для unsafe requests.
+
+Backend принимает unsafe request только если cookie/header присутствуют, совпадают и signature/expiry валидны. Cookie без header и header без cookie отклоняются. API client сам bootstrap-ит proof перед POST/PUT/PATCH/DELETE, поэтому корректность регистрации/логина больше не зависит от асинхронного `onMounted`.
+
+Refresh после полного reload также получает новый CSRF proof и использует HttpOnly refresh cookie; access token остаётся memory-only и не сохраняется в local/session storage.
+
+## Подтверждение в CI
+
+Playwright browser job поднимает отдельные PostgreSQL/Redis, реальный Uvicorn backend и production-like Vite preview через same-origin `/api`.
+
+Один и тот же journey проходит в:
+
+- Chromium desktop;
+- Firefox desktop;
+- WebKit / Safari-compatible engine;
+- narrow mobile Chromium.
+
+Journey проверяет registration → authenticated shell → full reload/refresh rotation → Messenger route → logout/revocation → login, HttpOnly/SameSite refresh cookie, отсутствие persisted bearer и отсутствие notification permission prompt на bootstrap.
+
+Functional exact-head CI #637 прошёл весь matrix вместе с backend/frontend и production dependency audits.
 
 ## Оставшийся security debt
 
-Текущий CSRF validator по-прежнему валидирует подписанный cookie сам по себе. Это не classic double-submit token с независимым header proof. В Stage 6.5 требуется отдельный CSRF/session review: выбранная модель должна быть явно задокументирована, а не случайно зависеть от browser cookie defaults.
+Automated WebKit существенно сильнее API-only теста, но не заменяет Safari на реальном Apple device. До beta остаются iOS/iPadOS installed Home Screen/PWA push rehearsal, upload/media security review, privacy side-channel review и accessibility/device checks.
 
-Нельзя исправлять Safari совместимость ослаблением `SameSite`/`Secure` без threat-model review. Если в будущем API снова станет cross-site, auth/CSRF contract должен быть спроектирован явно, а не обходиться browser exceptions.
+Нельзя исправлять browser совместимость ослаблением `SameSite`/`Secure` без threat-model review. Если в будущем API снова станет cross-site, auth/CSRF contract должен проектироваться отдельно от текущего same-origin baseline.
 
 ## Browser launch matrix
 
@@ -57,8 +76,8 @@ Safari/WebKit давно строже других браузеров относ
 7. PWA service-worker update without auth/private cache leakage;
 8. notification permission/subscription only after explicit user action.
 
-## CI direction
+## CI contract
 
-Добавить Playwright browser smoke suite отдельным gate. Для Safari regression нужен WebKit project, который выполняет настоящую регистрацию через production-like same-origin proxy и проверяет cookie/session flow. API-only test не считается достаточным для этого класса дефекта.
+Playwright browser smoke является отдельным обязательным gate. Network trace и video выключены, чтобы CI artifacts не становились новым местом хранения auth/private data; при падении сохраняется только screenshot.
 
-Browser smoke должен сохранять network trace/logs при падении, но не артефакты с access/refresh token values или приватным message content.
+Production dependency security также является gate: frontend проверяется `npm audit --omit=dev --audit-level=high`, backend — pinned `pip-audit`. Известные production vulnerabilities не маскируются allow-list исключениями в этом checkpoint.

@@ -127,7 +127,7 @@ const dialogs = ref([]);
 const messageComposer = ref(null);
 let intersectionObserver = null;
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000';
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 const currentUser = computed(() => store.getters.getUser || {});
 const activeDialog = computed(() => store.getters['messenger/getActiveDialog']);
 const connectionState = computed(() => store.getters['messenger/getConnectionState']);

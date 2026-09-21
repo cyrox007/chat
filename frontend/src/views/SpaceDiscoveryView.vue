@@ -137,7 +137,7 @@ import SpacesService from '@/API/SpacesService';
 import CreateSpaceModal from '@/components/Spaces/CreateSpaceModal.vue';
 
 const router = useRouter();
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000';
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
 const spaces = ref([]);
 const loading = ref(true);

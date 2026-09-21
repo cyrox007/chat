@@ -2,13 +2,13 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.19-alpha.1`**; last merged `main` checkpoint: **`0.6.18-alpha.1`**.
+Release candidate: **`0.6.20-alpha.1`**; last merged `main` checkpoint: **`0.6.19-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
 Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression, durable unread-Messenger email delivery, Web Push/PWA Messenger delivery, full `account.access` enforcement и fine-grained platform moderation permission boundaries.
 
-Provider-neutral AI assessment / copilot, anti-spam/raid behavioral signals, reported-media moderation, operations metrics, incident rehearsal, private-evidence retention/expiry и shadow-calibration/storage-lifecycle gate уже закрыты отдельными checkpoints. Protective holds остаются default-off; следующий Trust & Safety operational task — **накопить human-reviewed shadow data и подтвердить фактический provider backup/snapshot lifecycle перед enforce**. External-delivery observability baseline уже закрывает ledger-side backlog/failure visibility; дальше остаются broader HTTP/realtime/Redis/PostgreSQL/provider telemetry, browser matrix, security gates и формализация unit economics/monetization boundaries.
+Provider-neutral AI assessment / copilot, anti-spam/raid behavioral signals, reported-media moderation, operations metrics, incident rehearsal, private-evidence retention/expiry и shadow-calibration/storage-lifecycle gate уже закрыты отдельными checkpoints. Protective holds остаются default-off; следующий Trust & Safety operational task — **накопить human-reviewed shadow data и подтвердить фактический provider backup/snapshot lifecycle перед enforce**. External-delivery observability baseline уже закрывает ledger-side backlog/failure visibility. Browser/security checkpoint закрывает same-origin `/api`, explicit CSRF proof, dependency audit и Chromium/Firefox/WebKit/mobile auth-session matrix; дальше остаются broader HTTP/realtime/Redis/PostgreSQL/provider telemetry, real-device PWA/accessibility gates и формализация unit economics/monetization boundaries.
 
 Отдельно зафиксированы два обязательных launch workstream, которые раньше были недооценены: **production-grade moderation / Trust & Safety** и **устойчивая монетизация / unit economics**. PubChat не может считать наличие таблиц moderation готовой системой и не может рассчитывать, что инфраструктура, поддержка и Trust & Safety будут бесконечно финансироваться только энтузиазмом команды.
 
@@ -98,6 +98,17 @@ Direct/Sentinel topology abstraction, real master+replica+3-Sentinel promotion r
 - structured-log helper fail-closed отклоняет token/secret/password/email destination/push endpoint/key material/message-content field names;
 - PostgreSQL integration проверяет operational detection и отсутствие seeded private identifiers в metrics output;
 - CI запускает observability CLI как отдельный machine gate.
+
+### Stage 6 checkpoint 12 — Browser / security launch gate ✅ `0.6.20-alpha.1`
+- SPA browser default переведён на same-origin `/api`; dev/preview proxy обслуживает HTTP + WebSocket без legacy localhost cross-origin fallback;
+- CSRF требует signed HttpOnly cookie и matching in-memory `X-CSRF-Token` header proof;
+- unsafe requests сами bootstrap-ят CSRF, поэтому registration/login/refresh не зависят от mount-time race;
+- Playwright gate выполняет registration, reload/refresh rotation, Messenger route, logout/revocation и login;
+- matrix: Chromium, Firefox, WebKit/Safari-compatible engine и narrow mobile Chromium;
+- access bearer не сохраняется в local/session storage, notification permission не запрашивается на bootstrap;
+- CI блокирует возврат `http://localhost:9000` browser fallback;
+- production dependencies проходят обязательные npm/pip vulnerability audits без allow-list исключений;
+- functional exact-head CI #637 green: dependency-security + frontend + full backend + all browser projects.
 
 ### Stage 6.8 checkpoint 1 — Trust & Safety foundation ✅ `0.6.10-alpha.1`
 - platform report intake отделён от Space-local moderation и поддерживает Persona, Messenger message и Space message reports;
@@ -194,8 +205,8 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - production-like realtime/Redis pool saturation profiling.
 
 ### 6.5 Security/privacy 🚧
-- session/cookie/CSRF review, включая explicit CSRF proof contract;
-- registration/login/refresh Safari/WebKit compatibility audit;
+- ✅ session/cookie/CSRF browser contract: explicit signed cookie + matching header proof;
+- ✅ registration/login/refresh automated Chromium/Firefox/WebKit/mobile compatibility gate;
 - upload/media review;
 - moderation/report/appeal privacy audit;
 - Account block coverage + privacy side-channel + secret/logging review;
@@ -208,7 +219,8 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ✅ external Messenger email systemd scheduler/service + fail-fast provider config installer;
 - ✅ external Messenger Web Push systemd scheduler/service + VAPID preflight installer;
 - ⏳ Sentinel topology/promotion/pool metrics и alerting;
-- ⏳ email/push delivery metrics/provider health;
+- ✅ email/push durable-ledger delivery metrics/health;
+- ⏳ SMTP/Web Push provider-side health/latency telemetry;
 - ⏳ structured logs/error tracking, incident procedure;
 - 🚧 deployment/recovery runbook;
 - ⏳ backup retention/encryption/off-site storage + RPO/RTO;
@@ -218,8 +230,8 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - 🚧 compact messaging composer/density and information-panel polish;
 - ✅ transient authenticated bootstrap retry;
 - ✅ historical Safari registration defect audit;
-- ⏳ Playwright WebKit registration/login/refresh through production-like same-origin proxy;
-- ⏳ Chromium + Firefox + WebKit critical-journey matrix;
+- ✅ Playwright WebKit registration/login/refresh through production-like same-origin proxy;
+- ✅ Chromium + Firefox + WebKit + narrow mobile auth/session critical journey;
 - ✅ notification preferences UI и baseline PWA Web Push permission/subscription UX;
 - ⏳ iOS/iPadOS installed Home Screen push flow в device/browser matrix;
 - ⏳ keyboard/focus, contrast/mobile/narrow viewport, onboarding and terminology audit;

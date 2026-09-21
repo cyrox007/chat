@@ -102,7 +102,7 @@ import SocialService from '@/API/SocialService';
 import SpacesService from '@/API/SpacesService';
 
 const route = useRoute();
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000';
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 const people = ref([]);
 const total = ref(0);
 const loading = ref(true);

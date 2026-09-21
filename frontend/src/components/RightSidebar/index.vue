@@ -164,7 +164,7 @@ const loadingActive = ref(false);
 const loadingPending = ref(false);
 const loadingMore = ref(false);
 const busyUid = ref(null);
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000';
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
 const currentUserUid = computed(() => store.getters.getUser?.uid);
 const owner = computed(() => props.roomInfo.owner || (props.roomInfo.owner_uid ? { uid: props.roomInfo.owner_uid } : null));
