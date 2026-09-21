@@ -2,6 +2,24 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.20-alpha.1] — 2026-09-21
+
+Stage 6 checkpoint 12 — browser/security launch gate.
+
+- browser runtime contract теперь same-origin по умолчанию: SPA использует `/api`, а Vite dev/preview proxy передаёт HTTP и WebSocket трафик в backend без исторического `http://localhost:9000` fallback;
+- CSRF усилен с cookie-only проверки до signed HttpOnly cookie + отдельного `X-CSRF-Token` proof, который SPA хранит только в памяти;
+- unsafe API requests сами выполняют CSRF bootstrap, поэтому registration/login/refresh больше не зависят от mount-time race;
+- full reload восстанавливает session через HttpOnly refresh cookie + новый CSRF proof, не записывая access token в local/session storage;
+- добавлен Playwright launch gate для Chromium, Firefox, WebKit/Safari-compatible engine и narrow mobile Chromium;
+- browser journey реально выполняет registration → refresh-after-reload → Messenger route → logout/revocation → login и проверяет cookie/session semantics;
+- CI запрещает возврат cross-origin localhost API fallback в SPA source;
+- production dependency gate теперь запускает `npm audit --omit=dev --audit-level=high` и `pip-audit`;
+- frontend production lock обновлён до audit-clean набора; direct floors подняты для Axios, DOMPurify и UUID;
+- backend security-sensitive dependencies обновлены; FastAPI/Starlette закреплены на audit-clean совместимой паре, сохраняющей текущий route contract;
+- функциональный exact-head CI #637 полностью зелёный: dependency-security, frontend, backend/PostgreSQL/Redis/Sentinel/recovery и четыре browser projects.
+
+Этот checkpoint закрывает автоматизированный desktop/WebKit auth/session launch gate, но не подменяет реальный iOS/iPadOS installed-PWA/device rehearsal и оставшиеся pre-beta performance/accessibility/production-data задачи.
+
 ## [0.6.19-alpha.1] — 2026-09-21
 
 Stage 6 checkpoint 11 — privacy-safe external delivery observability baseline.
