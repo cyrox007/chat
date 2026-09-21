@@ -268,7 +268,8 @@ async def review_abuse_signal(
         raise ValueError("invalid calibration label")
     item.status = decision
     item.review_note = (note or "").strip()[:1000] or None
-    item.calibration_label = calibration_label
+    if calibration_label is not None:
+        item.calibration_label = calibration_label
     item.reviewed_by_account_uid = reviewer_account_uid
     item.reviewed_at = datetime.utcnow()
     item.updated_at = datetime.utcnow()
