@@ -9,6 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from components.moderation.abuse_model import TrustSafetyAbuseSignal
 from components.moderation.ai_model import ModerationAIRecommendation
 from components.moderation.automation_settings import moderation_automation_config
+from components.moderation.media_model import ModerationMediaRecord
+from settings import config
+
 from components.moderation.model import (
     PlatformRestriction,
     PlatformRestrictionAppeal,
@@ -128,6 +131,31 @@ async def trust_safety_metrics(
         or 0
     )
 
+    due_media_evidence = int(
+        (
+            await db.execute(
+                select(func.count(ModerationMediaRecord.uid)).where(
+                    ModerationMediaRecord.status == "removed",
+                    ModerationMediaRecord.purged_at.is_(None),
+                    ModerationMediaRecord.retention_due_at.is_not(None),
+                    ModerationMediaRecord.retention_due_at <= now,
+                )
+            )
+        ).scalar_one()
+        or 0
+    )
+    purged_media_evidence = int(
+        (
+            await db.execute(
+                select(func.count(ModerationMediaRecord.uid)).where(
+                    ModerationMediaRecord.purged_at.is_not(None),
+                    ModerationMediaRecord.purged_at >= cutoff,
+                )
+            )
+        ).scalar_one()
+        or 0
+    )
+
     return {
         "window_hours": window_hours,
         "queue": {
@@ -159,5 +187,10 @@ async def trust_safety_metrics(
             "lookback_seconds": moderation_automation_config.corroboration_lookback_seconds,
             "min_high_signals": moderation_automation_config.min_high_signals,
             "allowed_capabilities": ["invitation.send", "messenger.send"],
+        },
+        "media_retention": {
+            "removed_retention_days": config.MODERATION_MEDIA_REMOVED_RETENTION_DAYS,
+            "due_count": due_media_evidence,
+            "purged_count": purged_media_evidence,
         },
     }
