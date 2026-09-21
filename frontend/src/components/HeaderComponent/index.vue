@@ -72,7 +72,7 @@ const route = useRoute();
 const store = useStore();
 const currentTheme = ref('light');
 const isDropdownOpen = ref(false);
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000';
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
 const isAuthenticated = computed(() => store.getters.isAuth);
 const currentUser = computed(() => store.getters.getUser || {});
