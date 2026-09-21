@@ -59,7 +59,7 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Release candidate текущей ветки: `0.6.18-alpha.1`; последний выпущенный `main` checkpoint — `0.6.17-alpha.1` до финального exact-head CI и merge PR #39.
+Release candidate текущей ветки: `0.6.18-alpha.1`; последний выпущенный `main` checkpoint — `0.6.17-alpha.1` до финального exact-head CI и merge.
 
 Текущая development-линия: `0.6.x-alpha`. `0.6.18-alpha.1` добавляет безопасный shadow-calibration контур и storage-lifecycle preflight; production enforce остаётся закрыт до накопления реальной human-reviewed выборки. Параллельно продолжаются browser/security/observability и unit-economics/monetization planning.
 
