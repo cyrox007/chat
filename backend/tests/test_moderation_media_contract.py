@@ -71,7 +71,12 @@ class ModerationMediaContractTests(unittest.TestCase):
             path = _private_path_for_record(record, private_root=root)
             self.assertEqual(path, (root / str(uid) / "reported.jpg").resolve())
 
-            record.private_relative_path = f"{uuid4()}/other.jpg"
+            other_uid = uuid4()
+            record.private_relative_path = f"{other_uid}/other.jpg"
+            with self.assertRaises(ValueError):
+                _private_path_for_record(record, private_root=root)
+
+            record.private_relative_path = f"{uid}/../{other_uid}/other.jpg"
             with self.assertRaises(ValueError):
                 _private_path_for_record(record, private_root=root)
 
