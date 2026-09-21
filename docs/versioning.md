@@ -35,7 +35,7 @@ After `1.0.0`, normal SemVer rules apply.
 
 Alpha is used while launch-critical hardening or product domains are incomplete. Every recorded alpha checkpoint must pass CI on the exact versioned head.
 
-PubChat remains alpha because Stage 6 still requires production-like legacy snapshot rehearsal, member-capacity/DST work, real multi-process WebSocket and rolling-restart coverage, load/backpressure, observability, accessibility and final security review.
+PubChat remains alpha because Stage 6 still requires production-like legacy snapshot rehearsal, member-capacity/DST work, broader load/pool profiling and observability, accessibility/browser hardening and final security review.
 
 Checkpoint progression:
 - `0.6.0-alpha.1` — PostgreSQL migration/schema-drift/async integration baseline;
@@ -45,7 +45,7 @@ Checkpoint progression:
 - `0.6.15-alpha.1` — reversible human-only reported-media moderation with private evidence storage;
 - `0.6.16-alpha.1` — Trust & Safety operations metrics, incident rehearsal and disabled-by-default bounded protective holds;
 - `0.6.17-alpha.1` — bounded private moderation evidence retention and application-level secure expiry;
-- `0.6.18-alpha.1` — protective-hold shadow calibration, human-reviewed enablement gate and moderation storage-lifecycle preflight.
+- `0.6.18-alpha.1` — protective-hold shadow calibration, human-reviewed enablement gate and moderation storage-lifecycle preflight;
 - `0.6.19-alpha.1` — privacy-safe external delivery observability: backlog/claim/retry/failure aggregates, admin metrics, health CLI and structured email/Web Push worker completion logs.
 
 These checkpoints do not declare Stage 6 complete.
