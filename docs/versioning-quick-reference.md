@@ -1,7 +1,7 @@
 # PubChat version quick reference
 
-- Current release candidate: **0.6.19-alpha.1** — privacy-safe external delivery observability baseline.
-- Last released `main` checkpoint: **0.6.18-alpha.1** until the final exact-head gate passes and the release candidate merges.
+- Current release candidate: **0.6.20-alpha.1** — browser/security launch gate.
+- Last released `main` checkpoint: **0.6.19-alpha.1** until the final exact-head gate passes and the release candidate merges.
 - Current milestone: **0.6.x-alpha** — Pre-beta hardening continues.
 - Proven so far: PostgreSQL 16 migration/recovery; Redis 7.2 distributed semantics, restart recovery and real Sentinel master promotion; multi-process Uvicorn/WebSocket + bounded backpressure; persistent systemd-owned production listener; message notification preferences/active-context suppression; durable unread-Messenger email delivery; Web Push/PWA Messenger delivery.
 - Trust & Safety baseline: platform report intake/triage/evidence audit; Account-level capability restrictions; target-visible reasons/expiry; independent appeal queue; full `account.access` suspension; server-side enforcement for Messenger send, Space chat/media, Space create/join/invite, Persona edit and organic discovery publication.
@@ -17,7 +17,8 @@
 - Private removed-media evidence now has bounded retention/expiry with report/appeal deferral, record-scoped deletion, metadata scrub and a standalone scheduled worker; application-level expiry does not imply forensic wipe of snapshots/backups.
 - Shadow-calibration tooling is implemented, but production enforce remains closed until real human-reviewed data meets the gate and a Trust & Safety owner explicitly approves enablement; declared backup/snapshot lifecycle must also match real provider settings.
 - External delivery observability now covers privacy-safe email/Web Push backlog, expired claims, retry/failure aggregates, admin metrics and a machine health CLI with structured worker completion logs.
-- Still open before beta: accumulation of real shadow-calibration data and provider-level backup/snapshot lifecycle verification, anonymized production-like legacy snapshot rehearsal, member-capacity concurrency, DST-correct recurrence, production-like load/pool profiling, broader provider/HTTP/realtime/Redis/PostgreSQL observability, Safari/WebKit/security/accessibility hardening and unit-economics/monetization planning.
+- Browser/security gate now proves same-origin `/api`, explicit CSRF cookie+header proof, reload/refresh rotation, logout/login and non-persistent access tokens in Chromium, Firefox, WebKit and narrow mobile Chromium; production npm/pip dependency audits are mandatory.
+- Still open before beta: accumulation of real shadow-calibration data and provider-level backup/snapshot lifecycle verification, anonymized production-like legacy snapshot rehearsal, member-capacity concurrency, DST-correct recurrence, production-like load/pool profiling, broader provider/HTTP/realtime/Redis/PostgreSQL observability, upload/privacy review, real iOS/iPadOS PWA/device testing and accessibility hardening and unit-economics/monetization planning.
 - Alpha: hardening is incomplete; exact checkpoint CI is mandatory.
 - Beta: launch-critical flows and production-like gates are complete; focus shifts to stabilization.
 - Stable: starts at **1.0.0** after the full launch gate passes.
