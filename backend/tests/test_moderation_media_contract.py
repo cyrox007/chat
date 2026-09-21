@@ -13,6 +13,7 @@ from components.moderation.media_service import (
     _safe_private_path,
     _safe_public_path,
     _validate_storage_roots,
+    media_record_projection,
 )
 
 
@@ -92,6 +93,25 @@ class ModerationMediaContractTests(unittest.TestCase):
             self.assertTrue(_durable_unlink(path))
             self.assertFalse(path.exists())
             self.assertFalse(_durable_unlink(path))
+
+    def test_private_filesystem_path_is_never_projected(self):
+        uid = uuid4()
+        record = ModerationMediaRecord(
+            uid=uid,
+            report_uid=uuid4(),
+            source_type="messenger_message",
+            source_uid=uuid4(),
+            attachment_index=0,
+            original_url="/uploads/images/reported.jpg",
+            original_relative_path="images/reported.jpg",
+            private_relative_path=f"{uid}/reported.jpg",
+            status="removed",
+            reason="policy",
+        )
+        projection = media_record_projection(record)
+        self.assertNotIn("private_relative_path", projection)
+        self.assertNotIn("original_relative_path", projection)
+        self.assertNotIn(str(record.private_relative_path), str(projection))
 
     def test_private_media_path_is_record_scoped(self):
         with tempfile.TemporaryDirectory() as tmp:
