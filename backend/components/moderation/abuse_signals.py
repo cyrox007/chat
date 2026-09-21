@@ -266,6 +266,10 @@ async def review_abuse_signal(
         return None
     if calibration_label not in {None, "true_positive", "false_positive", "unclear"}:
         raise ValueError("invalid calibration label")
+    if calibration_label == "false_positive" and decision != "dismissed":
+        raise ValueError("false_positive calibration label requires dismissed decision")
+    if calibration_label in {"true_positive", "unclear"} and decision != "reviewed":
+        raise ValueError(f"{calibration_label} calibration label requires reviewed decision")
     item.status = decision
     item.review_note = (note or "").strip()[:1000] or None
     if calibration_label is not None:
