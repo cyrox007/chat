@@ -5,7 +5,11 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_DIR="$PROJECT_DIR/backend"
 
 cd "$BACKEND_DIR"
-python3 - <<'PY'
+PYTHON_BIN="$BACKEND_DIR/venv/bin/python3"
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  PYTHON_BIN="python3"
+fi
+"$PYTHON_BIN" - <<'PY'
 from settings import config
 
 config.ensure_moderation_media_retention_settings(require_storage_lifecycle=True)
