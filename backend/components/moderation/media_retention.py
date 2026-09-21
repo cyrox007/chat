@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -29,6 +29,7 @@ class MediaRetentionStats:
     already_missing: int = 0
     deferred_active_report: int = 0
     deferred_pending_appeal: int = 0
+    extended_after_finality: int = 0
     failed: int = 0
 
 
@@ -110,6 +111,25 @@ async def _has_pending_linked_appeal(db: AsyncSession, report_uid) -> bool:
     return count > 0
 
 
+async def _latest_resolved_linked_appeal_at(
+    db: AsyncSession,
+    report_uid,
+) -> datetime | None:
+    return (
+        await db.execute(
+            select(func.max(PlatformRestrictionAppeal.resolved_at))
+            .join(
+                PlatformRestriction,
+                PlatformRestriction.uid == PlatformRestrictionAppeal.restriction_uid,
+            )
+            .where(
+                PlatformRestriction.report_uid == report_uid,
+                PlatformRestrictionAppeal.resolved_at.is_not(None),
+            )
+        )
+    ).scalar_one_or_none()
+
+
 async def expire_due_media_evidence(
     db: AsyncSession,
     *,
@@ -154,6 +174,25 @@ async def expire_due_media_evidence(
         if await _has_pending_linked_appeal(db, record.report_uid):
             stats.deferred_pending_appeal += 1
             continue
+
+        latest_appeal_at = await _latest_resolved_linked_appeal_at(
+            db, record.report_uid
+        )
+        finality_anchors = [
+            value
+            for value in (record.removed_at, report.resolved_at, latest_appeal_at)
+            if value is not None
+        ]
+        if finality_anchors:
+            effective_due_at = max(finality_anchors) + timedelta(
+                days=config.MODERATION_MEDIA_REMOVED_RETENTION_DAYS
+            )
+            if record.retention_due_at is None or record.retention_due_at < effective_due_at:
+                record.retention_due_at = effective_due_at
+                record.updated_at = now
+                if effective_due_at > now:
+                    stats.extended_after_finality += 1
+                    continue
 
         try:
             path = _private_path_for_record(record, private_root=private_root)
