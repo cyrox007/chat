@@ -9,6 +9,8 @@
 - `alembic check` не показывает model/schema drift;
 - PostgreSQL integration smoke проходит там, где slice затрагивает persistence/worker behavior;
 - frontend production build проходит;
+- production dependency audits (`npm audit --omit=dev --audit-level=high` + `pip-audit`) проходят без unresolved vulnerability;
+- browser-sensitive slice проходит Playwright Chromium/Firefox/WebKit/mobile gate;
 - privacy/permissions/data self-review завершён;
 - пользовательская и техническая документация обновлена;
 - CI зелёный на exact functional head.
@@ -31,7 +33,7 @@
 - проверить PostgreSQL/Redis/configuration;
 - собрать frontend;
 - проверить `/health` и `/service/version`;
-- выполнить smoke test login/session, Space realtime и DM.
+- выполнить smoke test registration/login/session reload/logout, Space realtime и DM.
 - если email/Web Push delivery включены — проверить `python -m workers.external_delivery_observability --window-hours 24 --require-healthy` и разобрать stale backlog/expired claims до открытия трафика;
 
 Clean-database migration CI не заменяет backup/restore drill и rehearsal на legacy data перед реальным production deployment.
