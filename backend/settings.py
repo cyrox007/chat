@@ -10,6 +10,13 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return os.getenv(name, "true" if default else "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _optional_positive_int(name: str) -> int | None:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return None
+    return max(1, int(raw))
+
+
 class Config:
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
@@ -248,8 +255,34 @@ class Config:
     MODERATION_MEDIA_RETENTION_BATCH_SIZE = max(
         1, min(500, int(os.getenv("MODERATION_MEDIA_RETENTION_BATCH_SIZE", "100")))
     )
+    MODERATION_MEDIA_BACKUP_RETENTION_DAYS = _optional_positive_int(
+        "MODERATION_MEDIA_BACKUP_RETENTION_DAYS"
+    )
+    MODERATION_MEDIA_SNAPSHOT_RETENTION_DAYS = _optional_positive_int(
+        "MODERATION_MEDIA_SNAPSHOT_RETENTION_DAYS"
+    )
 
-    def ensure_moderation_media_retention_settings(self) -> None:
+    def moderation_media_storage_lifecycle_status(self) -> dict:
+        app_days = self.MODERATION_MEDIA_REMOVED_RETENTION_DAYS
+        backup_days = self.MODERATION_MEDIA_BACKUP_RETENTION_DAYS
+        snapshot_days = self.MODERATION_MEDIA_SNAPSHOT_RETENTION_DAYS
+        declared = backup_days is not None and snapshot_days is not None
+        aligned = bool(
+            declared
+            and backup_days <= app_days
+            and snapshot_days <= app_days
+        )
+        return {
+            "application_retention_days": app_days,
+            "backup_retention_days": backup_days,
+            "snapshot_retention_days": snapshot_days,
+            "declared": declared,
+            "aligned": aligned,
+        }
+
+    def ensure_moderation_media_retention_settings(
+        self, *, require_storage_lifecycle: bool = False
+    ) -> None:
         public_root = Path("uploads").resolve()
         private_root = Path(self.MODERATION_MEDIA_ROOT).resolve()
         if (
@@ -259,6 +292,27 @@ class Config:
         ):
             raise RuntimeError(
                 "MODERATION_MEDIA_ROOT must be a dedicated path disjoint from public uploads"
+            )
+
+        lifecycle = self.moderation_media_storage_lifecycle_status()
+        if require_storage_lifecycle and not lifecycle["declared"]:
+            raise RuntimeError(
+                "MODERATION_MEDIA_BACKUP_RETENTION_DAYS and "
+                "MODERATION_MEDIA_SNAPSHOT_RETENTION_DAYS must be declared"
+            )
+        if lifecycle["backup_retention_days"] is not None and (
+            lifecycle["backup_retention_days"]
+            > lifecycle["application_retention_days"]
+        ):
+            raise RuntimeError(
+                "Moderation media backup retention may not exceed application retention"
+            )
+        if lifecycle["snapshot_retention_days"] is not None and (
+            lifecycle["snapshot_retention_days"]
+            > lifecycle["application_retention_days"]
+        ):
+            raise RuntimeError(
+                "Moderation media snapshot retention may not exceed application retention"
             )
 
     # File storage
