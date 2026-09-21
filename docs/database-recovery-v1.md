@@ -30,7 +30,8 @@ Dump/restore client намеренно запускается из `postgres:16`
 CI recovery drill не является полной production backup policy. До beta/production отдельно нужны:
 
 - rehearsal на anonymized production-like snapshot;
-- правила retention и ротации backup;
+- правила retention и ротации database backup;
+- отдельная проверка lifecycle private moderation media backup/snapshot copies;
 - encryption at rest/in transit для backup artifacts;
 - off-site/object-storage location и access control;
 - измеренные RPO/RTO;
@@ -57,4 +58,5 @@ CI recovery drill не является полной production backup policy. �
 - recovery test восстанавливает в отдельную database, а не поверх source;
 - recovery correctness включает data assertions, а не только успешный exit code `pg_restore`;
 - synthetic recovery drill не подменяет production-like recovery rehearsal;
-- database backup не включает secrets и не решает backup для uploaded media.
+- database backup не включает secrets и не решает backup для uploaded media;
+- `ops/check-moderation-storage-lifecycle.sh` проверяет только declared private-media lifecycle limits и не заменяет provider-side lifecycle configuration.
