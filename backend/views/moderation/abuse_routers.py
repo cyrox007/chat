@@ -15,6 +15,10 @@ class AbuseSignalReviewRequest(BaseModel):
 
     decision: str = Field(pattern=r"^(reviewed|dismissed)$")
     note: str | None = Field(default=None, max_length=1000)
+    calibration_label: str | None = Field(
+        default=None,
+        pattern=r"^(true_positive|false_positive|unclear)$",
+    )
 
 
 async def require_signal_reviewer(request: Request) -> Account:
@@ -47,6 +51,7 @@ def install(app: FastAPI) -> None:
             reviewer_account_uid=moderator.uid,
             decision=payload.decision,
             note=payload.note,
+            calibration_label=payload.calibration_label,
         )
         if not item:
             raise HTTPException(
