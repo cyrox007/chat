@@ -1,0 +1,12 @@
+[Unit]
+Description=Schedule PubChat Trust & Safety private media retention worker
+
+[Timer]
+OnBootSec=30min
+OnUnitActiveSec=24h
+RandomizedDelaySec=2h
+Persistent=true
+Unit=pubchat-moderation-media-retention.service
+
+[Install]
+WantedBy=timers.target

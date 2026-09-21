@@ -2,6 +2,25 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.17-alpha.1] — 2026-09-21
+
+Stage 6.8 checkpoint 8 — bounded private moderation evidence retention and application-level secure expiry.
+
+- `moderation_media_records` получил durable `retention_due_at` / `purged_at` lifecycle и nullable file-locating metadata после expiry;
+- removed evidence получает configurable retention baseline: 90 дней по умолчанию, жёстко ограниченный 7–365 днями;
+- фактический expiry гарантирует полный retention window после самой поздней точки `removed_at`, final report resolution или завершения связанной restriction appeal;
+- active Trust & Safety report и pending appeal блокируют deletion; deferred records фильтруются до bounded batch selection, чтобы они не starvation-или eligible evidence;
+- private storage обязан быть disjoint от публичного `/uploads`; quarantine directory/file hardening использует 0700/0600, worker — `UMask=0077`;
+- retention deletion confined к каталогу конкретного `record.uid`, включая запрет sibling-record traversal;
+- expiry удаляет private bytes, scrub-ит private/original path, URL, filename и MIME metadata, но сохраняет moderation decision/reason/audit linkage;
+- missing file на retry является idempotent recoverable state; worker завершает metadata scrub и audit outcome `already_missing`;
+- отдельный systemd oneshot/timer запускает bounded `FOR UPDATE SKIP LOCKED` cleanup вне Uvicorn lifecycle;
+- moderator operations metrics показывают только aggregate due/purged counts и configured retention days;
+- документация явно отделяет application-level expiry от forensic secure wipe на SSD/COW/snapshots/backups;
+- functional exact-head CI #595 green: frontend/backend contracts, PostgreSQL retention lifecycle, Redis/Sentinel, multi-process WebSocket, rolling reload, legacy migration и backup/restore.
+
+Protective holds остаются выключенными по умолчанию. Следующий Trust & Safety шаг — production calibration на human-reviewed signals и согласование backup/snapshot lifecycle с утверждённой evidence retention policy.
+
 ## [0.6.16-alpha.1] — 2026-09-20
 
 Stage 6.8 checkpoint 7 — Trust & Safety operations metrics, incident rehearsal and calibrated protective-hold baseline.

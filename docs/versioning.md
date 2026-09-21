@@ -2,7 +2,7 @@
 
 ## Current release
 
-`0.6.16-alpha.1`
+`0.6.17-alpha.1`
 
 Current development milestone remains `0.6.x-alpha` — Pre-beta hardening.
 
@@ -43,7 +43,8 @@ Checkpoint progression:
 - `0.6.2-alpha.1` — Redis 7.2 distributed realtime production-semantics baseline;
 - `0.6.3-alpha.1` — real Redis restart/outage recovery without Python process restart, including pub/sub resubscription;
 - `0.6.15-alpha.1` — reversible human-only reported-media moderation with private evidence storage;
-- `0.6.16-alpha.1` — Trust & Safety operations metrics, incident rehearsal and disabled-by-default bounded protective holds.
+- `0.6.16-alpha.1` — Trust & Safety operations metrics, incident rehearsal and disabled-by-default bounded protective holds;
+- `0.6.17-alpha.1` — bounded private moderation evidence retention and application-level secure expiry.
 
 These checkpoints do not declare Stage 6 complete.
 

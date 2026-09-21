@@ -1,0 +1,14 @@
+[Unit]
+Description=PubChat Trust & Safety private media retention worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/projects/pubchat/backend
+ExecStart=/home/projects/pubchat/backend/venv/bin/python3 -m workers.moderation_media_retention
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=10min

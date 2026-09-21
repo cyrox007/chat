@@ -207,3 +207,23 @@ Web Push работает через service worker как отдельный ex
 - formal Web Push Safari/iOS device-matrix results;
 - формальная PostgreSQL/Redis compatibility matrix;
 - fully automated rollback.
+
+
+## Trust & Safety private media retention worker
+
+Removed reported-media evidence is expired by a standalone scheduled worker, never by the web-process lifecycle.
+
+Install/validate the tracked units:
+
+```bash
+sudo bash ops/install-moderation-media-retention-worker.sh
+```
+
+Runtime units:
+
+- `pubchat-moderation-media-retention.service` — bounded oneshot cleanup;
+- `pubchat-moderation-media-retention.timer` — daily schedule with randomized delay.
+
+Before enabling it, configure `MODERATION_MEDIA_ROOT`, `MODERATION_MEDIA_REMOVED_RETENTION_DAYS` and `MODERATION_MEDIA_RETENTION_BATCH_SIZE`. The installer rejects a private root that overlaps public `uploads`.
+
+See `docs/moderation-media-retention-v1.md` for case-finality, appeal deferral, crash recovery and storage-layer wipe limitations.
