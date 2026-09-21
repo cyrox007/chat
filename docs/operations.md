@@ -182,7 +182,7 @@ Web Push работает через service worker как отдельный ex
 
 ## Backup
 
-Минимальная стратегия перед production launch должна включать регулярный PostgreSQL backup, проверенный restore, storage backup policy и хранение secrets отдельно от repository backup.
+Минимальная стратегия перед production launch должна включать регулярный PostgreSQL backup, проверенный restore, storage backup policy и хранение secrets отдельно от repository backup. Для private moderation evidence отдельно объявляются backup/snapshot max-age и проходят `ops/check-moderation-storage-lifecycle.sh`; этот preflight проверяет конфигурационный contract, но не настраивает lifecycle у storage provider.
 
 ## Release deployment checklist
 
@@ -196,6 +196,8 @@ Web Push работает через service worker как отдельный ex
 8. Login/refresh, Space realtime, DM и notification smoke tests пройдены.
 9. Если email nudge включается — SMTP preflight + `ops/install-message-email-worker.sh` + timer status проверены отдельно.
 10. Если Web Push включается — VAPID preflight + `ops/install-web-push-worker.sh` + timer status и browser permission/subscription smoke проверены отдельно.
+11. Для private moderation evidence заданы реальные `MODERATION_MEDIA_BACKUP_RETENTION_DAYS` и `MODERATION_MEDIA_SNAPSHOT_RETENTION_DAYS`, выполнен `bash ops/check-moderation-storage-lifecycle.sh`, а значения сверены с provider policy.
+12. Protective holds остаются `off`/`shadow`, пока calibration CLI не проходит `--require-ready`; `enforce` требует отдельного human approval.
 
 ## Пока не заявлено как готовое
 
@@ -224,6 +226,31 @@ Runtime units:
 - `pubchat-moderation-media-retention.service` — bounded oneshot cleanup;
 - `pubchat-moderation-media-retention.timer` — daily schedule with randomized delay.
 
-Before enabling it, configure `MODERATION_MEDIA_ROOT`, `MODERATION_MEDIA_REMOVED_RETENTION_DAYS` and `MODERATION_MEDIA_RETENTION_BATCH_SIZE`. The installer rejects a private root that overlaps public `uploads`.
+Before enabling it, configure `MODERATION_MEDIA_ROOT`, `MODERATION_MEDIA_REMOVED_RETENTION_DAYS`, `MODERATION_MEDIA_RETENTION_BATCH_SIZE`, `MODERATION_MEDIA_BACKUP_RETENTION_DAYS` and `MODERATION_MEDIA_SNAPSHOT_RETENTION_DAYS`. The installer rejects a private root that overlaps public `uploads`, missing secondary-copy declarations, or declared backup/snapshot max-age above application retention.
 
 See `docs/moderation-media-retention-v1.md` for case-finality, appeal deferral, crash recovery and storage-layer wipe limitations.
+
+
+## Protective hold shadow calibration
+
+Production calibration не должна начинаться с punitive mode.
+
+1. Выставить `MODERATION_PROTECTIVE_HOLDS_MODE=shadow`.
+2. Оставить `MODERATION_PROTECTIVE_HOLD_ENFORCEMENT_APPROVED=false`.
+3. Модераторы размечают eligible abuse signals как true positive / false positive / unclear.
+4. Проверять агрегаты в Trust & Safety dashboard или CLI:
+
+```bash
+cd /home/projects/pubchat/backend
+venv/bin/python3 -m workers.protective_hold_calibration --window-days 30
+```
+
+Machine gate:
+
+```bash
+venv/bin/python3 -m workers.protective_hold_calibration --window-days 30 --require-ready
+```
+
+Только после data-ready результата MODE может быть переключён в `enforce`, при этом approval всё ещё должен оставаться false до отдельного решения ответственного Trust & Safety owner. Реальное включение требует одновременно `enforce` + approval=true; один config flag больше не является достаточным.
+
+См. `docs/protective-hold-calibration-v1.md`.
