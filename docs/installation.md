@@ -134,13 +134,15 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Пример `frontend/.env.local`:
+По умолчанию менять `frontend/.env.local` не требуется. Browser contract использует same-origin `/api`, а Vite сам проксирует его в backend `http://127.0.0.1:9000`.
 
-```dotenv
-VITE_API_BASE_URL=http://localhost:9000
-# Обычно можно не задавать: значение будет получено заменой http -> ws.
-VITE_API_WS_SERVER_URL=ws://localhost:9000
+При нестандартном backend development address задайте только target proxy перед запуском Vite:
+
+```bash
+PUBCHAT_DEV_BACKEND=http://127.0.0.1:9000 npm run dev
 ```
+
+`VITE_API_BASE_URL=/api` и пустой `VITE_API_WS_SERVER_URL` уже находятся в `.env.example`. Не возвращайте `http://localhost:9000` как browser fallback: это снова сделает cookie/session flow cross-origin.
 
 Откройте URL, который напечатает Vite; стандартно это `http://localhost:5173`.
 
@@ -202,6 +204,17 @@ Frontend:
 cd frontend
 npm ci
 npm run build
+npm audit --omit=dev --audit-level=high
 ```
+
+Для локального повторения browser launch gate дополнительно установите pinned Playwright без изменения lockfile и browser engines:
+
+```bash
+npm install --no-save --package-lock=false @playwright/test@1.55.0
+npx playwright install chromium firefox webkit
+npx playwright test --config=playwright.config.mjs
+```
+
+Browser test ожидает доступные PostgreSQL/Redis/backend и production-like frontend stack; CI поднимает этот контур автоматически. Backend production dependencies отдельно проверяются `pip-audit`.
 
 Те же основные проверки выполняет GitHub Actions.
