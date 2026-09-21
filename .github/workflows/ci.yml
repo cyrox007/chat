@@ -87,6 +87,11 @@ jobs:
         run: alembic check
       - name: Run backend contract tests
         run: python -m unittest discover -s tests -p 'test_*.py'
+      - name: Check moderation storage retention preflight
+        env:
+          MODERATION_MEDIA_BACKUP_RETENTION_DAYS: "90"
+          MODERATION_MEDIA_SNAPSHOT_RETENTION_DAYS: "30"
+        run: bash ../ops/check-moderation-storage-lifecycle.sh
       - name: Run PostgreSQL integration smoke
         env:
           PUBCHAT_POSTGRES_INTEGRATION: "1"
