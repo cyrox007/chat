@@ -47,7 +47,7 @@
 
 - [`identity-v2.md`](identity-v2.md) — Account/Persona/Credential/Session/Privacy.
 - [`realtime-v2.md`](realtime-v2.md) — tickets, Redis pub/sub, presence, reconnect.
-- [`trust-safety-v1.md`](trust-safety-v1.md) — platform report intake, иерархия ролей, capability restrictions, runtime enforcement, audit/appeals и AI-copilot boundaries (`0.6.10-alpha.1` foundation; `0.6.11-alpha.1` full `account.access`; `0.6.12-alpha.1` permission/hierarchy hardening; `0.6.13-alpha.1` provider-neutral AI copilot; `0.6.14-alpha.1` behavioral anti-spam/raid signals; `0.6.15-alpha.1` reversible reported-media moderation; `0.6.16-alpha.1` operations/protective-hold baseline; `0.6.17-alpha.1` private media retention/expiry).
+- [`trust-safety-v1.md`](trust-safety-v1.md) — platform report intake, иерархия ролей, capability restrictions, runtime enforcement, audit/appeals и AI-copilot boundaries (`0.6.10-alpha.1` foundation; `0.6.11-alpha.1` full `account.access`; `0.6.12-alpha.1` permission/hierarchy hardening; `0.6.13-alpha.1` provider-neutral AI copilot; `0.6.14-alpha.1` behavioral anti-spam/raid signals; `0.6.15-alpha.1` reversible reported-media moderation; `0.6.16-alpha.1` operations/protective-hold baseline; `0.6.17-alpha.1` private media retention/expiry; `0.6.18-alpha.1` protective-hold shadow calibration/storage lifecycle gate).
 - [`product-identity-v1.md`](product-identity-v1.md) — Persona/Space appearance и recurring Activities.
 - [`social-engagement-v2.md`](social-engagement-v2.md) — earned achievements и Conversation Rounds.
 - [`activity-occurrences-v1.md`](activity-occurrences-v1.md) — occurrences/reminders/inbox.
@@ -59,10 +59,12 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Release candidate текущей ветки: `0.6.17-alpha.1`; последний выпущенный `main` checkpoint — `0.6.16-alpha.1` до финального exact-head CI и merge PR #37.
+Release candidate текущей ветки: `0.6.18-alpha.1`; последний выпущенный `main` checkpoint — `0.6.17-alpha.1` до финального exact-head CI и merge PR #39.
 
-Текущая development-линия: `0.6.x-alpha`. Private moderation evidence retention/expiry закрыт в `0.6.17-alpha.1`; следующий Trust & Safety блок — production calibration protective holds и alignment backup/snapshot lifecycle. Параллельно продолжаются browser/security/observability и unit-economics/monetization planning.
+Текущая development-линия: `0.6.x-alpha`. `0.6.18-alpha.1` добавляет безопасный shadow-calibration контур и storage-lifecycle preflight; production enforce остаётся закрыт до накопления реальной human-reviewed выборки. Параллельно продолжаются browser/security/observability и unit-economics/monetization planning.
 
 - `trust-safety-incident-rehearsal-v1.md` — moderation incident matrix, protective-hold safeguards и beta enablement gate.
 
 - [`moderation-media-retention-v1.md`](moderation-media-retention-v1.md) — bounded private moderation evidence retention, expiry worker, path/storage boundaries and backup caveats.
+
+- [`protective-hold-calibration-v1.md`](protective-hold-calibration-v1.md) — off/shadow/enforce, human labels, per-signal-family FP gate и controlled rollout.
