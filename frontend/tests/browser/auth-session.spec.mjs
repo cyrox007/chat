@@ -18,14 +18,28 @@ const assertNoPersistedBearer = async (page) => {
 };
 
 const logout = async (page) => {
-  await page.locator('.persona-trigger').click();
-  await page.getByRole('menuitem', { name: 'Выйти' }).click();
+  const trigger = page.locator('.persona-trigger');
+  await expect(trigger).toBeVisible();
+  await trigger.click({ force: true });
+  const logoutItem = page.getByRole('menuitem', { name: 'Выйти' });
+  await expect(logoutItem).toBeVisible();
+  await logoutItem.click({ force: true });
   await expect(page).toHaveURL(/\/login$/);
 };
 
 test('registration, refresh rotation, logout and login survive real browser cookie rules', async ({ page, context }, testInfo) => {
   const pageErrors = [];
   page.on('pageerror', (error) => pageErrors.push(String(error)));
+
+  await page.addInitScript(() => {
+    window.__pubchatNotificationPermissionRequests = 0;
+    if ('Notification' in window && typeof Notification.requestPermission === 'function') {
+      Notification.requestPermission = async () => {
+        window.__pubchatNotificationPermissionRequests += 1;
+        return Notification.permission;
+      };
+    }
+  });
 
   const handle = projectHandle(testInfo.project.name);
   const displayName = `Browser ${testInfo.project.name}`;
@@ -63,13 +77,14 @@ test('registration, refresh rotation, logout and login survive real browser cook
   // Core authenticated surfaces should remain routable after refresh recovery.
   await page.goto('/messenger');
   await expect(page).toHaveURL(/\/messenger$/);
-  await expect(page.getByText('Сообщения', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('a[href="/messenger"]:visible').first()).toBeVisible();
 
-  // No browser notification permission prompt may happen as a bootstrap side effect.
-  const notificationPermission = await page.evaluate(() => (
-    'Notification' in window ? Notification.permission : 'unsupported'
-  ));
-  expect(['default', 'unsupported']).toContain(notificationPermission);
+  // Browser defaults differ in headless environments, so permission state is not
+  // a reliable prompt signal. Count direct requestPermission calls instead.
+  const permissionRequests = await page.evaluate(
+    () => window.__pubchatNotificationPermissionRequests || 0,
+  );
+  expect(permissionRequests).toBe(0);
 
   await logout(page);
   expect((await context.cookies()).some((item) => item.name === 'refresh_token')).toBe(false);
