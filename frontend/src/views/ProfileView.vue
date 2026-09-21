@@ -165,7 +165,7 @@ const privacyForm = reactive({ dm_policy: 'shared_spaces', show_location: false 
 const currentUser = computed(() => store.getters.getUser || {});
 const identity = computed(() => store.getters.getIdentity || {});
 const isAdmin = computed(() => ['admin', 'superadmin'].includes(currentUser.value.global_role));
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000';
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
 const avatarUrl = computed(() => {
 	if (!profile.value?.avatar) return '';
