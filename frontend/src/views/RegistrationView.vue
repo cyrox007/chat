@@ -24,7 +24,8 @@
 				{{ errorMessage }}
 			</div>
 
-			<form v-if="step === 1" class="auth-form" @submit.prevent="goToSecurity">
+			<Transition name="registration-step" mode="out-in">
+			<form v-if="step === 1" key="persona" class="auth-form" @submit.prevent="goToSecurity">
 				<label class="field">
 					<span class="field__label">Как вас называть?</span>
 					<input
@@ -79,7 +80,7 @@
 				<button class="ui-button ui-button--primary ui-button--block" type="submit">Продолжить</button>
 			</form>
 
-			<form v-else class="auth-form" @submit.prevent="register">
+			<form v-else key="security" class="auth-form" @submit.prevent="register">
 				<label class="field">
 					<span class="field__label">Пароль</span>
 					<input
@@ -131,11 +132,13 @@
 
 				<div class="auth-actions">
 					<button class="ui-button ui-button--secondary" type="button" :disabled="isSubmitting" @click="step = 1">Назад</button>
-					<button class="ui-button ui-button--primary" type="submit" :disabled="isSubmitting">
-						{{ isSubmitting ? 'Создаём…' : 'Войти в PubChat' }}
+					<button class="ui-button ui-button--primary" type="submit" :disabled="isSubmitting" :aria-busy="isSubmitting ? 'true' : 'false'">
+						<span v-if="isSubmitting" class="button-pending"><span class="ui-spinner" aria-hidden="true"></span>Создаём…</span>
+						<span v-else>Войти в PubChat</span>
 					</button>
 				</div>
 			</form>
+			</Transition>
 
 			<p class="auth-footer">
 				Уже есть аккаунт?
@@ -274,6 +277,12 @@ h1 { margin: 0; font-size: clamp(1.5rem, 5vw, 2rem); line-height: var(--ui-leadi
 .step-dot--active { border-color: var(--ui-primary); background: var(--ui-primary); color: white; }
 .step-line { width: 2rem; height: 1px; background: var(--ui-border); }
 .step-label { margin-left: var(--ui-space-1); font-weight: 600; }
+.step-dot, .step-line, .step-label { transition: background var(--ui-motion-normal) var(--ui-ease), border-color var(--ui-motion-normal) var(--ui-ease), color var(--ui-motion-normal) var(--ui-ease), transform var(--ui-motion-normal) var(--ui-ease); }
+.step-dot--active { transform: scale(1.04); }
+.registration-step-enter-active, .registration-step-leave-active { transition: opacity var(--ui-motion-medium) var(--ui-ease-out), transform var(--ui-motion-medium) var(--ui-ease-out); }
+.registration-step-enter-from { opacity: 0; transform: translateX(10px); }
+.registration-step-leave-to { opacity: 0; transform: translateX(-8px); }
+.button-pending { display: inline-flex; align-items: center; gap: var(--ui-space-2); }
 .auth-form { display: grid; gap: var(--ui-space-5); }
 .field { display: grid; gap: var(--ui-space-2); margin: 0; border: 0; padding: 0; }
 .field__label { font-size: var(--ui-text-sm); font-weight: 700; }
