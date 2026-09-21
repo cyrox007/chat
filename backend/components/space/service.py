@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.identity.model import Account, Persona
 from components.room.model import Room, RoomBan, RoomMember
+from components.space.capacity import assert_space_capacity_available
 from components.space.model import SpaceMembership, SpaceSettings, SpaceTag
 from components.space.schemas import SpaceCreateRequest, SpaceUpdateRequest
 
@@ -497,7 +498,6 @@ async def join_space(
 
     settings = await db.get(SpaceSettings, room.uid)
     join_policy = settings.join_policy if settings else DEFAULT_JOIN_POLICY
-    member_limit = settings.member_limit if settings else DEFAULT_MEMBER_LIMIT
 
     result = await db.execute(
         select(SpaceMembership)
@@ -531,17 +531,11 @@ async def join_space(
     )
 
     if target_status == "active":
-        count_result = await db.execute(
-            select(func.count(SpaceMembership.uid)).where(
-                SpaceMembership.room_uid == room.uid,
-                SpaceMembership.status == "active",
-            )
+        await assert_space_capacity_available(
+            db,
+            room.uid,
+            default_member_limit=DEFAULT_MEMBER_LIMIT,
         )
-        if int(count_result.scalar_one() or 0) >= member_limit:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={"error_type": "space_full"},
-            )
 
     if membership:
         if membership.role == "owner":
