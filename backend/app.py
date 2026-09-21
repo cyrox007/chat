@@ -21,6 +21,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    from views.admin import operations_routers as admin_operations_routes
     from views.admin import routers as admin_routers
     from views.achievements import routers as achievement_routes
     from views.csrf import routers as csrf_routes
@@ -88,6 +89,7 @@ def create_app() -> FastAPI:
     http_routers_messenger.install(app)
     ws_routers_messenger.install(app)
     admin_routers.install(app)
+    admin_operations_routes.install(app)
 
     return app
 
