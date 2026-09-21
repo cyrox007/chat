@@ -2,13 +2,13 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.16-alpha.1`**; last merged `main` checkpoint: **`0.6.15-alpha.1`**.
+Release candidate: **`0.6.17-alpha.1`**; last merged `main` checkpoint: **`0.6.16-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
 Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression, durable unread-Messenger email delivery, Web Push/PWA Messenger delivery, full `account.access` enforcement и fine-grained platform moderation permission boundaries.
 
-Provider-neutral AI assessment / copilot, anti-spam/raid behavioral signals, reported-media moderation, operations metrics, incident rehearsal и default-off low-risk protective-hold baseline уже закрыты отдельными checkpoints. Следующий Trust & Safety task — **formal privacy-retention/secure-expiry + production calibration**; protective holds остаются выключенными до human-reviewed calibration. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
+Provider-neutral AI assessment / copilot, anti-spam/raid behavioral signals, reported-media moderation, operations metrics, incident rehearsal, default-off protective-hold baseline и private-evidence retention/expiry уже закрыты отдельными checkpoints. Следующий Trust & Safety task — **production calibration + storage backup/snapshot retention alignment**; protective holds остаются выключенными до human-reviewed calibration. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
 
 Отдельно зафиксированы два обязательных launch workstream, которые раньше были недооценены: **production-grade moderation / Trust & Safety** и **устойчивая монетизация / unit economics**. PubChat не может считать наличие таблиц moderation готовой системой и не может рассчитывать, что инфраструктура, поддержка и Trust & Safety будут бесконечно финансироваться только энтузиазмом команды.
 
@@ -317,4 +317,19 @@ Beta назначается только когда launch-critical journeys р�
 - per-Account serialization исключает duplicate auto-holds при concurrent detectors;
 - functional exact-head CI #579 green до release sync.
 - осталось отдельно: private moderation evidence retention/secure expiry и production calibration до enablement automation.
+
+
+
+### Stage 6.8 checkpoint 8 — Private moderation evidence retention ✅ `0.6.17-alpha.1`
+- durable `retention_due_at` / `purged_at` lifecycle для removed reported-media evidence;
+- configurable 90-day baseline (bounded 7–365 days) и полный window после latest removal/report/appeal finality;
+- active report и pending linked appeal блокируют expiry;
+- eligible rows выбираются bounded batch через `FOR UPDATE SKIP LOCKED` без starvation deferred cases;
+- private storage disjoint from `/uploads`, 0700/0600 + systemd `UMask=0077`;
+- record-directory confinement запрещает cross-record/path traversal deletion;
+- expiry удаляет private bytes и file-locating metadata, сохраняя decision/audit linkage;
+- отдельный daily systemd worker + aggregate due/purged metrics;
+- application-level expiry не заявляется как forensic wipe для snapshots/backups;
+- functional exact-head CI #595 green до release sync.
+- осталось отдельно: production calibration protective holds и backup/snapshot lifecycle alignment.
 
