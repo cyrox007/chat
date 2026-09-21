@@ -29,7 +29,8 @@ const logout = async (page) => {
 
   const logoutItem = page.getByRole('menuitem', { name: 'Выйти' });
   await expect(logoutItem).toBeVisible();
-  await logoutItem.click();
+  await logoutItem.focus();
+  await logoutItem.press('Enter');
   await expect(page).toHaveURL(/\/login$/);
 };
 
