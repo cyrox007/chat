@@ -38,12 +38,13 @@ async def run(batch_size: int) -> int:
         logger.info(
             "Moderation media retention complete: candidates=%s purged=%s "
             "already_missing=%s deferred_active_report=%s "
-            "deferred_pending_appeal=%s failed=%s",
+            "deferred_pending_appeal=%s extended_after_finality=%s failed=%s",
             stats.candidates,
             stats.purged,
             stats.already_missing,
             stats.deferred_active_report,
             stats.deferred_pending_appeal,
+            stats.extended_after_finality,
             stats.failed,
         )
         return 1 if stats.failed else 0
