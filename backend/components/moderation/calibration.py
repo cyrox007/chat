@@ -97,7 +97,7 @@ async def protective_hold_calibration_summary(
                 TrustSafetyAbuseSignal.uid == ProtectiveHoldEvaluation.signal_uid,
             )
             .where(
-                ProtectiveHoldEvaluation.created_at >= cutoff,
+                ProtectiveHoldEvaluation.updated_at >= cutoff,
                 TrustSafetyAbuseSignal.calibration_label.in_(
                     ["true_positive", "false_positive", "unclear"]
                 ),
