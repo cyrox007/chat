@@ -36,9 +36,9 @@ class ModerationMediaRecord(Database.Base):
         ForeignKey("accounts.uid", ondelete="SET NULL"),
         nullable=True,
     )
-    original_url = Column(String(512), nullable=False)
-    original_relative_path = Column(String(512), nullable=False)
-    private_relative_path = Column(String(512), nullable=False)
+    original_url = Column(String(512), nullable=True)
+    original_relative_path = Column(String(512), nullable=True)
+    private_relative_path = Column(String(512), nullable=True)
     mime_type = Column(String(128), nullable=True)
     original_name = Column(String(255), nullable=True)
     status = Column(String(24), nullable=False, default="quarantined")
@@ -47,6 +47,8 @@ class ModerationMediaRecord(Database.Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     restored_at = Column(DateTime, nullable=True)
     removed_at = Column(DateTime, nullable=True)
+    retention_due_at = Column(DateTime, nullable=True)
+    purged_at = Column(DateTime, nullable=True)
 
     __table_args__ = (
         UniqueConstraint(
@@ -58,4 +60,10 @@ class ModerationMediaRecord(Database.Base):
         Index("ix_moderation_media_report_status", "report_uid", "status", "created_at"),
         Index("ix_moderation_media_target_created", "target_account_uid", "created_at"),
         Index("ix_moderation_media_actor_created", "actor_account_uid", "created_at"),
+        Index(
+            "ix_moderation_media_retention_due",
+            "status",
+            "purged_at",
+            "retention_due_at",
+        ),
     )
