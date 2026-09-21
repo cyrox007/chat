@@ -151,29 +151,92 @@ async def expire_due_media_evidence(
     )
     stats = MediaRetentionStats()
 
+    due_filters = (
+        ModerationMediaRecord.status == "removed",
+        ModerationMediaRecord.purged_at.is_(None),
+        ModerationMediaRecord.retention_due_at.is_not(None),
+        ModerationMediaRecord.retention_due_at <= now,
+    )
+    pending_appeal_exists = (
+        select(PlatformRestrictionAppeal.uid)
+        .join(
+            PlatformRestriction,
+            PlatformRestriction.uid == PlatformRestrictionAppeal.restriction_uid,
+        )
+        .where(
+            PlatformRestriction.report_uid == ModerationMediaRecord.report_uid,
+            PlatformRestrictionAppeal.status == "pending",
+        )
+        .exists()
+    )
+
+    stats.candidates = int(
+        (
+            await db.execute(
+                select(func.count(ModerationMediaRecord.uid)).where(*due_filters)
+            )
+        ).scalar_one()
+        or 0
+    )
+    stats.deferred_active_report = int(
+        (
+            await db.execute(
+                select(func.count(ModerationMediaRecord.uid))
+                .join(
+                    TrustSafetyReport,
+                    TrustSafetyReport.uid == ModerationMediaRecord.report_uid,
+                )
+                .where(
+                    *due_filters,
+                    ~TrustSafetyReport.status.in_(tuple(FINAL_REPORT_STATUSES)),
+                )
+            )
+        ).scalar_one()
+        or 0
+    )
+    stats.deferred_pending_appeal = int(
+        (
+            await db.execute(
+                select(func.count(ModerationMediaRecord.uid))
+                .join(
+                    TrustSafetyReport,
+                    TrustSafetyReport.uid == ModerationMediaRecord.report_uid,
+                )
+                .where(
+                    *due_filters,
+                    TrustSafetyReport.status.in_(tuple(FINAL_REPORT_STATUSES)),
+                    pending_appeal_exists,
+                )
+            )
+        ).scalar_one()
+        or 0
+    )
+
     result = await db.execute(
         select(ModerationMediaRecord)
+        .join(
+            TrustSafetyReport,
+            TrustSafetyReport.uid == ModerationMediaRecord.report_uid,
+        )
         .where(
-            ModerationMediaRecord.status == "removed",
-            ModerationMediaRecord.purged_at.is_(None),
-            ModerationMediaRecord.retention_due_at.is_not(None),
-            ModerationMediaRecord.retention_due_at <= now,
+            *due_filters,
+            TrustSafetyReport.status.in_(tuple(FINAL_REPORT_STATUSES)),
+            ~pending_appeal_exists,
         )
         .order_by(ModerationMediaRecord.retention_due_at.asc())
-        .with_for_update(skip_locked=True)
+        .with_for_update(of=ModerationMediaRecord, skip_locked=True)
         .limit(batch_size)
     )
     records = list(result.scalars().all())
-    stats.candidates = len(records)
 
     for record in records:
+        # Re-check after the row lock in case appeal state changed between the
+        # aggregate/candidate queries.
         report = await db.get(TrustSafetyReport, record.report_uid)
         if report is None or report.status not in FINAL_REPORT_STATUSES:
-            stats.deferred_active_report += 1
             continue
 
         if await _has_pending_linked_appeal(db, record.report_uid):
-            stats.deferred_pending_appeal += 1
             continue
 
         latest_appeal_at = await _latest_resolved_linked_appeal_at(
