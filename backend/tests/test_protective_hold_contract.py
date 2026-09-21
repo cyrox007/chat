@@ -51,6 +51,23 @@ class ProtectiveHoldContractTests(unittest.TestCase):
             50.0,
         )
 
+    def test_legacy_enabled_alias_cannot_bypass_calibration_gate(self):
+        with patch.dict(
+            os.environ,
+            {
+                "MODERATION_PROTECTIVE_HOLDS_ENABLED": "true",
+            },
+            clear=False,
+        ):
+            os.environ.pop("MODERATION_PROTECTIVE_HOLDS_MODE", None)
+            os.environ.pop(
+                "MODERATION_PROTECTIVE_HOLD_ENFORCEMENT_APPROVED", None
+            )
+            config = load_moderation_automation_config()
+        self.assertEqual(automation_mode(config), "enforce")
+        self.assertTrue(config.calibration_gate_required)
+        self.assertFalse(config.enforcement_approved)
+
     def test_only_low_risk_capabilities_are_automatable(self):
         self.assertEqual(
             _ALLOWED_CAPABILITIES,
