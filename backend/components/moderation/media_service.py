@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -15,11 +15,12 @@ from components.message.model import Message, PrivateMessage
 from components.moderation.media_model import ModerationMediaRecord
 from components.moderation.policy import assert_higher_authority
 from components.moderation.trust_safety import _audit, _require_claim_owner
+from settings import config
 
 
 MEDIA_MANAGE_PERMISSION = "moderation.platform.media.manage"
 PUBLIC_UPLOAD_ROOT = Path("uploads")
-PRIVATE_MEDIA_ROOT = Path("moderation_media")
+PRIVATE_MEDIA_ROOT = Path(config.MODERATION_MEDIA_ROOT)
 
 
 def _move_file(source: Path, destination: Path) -> None:
@@ -42,6 +43,23 @@ def _move_file(source: Path, destination: Path) -> None:
             except OSError:
                 pass
         raise
+
+
+def _validate_storage_roots(upload_root: Path, private_root: Path) -> None:
+    """Fail closed if private evidence could overlap the public uploads tree."""
+    public = upload_root.resolve()
+    private = private_root.resolve()
+    if private == public or private in public.parents or public in private.parents:
+        raise RuntimeError(
+            "moderation private media root must be disjoint from public uploads"
+        )
+
+
+def _harden_private_evidence_file(path: Path) -> None:
+    """Apply least-privilege POSIX-style permissions to one evidence copy."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(path.parent, 0o700)
+    os.chmod(path, 0o600)
 
 
 def _safe_public_path(url: str, *, upload_root: Path = PUBLIC_UPLOAD_ROOT) -> tuple[Path, str]:
@@ -134,6 +152,9 @@ def _set_attachment_status(message, attachment_index: int, value: str | None) ->
 
 
 def media_record_projection(item: ModerationMediaRecord) -> dict:
+    evidence_state = "expired" if item.purged_at else (
+        "retained" if item.status in {"quarantined", "removed"} else "public"
+    )
     return {
         "uid": str(item.uid),
         "report_uid": str(item.report_uid),
@@ -145,11 +166,16 @@ def media_record_projection(item: ModerationMediaRecord) -> dict:
         "mime_type": item.mime_type,
         "original_name": item.original_name,
         "status": item.status,
+        "evidence_state": evidence_state,
         "reason": item.reason,
         "created_at": item.created_at.isoformat(),
         "updated_at": item.updated_at.isoformat(),
         "restored_at": item.restored_at.isoformat() if item.restored_at else None,
         "removed_at": item.removed_at.isoformat() if item.removed_at else None,
+        "retention_due_at": (
+            item.retention_due_at.isoformat() if item.retention_due_at else None
+        ),
+        "purged_at": item.purged_at.isoformat() if item.purged_at else None,
     }
 
 
@@ -163,6 +189,7 @@ async def quarantine_report_attachment(
     upload_root: Path = PUBLIC_UPLOAD_ROOT,
     private_root: Path = PRIVATE_MEDIA_ROOT,
 ) -> dict:
+    _validate_storage_roots(upload_root, private_root)
     report = await _require_claim_owner(db, report_uid, moderator_account_uid)
     if report.source_type not in {"messenger_message", "space_message"}:
         raise HTTPException(
@@ -211,7 +238,15 @@ async def quarantine_report_attachment(
 
     try:
         _move_file(source_path, private_path)
+        _harden_private_evidence_file(private_path)
     except OSError as exc:
+        # If permission hardening fails after the move, restore public delivery
+        # rather than leaving an evidence copy in an unexpectedly broad mode.
+        if private_path.exists() and not source_path.exists():
+            try:
+                _move_file(private_path, source_path)
+            except OSError:
+                pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error_type": "moderation_media_quarantine_failed"},
@@ -241,6 +276,8 @@ async def quarantine_report_attachment(
     record.updated_at = now
     record.restored_at = None
     record.removed_at = None
+    record.retention_due_at = None
+    record.purged_at = None
     if not existing:
         db.add(record)
 
@@ -293,6 +330,7 @@ async def restore_report_attachment(
     upload_root: Path = PUBLIC_UPLOAD_ROOT,
     private_root: Path = PRIVATE_MEDIA_ROOT,
 ) -> dict:
+    _validate_storage_roots(upload_root, private_root)
     report = await _require_claim_owner(db, report_uid, moderator_account_uid)
     if report.target_account_uid:
         await assert_higher_authority(db, moderator_account_uid, report.target_account_uid)
@@ -316,6 +354,11 @@ async def restore_report_attachment(
     if record.status == "restored":
         return media_record_projection(record)
 
+    if not record.private_relative_path or not record.original_relative_path:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error_type": "moderation_media_evidence_expired"},
+        )
     public_root = upload_root.resolve()
     source_path = (private_root.resolve() / record.private_relative_path).resolve()
     destination = (public_root / record.original_relative_path).resolve()
@@ -342,6 +385,7 @@ async def restore_report_attachment(
         _set_attachment_status(message, record.attachment_index, None)
     record.status = "restored"
     record.restored_at = datetime.utcnow()
+    record.retention_due_at = None
     record.updated_at = datetime.utcnow()
     await _audit(
         db,
@@ -393,12 +437,18 @@ async def remove_report_attachment(
             detail={"error_type": "moderation_media_must_be_quarantined_first"},
         )
 
-    # "removed" means removed from public delivery. The private evidence copy is
-    # retained until the future retention policy decides when secure deletion is due.
+    # "removed" means removed from public delivery. Private bytes remain only
+    # for the bounded evidence-retention window and are later expired by the
+    # standalone retention worker after report/appeal safety checks.
+    now = datetime.utcnow()
     record.status = "removed"
     record.reason = reason.strip()[:1000]
-    record.removed_at = datetime.utcnow()
-    record.updated_at = datetime.utcnow()
+    record.removed_at = now
+    record.retention_due_at = now + timedelta(
+        days=config.MODERATION_MEDIA_REMOVED_RETENTION_DAYS
+    )
+    record.purged_at = None
+    record.updated_at = now
     message = await _reported_message(db, record.source_type, record.source_uid)
     if message:
         _set_attachment_status(message, record.attachment_index, "removed")
