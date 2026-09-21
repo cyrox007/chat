@@ -426,16 +426,15 @@ textarea.ui-input {
 
 .ui-popover-enter-active,
 .ui-popover-leave-active {
-    transform-origin: top right;
     transition:
         opacity var(--ui-motion-normal) var(--ui-ease-out),
-        transform var(--ui-motion-normal) var(--ui-ease-out);
+        filter var(--ui-motion-normal) var(--ui-ease-out);
 }
 
 .ui-popover-enter-from,
 .ui-popover-leave-to {
     opacity: 0;
-    transform: translateY(-6px) scale(0.98);
+    filter: brightness(0.98);
 }
 
 .ui-skeleton {
