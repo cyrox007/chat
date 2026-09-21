@@ -182,6 +182,33 @@ class ProtectiveHoldCalibrationPostgresIntegrationTests(unittest.TestCase):
                         calibration_label="false_positive",
                     )
 
+                # A later detector pass in the same reviewed bucket must
+                # not rewrite the human-labeled shadow snapshot.
+                async with Database.sessionmaker()() as db:
+                    before_reviewed = (
+                        await db.execute(
+                            select(ProtectiveHoldEvaluation).where(
+                                ProtectiveHoldEvaluation.signal_uid == dm_shadow_uid
+                            )
+                        )
+                    ).scalar_one()
+                    before_decision = before_reviewed.decision
+                    before_would_hold = before_reviewed.would_hold
+                    self.assertIsNone(
+                        await maybe_apply_protective_hold(
+                            db, signal_uid=dm_shadow_uid, config=shadow
+                        )
+                    )
+                    after_reviewed = (
+                        await db.execute(
+                            select(ProtectiveHoldEvaluation).where(
+                                ProtectiveHoldEvaluation.signal_uid == dm_shadow_uid
+                            )
+                        )
+                    ).scalar_one()
+                    self.assertEqual(after_reviewed.decision, before_decision)
+                    self.assertEqual(after_reviewed.would_hold, before_would_hold)
+
                 gate_config = ModerationAutomationConfig(
                     enabled=True,
                     mode="enforce",
