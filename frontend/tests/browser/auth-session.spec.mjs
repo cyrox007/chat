@@ -102,8 +102,9 @@ test('registration, refresh rotation, logout and login survive real browser cook
   // Login itself is another unsafe request and must work without relying on a
   // mount-time race for CSRF bootstrap.
   await page.getByLabel('Логин или email').fill(handle);
-  await page.getByLabel('Пароль').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Войти' }).click();
+  const loginPassword = page.getByLabel('Пароль');
+  await loginPassword.fill(PASSWORD);
+  await loginPassword.press('Enter');
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator('.persona-trigger')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Найдите место, куда хочется вернуться' })).toBeVisible();
