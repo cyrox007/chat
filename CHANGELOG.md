@@ -2,6 +2,17 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.21-alpha.2] — 2026-09-21
+
+Hotfix — mobile routed-content visibility + unique session JWTs.
+
+- исправлен mobile regression из `0.6.21-alpha.1`: RouterView transition теперь анимирует стабильную DOM-обёртку, а не произвольный component root/fragment, поэтому shell больше не может остаться без routed content;
+- browser-smoke теперь явно проверяет видимость главного заголовка Space Discovery после registration, full reload/refresh recovery и повторного login;
+- access/refresh JWT получают уникальный `jti` и `iat`, поэтому несколько token issuance для одного Account в одну секунду больше не создают одинаковые refresh tokens и не конфликтуют с `user_devices.token`;
+- добавлены contract tests на uniqueness back-to-back access/refresh tokens;
+- Firefox logout path в browser-smoke использует keyboard activation после accessibility assertions, исключая старый pointer timing flake;
+- functional exact-head CI #662 полностью зелёный: backend, frontend, dependency-security и Chromium/Firefox/WebKit/mobile browser-smoke.
+
 ## [0.6.21-alpha.1] — 2026-09-21
 
 Stage 6 checkpoint 13 — UI motion/loading polish.
