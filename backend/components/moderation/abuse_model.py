@@ -94,7 +94,7 @@ class ProtectiveHoldEvaluation(Database.Base):
             "ix_protective_hold_evaluation_calibration",
             "signal_type",
             "would_hold",
-            "created_at",
+            "updated_at",
         ),
         Index(
             "ix_protective_hold_evaluation_account",
