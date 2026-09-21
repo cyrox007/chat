@@ -154,16 +154,32 @@ class ModerationMediaRetentionPostgresIntegrationTests(unittest.TestCase):
                         self.assertEqual(stats.deferred_pending_appeal, 1)
                         self.assertTrue(evidence_path.exists())
 
-                    # Once the pending appeal is final, due evidence may expire.
+                    # Once the appeal is final, the policy grants a fresh full
+                    # retention window from the latest case-finality event.
+                    appeal_resolved_at = now + timedelta(minutes=2)
                     async with Database.sessionmaker()() as db:
                         appeal = await db.get(PlatformRestrictionAppeal, appeal_uid)
                         appeal.status = "upheld"
                         appeal.resolution = "Restriction upheld."
-                        appeal.resolved_at = now + timedelta(minutes=2)
-                        appeal.updated_at = now + timedelta(minutes=2)
+                        appeal.resolved_at = appeal_resolved_at
+                        appeal.updated_at = appeal_resolved_at
                         await db.commit()
 
-                    purge_time = now + timedelta(minutes=3)
+                    async with Database.sessionmaker()() as db:
+                        stats = await expire_due_media_evidence(
+                            db,
+                            now=now + timedelta(minutes=3),
+                            private_root=private_root,
+                            upload_root=upload_root,
+                        )
+                        self.assertEqual(stats.purged, 0)
+                        self.assertEqual(stats.extended_after_finality, 1)
+                        self.assertTrue(evidence_path.exists())
+                        record = await db.get(ModerationMediaRecord, record_uid)
+                        extended_due_at = record.retention_due_at
+                        self.assertGreater(extended_due_at, appeal_resolved_at)
+
+                    purge_time = extended_due_at + timedelta(seconds=1)
                     async with Database.sessionmaker()() as db:
                         stats = await expire_due_media_evidence(
                             db,
