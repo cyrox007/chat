@@ -16,6 +16,13 @@ const bootstrapError = ref(false);
 let authenticatedBootstrap = null;
 let bootstrapRetryTimer = null;
 let bootstrapRetryAttempt = 0;
+const routePending = ref(false);
+let routeStartTimer = null;
+let routeFinishTimer = null;
+let routeVisibleAt = 0;
+
+const ROUTE_PROGRESS_DELAY = 90;
+const ROUTE_PROGRESS_MIN_VISIBLE = 180;
 
 const BOOTSTRAP_RETRY_DELAYS = [1000, 2000, 5000, 10000, 30000];
 const TRANSIENT_BOOTSTRAP_STATUSES = new Set([502, 503, 504]);
@@ -26,6 +33,57 @@ const clearBootstrapRetry = () => {
 		bootstrapRetryTimer = null;
 	}
 };
+
+const clearRouteTimers = () => {
+	if (routeStartTimer) {
+		window.clearTimeout(routeStartTimer);
+		routeStartTimer = null;
+	}
+	if (routeFinishTimer) {
+		window.clearTimeout(routeFinishTimer);
+		routeFinishTimer = null;
+	}
+};
+
+const startRouteProgress = () => {
+	if (routeFinishTimer) {
+		window.clearTimeout(routeFinishTimer);
+		routeFinishTimer = null;
+	}
+	if (routePending.value || routeStartTimer) return;
+	routeStartTimer = window.setTimeout(() => {
+		routeStartTimer = null;
+		routeVisibleAt = performance.now();
+		routePending.value = true;
+	}, ROUTE_PROGRESS_DELAY);
+};
+
+const finishRouteProgress = () => {
+	if (routeStartTimer) {
+		window.clearTimeout(routeStartTimer);
+		routeStartTimer = null;
+	}
+	if (!routePending.value) return;
+	const elapsed = performance.now() - routeVisibleAt;
+	const remaining = Math.max(0, ROUTE_PROGRESS_MIN_VISIBLE - elapsed);
+	if (routeFinishTimer) window.clearTimeout(routeFinishTimer);
+	routeFinishTimer = window.setTimeout(() => {
+		routeFinishTimer = null;
+		routePending.value = false;
+	}, remaining);
+};
+
+const removeRouteBeforeHook = router.beforeEach((to, from) => {
+	if (to.fullPath !== from.fullPath) startRouteProgress();
+});
+
+const removeRouteAfterHook = router.afterEach(() => {
+	finishRouteProgress();
+});
+
+const removeRouteErrorHook = router.onError(() => {
+	finishRouteProgress();
+});
 
 const connectionNotice = computed(() => {
 	if (!store.getters.isAuth) return null;
@@ -145,6 +203,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
 	clearBootstrapRetry();
+	clearRouteTimers();
+	removeRouteBeforeHook?.();
+	removeRouteAfterHook?.();
+	removeRouteErrorHook?.();
 	store.dispatch('notifications/stopPolling');
 	window.removeEventListener('pubchat:session-expired', handleSessionExpired);
 	window.removeEventListener('offline', handleOffline);
@@ -170,6 +232,12 @@ watch(() => store.getters.isAuth, (isAuthenticated, wasAuthenticated) => {
 		<PwaInstallPrompt />
 		<PwaUpdateNotice />
 
+		<Transition name="route-progress">
+			<div v-if="routePending" class="route-progress" role="status" aria-live="polite" aria-label="Открываем раздел">
+				<span class="route-progress__bar" aria-hidden="true"></span>
+			</div>
+		</Transition>
+
 		<transition name="fade">
 			<div
 				v-if="connectionNotice"
@@ -186,8 +254,12 @@ watch(() => store.getters.isAuth, (isAuthenticated, wasAuthenticated) => {
 			</div>
 		</transition>
 
-		<main class="container app-content">
-			<RouterView />
+		<main class="container app-content" :aria-busy="routePending ? 'true' : 'false'">
+			<RouterView v-slot="{ Component, route }">
+				<Transition name="ui-route" mode="out-in">
+					<component :is="Component" :key="route.path" />
+				</Transition>
+			</RouterView>
 		</main>
 	</div>
 </template>
@@ -195,6 +267,10 @@ watch(() => store.getters.isAuth, (isAuthenticated, wasAuthenticated) => {
 <style scoped>
 .app-shell { min-height: 100dvh; }
 .app-content { margin-top: var(--ui-space-2); }
+.route-progress { position: fixed; inset: 0 0 auto; z-index: 1800; height: 3px; overflow: hidden; pointer-events: none; background: color-mix(in srgb, var(--ui-primary) 10%, transparent); }
+.route-progress__bar { position: absolute; inset: 0 auto 0 0; width: 38%; border-radius: var(--ui-radius-pill); background: var(--ui-primary); box-shadow: 0 0 12px color-mix(in srgb, var(--ui-primary) 36%, transparent); animation: route-progress 1s var(--ui-ease-out) infinite; }
+.route-progress-enter-active, .route-progress-leave-active { transition: opacity var(--ui-motion-fast) var(--ui-ease); }
+.route-progress-enter-from, .route-progress-leave-to { opacity: 0; }
 .connection-notice { position: fixed; top: var(--ui-space-3); left: 50%; z-index: 1000; width: min(calc(100% - 24px), 640px); display: flex; align-items: center; gap: var(--ui-space-3); padding: var(--ui-space-3) var(--ui-space-4); transform: translateX(-50%); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-raised); box-shadow: var(--ui-shadow-lg); color: var(--ui-text); }
 .connection-notice--warning { border-color: color-mix(in srgb, var(--ui-warning) 32%, var(--ui-border)); }
 .connection-notice--danger { border-color: color-mix(in srgb, var(--ui-danger) 32%, var(--ui-border)); }
@@ -208,7 +284,8 @@ watch(() => store.getters.isAuth, (isAuthenticated, wasAuthenticated) => {
 .fade-enter-active, .fade-leave-active { transition: opacity var(--ui-motion-normal) var(--ui-ease), transform var(--ui-motion-normal) var(--ui-ease); }
 .fade-enter-from, .fade-leave-to { opacity: 0; transform: translate(-50%, -10px); }
 @keyframes connection-pulse { 0%, 100% { opacity: 0.45; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.15); } }
-@media (prefers-reduced-motion: reduce) { .connection-notice__pulse { animation: none; } }
+@keyframes route-progress { 0% { transform: translateX(-115%); } 55% { transform: translateX(145%); } 100% { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .connection-notice__pulse, .route-progress__bar { animation: none; } .route-progress__bar { width: 100%; opacity: .72; } }
 @media (max-width: 720px) {
 	.app-shell { padding-bottom: 4.75rem; }
 	.app-content { margin-top: 0; }
