@@ -311,22 +311,6 @@ jobs:
 
 
 
-  lock-refresh-probe:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Generate production lock refresh candidate
-        run: |
-          cd frontend
-          npm audit fix --package-lock-only --omit=dev || true
-          echo "PUBCHAT_LOCK_B64_BEGIN"
-          base64 -w0 package-lock.json
-          echo
-          echo "PUBCHAT_LOCK_B64_END"
-
   dependency-security:
     runs-on: ubuntu-latest
     steps:
