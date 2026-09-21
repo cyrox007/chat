@@ -21,13 +21,16 @@ from pathlib import Path
 
 from settings import config
 
-config.ensure_moderation_media_retention_settings()
+config.ensure_moderation_media_retention_settings(require_storage_lifecycle=True)
 root = Path(config.MODERATION_MEDIA_ROOT)
 root.mkdir(parents=True, exist_ok=True, mode=0o700)
 root.chmod(0o700)
+lifecycle = config.moderation_media_storage_lifecycle_status()
 print(
     "Moderation media retention settings: OK "
-    f"(root={root}, retention_days={config.MODERATION_MEDIA_REMOVED_RETENTION_DAYS})"
+    f"(root={root}, retention_days={config.MODERATION_MEDIA_REMOVED_RETENTION_DAYS}, "
+    f"backup_days={lifecycle['backup_retention_days']}, "
+    f"snapshot_days={lifecycle['snapshot_retention_days']})"
 )
 PY
 
