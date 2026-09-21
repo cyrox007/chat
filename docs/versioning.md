@@ -2,7 +2,7 @@
 
 ## Current release
 
-`0.6.18-alpha.1`
+`0.6.19-alpha.1`
 
 Current development milestone remains `0.6.x-alpha` — Pre-beta hardening.
 
@@ -46,6 +46,7 @@ Checkpoint progression:
 - `0.6.16-alpha.1` — Trust & Safety operations metrics, incident rehearsal and disabled-by-default bounded protective holds;
 - `0.6.17-alpha.1` — bounded private moderation evidence retention and application-level secure expiry;
 - `0.6.18-alpha.1` — protective-hold shadow calibration, human-reviewed enablement gate and moderation storage-lifecycle preflight.
+- `0.6.19-alpha.1` — privacy-safe external delivery observability: backlog/claim/retry/failure aggregates, admin metrics, health CLI and structured email/Web Push worker completion logs.
 
 These checkpoints do not declare Stage 6 complete.
 
