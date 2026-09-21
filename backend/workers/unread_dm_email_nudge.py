@@ -1,4 +1,5 @@
 import argparse
+import logging
 import asyncio
 
 from components.model_registry import ensure_models_registered
@@ -14,6 +15,7 @@ from components.realtime import realtime_service
 from database import Database
 from settings import config
 from utils.logger import setup_logger
+from utils.observability import log_structured
 
 
 logger = setup_logger(__name__)
@@ -60,15 +62,17 @@ async def run(stage: str, batch_size: int, max_batches: int, delivery_batch_size
                 batch_size=batch_size,
                 max_batches=max_batches,
             )
-            logger.info(
-                "Unread-DM email queue complete: ready=%s acquired=%s batches=%s seen=%s queued=%s skipped=%s failed=%s",
-                queue_stats.infrastructure_ready,
-                queue_stats.acquired,
-                queue_stats.batches,
-                queue_stats.accounts_seen,
-                queue_stats.queued,
-                queue_stats.skipped,
-                queue_stats.failed,
+            log_structured(
+                logger,
+                logging.INFO,
+                "external_delivery.email.queue_complete",
+                infrastructure_ready=queue_stats.infrastructure_ready,
+                acquired=queue_stats.acquired,
+                batches=queue_stats.batches,
+                accounts_seen=queue_stats.accounts_seen,
+                queued=queue_stats.queued,
+                skipped=queue_stats.skipped,
+                failed=queue_stats.failed,
             )
             if not queue_stats.infrastructure_ready:
                 exit_code = max(exit_code, 2)
@@ -80,15 +84,17 @@ async def run(stage: str, batch_size: int, max_batches: int, delivery_batch_size
                 Database.sessionmaker(),
                 batch_size=delivery_batch_size,
             )
-            logger.info(
-                "Unread-DM email delivery complete: ready=%s claimed=%s delivered=%s retried=%s failed=%s suppressed=%s deferred_online=%s",
-                delivery_stats.infrastructure_ready,
-                delivery_stats.claimed,
-                delivery_stats.delivered,
-                delivery_stats.retried,
-                delivery_stats.failed,
-                delivery_stats.suppressed,
-                delivery_stats.deferred_online,
+            log_structured(
+                logger,
+                logging.INFO,
+                "external_delivery.email.delivery_complete",
+                infrastructure_ready=delivery_stats.infrastructure_ready,
+                claimed=delivery_stats.claimed,
+                delivered=delivery_stats.delivered,
+                retried=delivery_stats.retried,
+                failed=delivery_stats.failed,
+                suppressed=delivery_stats.suppressed,
+                deferred_online=delivery_stats.deferred_online,
             )
             if not delivery_stats.infrastructure_ready:
                 exit_code = max(exit_code, 2)
