@@ -79,12 +79,13 @@ async def maybe_apply_protective_hold(
     if signal is None:
         return None
 
+    # Human review closes the calibration sample. A later event in the same
+    # dedupe bucket must not rewrite the policy snapshot that the human labeled.
+    if signal.status != "open":
+        return None
+
     capability = _SIGNAL_CAPABILITY.get(signal.signal_type)
-    if (
-        signal.status != "open"
-        or signal.severity not in {"high", "critical"}
-        or capability is None
-    ):
+    if signal.severity not in {"high", "critical"} or capability is None:
         await _record_and_commit_evaluation(
             db,
             signal=signal,
