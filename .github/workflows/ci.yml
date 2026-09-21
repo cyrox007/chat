@@ -87,6 +87,8 @@ jobs:
         run: alembic check
       - name: Run backend contract tests
         run: python -m unittest discover -s tests -p 'test_*.py'
+      - name: Check external delivery observability CLI
+        run: python -m workers.external_delivery_observability --window-hours 24 --require-healthy
       - name: Check moderation storage retention preflight
         env:
           MODERATION_MEDIA_BACKUP_RETENTION_DAYS: "90"

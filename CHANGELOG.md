@@ -2,6 +2,22 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.19-alpha.1] — 2026-09-21
+
+Stage 6 checkpoint 11 — privacy-safe external delivery observability baseline.
+
+- email/Web Push получили агрегированные operational metrics по durable `external_delivery_ledger`: pending/due backlog, processing, expired claims, retry pressure, delivered/failed и failure classes;
+- stale due backlog определяется отдельными alert thresholds для email и Web Push, не меняющими delivery behavior;
+- admin-only endpoint `GET /admin/operations/external-delivery` отдаёт только агрегаты;
+- standalone CLI `python -m workers.external_delivery_observability` печатает machine-readable report и поддерживает `--require-healthy` для внешнего monitoring;
+- email queue/delivery и Web Push delivery workers получили structured JSON completion events;
+- structured logger fail-closed отклоняет sensitive field names для tokens/secrets/passwords/destination email/push endpoints/key material/message body/content;
+- PostgreSQL integration проверяет stale backlog + expired claim detection и отсутствие Account ID, aggregate/dedupe keys, claim token и provider id в metrics output;
+- CI теперь отдельно запускает observability CLI machine gate;
+- функциональный exact-head CI #608 прошёл frontend/backend, migrations/schema drift, PostgreSQL observability rehearsal, Redis/Sentinel, multi-process WebSocket, rolling reload, legacy migration и backup/restore.
+
+Этот checkpoint закрывает ledger-side external-delivery visibility, но не объявляет готовым полный observability stack: provider-side SLA telemetry, общий HTTP/realtime/Redis/PostgreSQL metrics backend, error tracking и pager/on-call остаются отдельной pre-beta работой.
+
 ## [0.6.18-alpha.1] — 2026-09-21
 
 Stage 6.8 checkpoint 9 — protective-hold shadow calibration and moderation storage lifecycle gate.

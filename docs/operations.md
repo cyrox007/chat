@@ -176,9 +176,34 @@ Web Push работает через service worker как отдельный ex
 
 ## Observability
 
-Полный observability stack пока не завершён. До beta необходимы structured logs, HTTP/realtime/Redis/PostgreSQL metrics, email/Web Push worker/provider metrics, error tracking, dashboards/alerting и incident/status procedures.
+Checkpoint `0.6.19-alpha.1` добавляет первый operational observability baseline для внешней Messenger delivery.
 
-Нельзя логировать access/refresh tokens, WebSocket tickets, SMTP credentials, VAPID private key, push endpoint/key material, destination email из delivery attempts или private message body.
+Admin-only aggregate endpoint:
+
+```
+GET /admin/operations/external-delivery?window_hours=24
+```
+
+CLI:
+
+```bash
+cd /home/projects/pubchat/backend
+venv/bin/python3 -m workers.external_delivery_observability --window-hours 24
+```
+
+Machine health gate:
+
+```bash
+venv/bin/python3 -m workers.external_delivery_observability --window-hours 24 --require-healthy
+```
+
+Health становится unhealthy при stale due backlog или expired processing claims. Alert ages настраиваются через `EXTERNAL_DELIVERY_EMAIL_BACKLOG_ALERT_SECONDS` и `EXTERNAL_DELIVERY_WEB_PUSH_BACKLOG_ALERT_SECONDS`; они не меняют delivery/retry policy.
+
+Email/Web Push worker completion logs теперь machine-readable JSON events с aggregate counters. Нельзя помещать в metrics/log fields access/refresh tokens, WebSocket tickets, SMTP credentials, destination email, VAPID private key, push endpoint/key material, claim/dedupe identifiers или private message body.
+
+Полный observability stack всё ещё не завершён. До beta дополнительно нужны broader HTTP/realtime/Redis/PostgreSQL telemetry, provider-side SMTP/Web Push metrics, error tracking, dashboard/alerting backend и incident/status procedures.
+
+Подробности: [`external-delivery-observability-v1.md`](external-delivery-observability-v1.md).
 
 ## Backup
 

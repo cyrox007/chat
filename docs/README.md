@@ -33,6 +33,7 @@
 - [`message-notification-delivery-v1.md`](message-notification-delivery-v1.md) — message preferences, online/offline routing, active-context suppression и external channel policy.
 - [`message-email-delivery-v1.md`](message-email-delivery-v1.md) — durable unread-Messenger email ledger/provider/retry/systemd contract (`0.6.8-alpha.1`).
 - [`web-push-delivery-v1.md`](web-push-delivery-v1.md) — per-device Web Push/VAPID/service-worker/provider/privacy contract (`0.6.9-alpha.1`).
+- [`external-delivery-observability-v1.md`](external-delivery-observability-v1.md) — privacy-safe email/Web Push backlog/failure metrics, health CLI и structured-log boundary (`0.6.19-alpha.1`).
 - [`browser-compatibility-v1.md`](browser-compatibility-v1.md) — browser launch matrix и аудит исторического Safari registration defect.
 - [`prebeta-hardening-v1.md`](prebeta-hardening-v1.md) — PostgreSQL/migration baseline (`0.6.0-alpha.1`).
 - [`database-recovery-v1.md`](database-recovery-v1.md) — PostgreSQL backup/restore (`0.6.1-alpha.1`).
@@ -59,9 +60,9 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Release candidate текущей ветки: `0.6.18-alpha.1`; последний выпущенный `main` checkpoint — `0.6.17-alpha.1` до финального exact-head CI и merge.
+Release candidate текущей ветки: `0.6.19-alpha.1`; последний выпущенный `main` checkpoint — `0.6.18-alpha.1` до финального exact-head CI и merge.
 
-Текущая development-линия: `0.6.x-alpha`. `0.6.18-alpha.1` добавляет безопасный shadow-calibration контур и storage-lifecycle preflight; production enforce остаётся закрыт до накопления реальной human-reviewed выборки. Параллельно продолжаются browser/security/observability и unit-economics/monetization planning.
+Текущая development-линия: `0.6.x-alpha`. `0.6.19-alpha.1` добавляет privacy-safe external-delivery observability baseline поверх durable email/Web Push ledger; broader provider/HTTP/realtime/Redis/PostgreSQL observability, browser/security gates и unit-economics/monetization planning остаются следующей работой.
 
 - `trust-safety-incident-rehearsal-v1.md` — moderation incident matrix, protective-hold safeguards и beta enablement gate.
 

@@ -1,4 +1,5 @@
 import argparse
+import logging
 import asyncio
 
 from components.model_registry import ensure_models_registered
@@ -7,6 +8,7 @@ from components.realtime import realtime_service
 from database import Database
 from settings import config
 from utils.logger import setup_logger
+from utils.observability import log_structured
 
 
 logger = setup_logger(__name__)
@@ -33,15 +35,17 @@ async def run(max_deliveries: int) -> int:
             Database.sessionmaker(),
             max_deliveries=max_deliveries,
         )
-        logger.info(
-            "Web Push worker complete: ready=%s claimed=%s delivered=%s retried=%s failed=%s suppressed=%s terminal_removed=%s",
-            stats.infrastructure_ready,
-            stats.claimed,
-            stats.delivered,
-            stats.retried,
-            stats.failed,
-            stats.suppressed,
-            stats.terminal_subscriptions_removed,
+        log_structured(
+            logger,
+            logging.INFO,
+            "external_delivery.web_push.delivery_complete",
+            infrastructure_ready=stats.infrastructure_ready,
+            claimed=stats.claimed,
+            delivered=stats.delivered,
+            retried=stats.retried,
+            failed=stats.failed,
+            suppressed=stats.suppressed,
+            terminal_removed=stats.terminal_subscriptions_removed,
         )
         if not stats.infrastructure_ready:
             return 2
