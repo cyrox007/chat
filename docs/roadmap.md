@@ -2,13 +2,13 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.17-alpha.1`**; last merged `main` checkpoint: **`0.6.16-alpha.1`**.
+Release candidate: **`0.6.18-alpha.1`**; last merged `main` checkpoint: **`0.6.17-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
 Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression, durable unread-Messenger email delivery, Web Push/PWA Messenger delivery, full `account.access` enforcement и fine-grained platform moderation permission boundaries.
 
-Provider-neutral AI assessment / copilot, anti-spam/raid behavioral signals, reported-media moderation, operations metrics, incident rehearsal, default-off protective-hold baseline и private-evidence retention/expiry уже закрыты отдельными checkpoints. Следующий Trust & Safety task — **production calibration + storage backup/snapshot retention alignment**; protective holds остаются выключенными до human-reviewed calibration. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
+Provider-neutral AI assessment / copilot, anti-spam/raid behavioral signals, reported-media moderation, operations metrics, incident rehearsal, private-evidence retention/expiry и shadow-calibration/storage-lifecycle gate уже закрыты отдельными checkpoints. Protective holds остаются default-off; следующий Trust & Safety operational task — **накопить human-reviewed shadow data и подтвердить фактический provider backup/snapshot lifecycle перед enforce**. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
 
 Отдельно зафиксированы два обязательных launch workstream, которые раньше были недооценены: **production-grade moderation / Trust & Safety** и **устойчивая монетизация / unit economics**. PubChat не может считать наличие таблиц moderation готовой системой и не может рассчитывать, что инфраструктура, поддержка и Trust & Safety будут бесконечно финансироваться только энтузиазмом команды.
 
@@ -332,4 +332,21 @@ Beta назначается только когда launch-critical journeys р�
 - application-level expiry не заявляется как forensic wipe для snapshots/backups;
 - functional exact-head CI #595 green до release sync.
 - осталось отдельно: production calibration protective holds и backup/snapshot lifecycle alignment.
+
+
+
+### Stage 6.8 checkpoint 9 — Protective-hold calibration / storage lifecycle ✅ `0.6.18-alpha.1`
+- canonical `off | shadow | enforce` modes;
+- shadow пишет would-hold evaluations, но не создаёт restrictions;
+- explicit human labels `true_positive / false_positive / unclear`;
+- per-signal-family false-positive gate и conservative candidate-capture proxy;
+- enforce требует одновременно data-ready calibration и explicit operational approval;
+- legacy ENABLED flag не обходит новый gate;
+- calibration CLI и moderator dashboard;
+- declared backup/snapshot retention preflight для private moderation evidence;
+- retention-worker installer fail-closed без storage lifecycle declarations;
+- CI rehearsal проверяет shadow/no-sanction, bad-FP blocking, no-approval blocking и allow-listed enforce path;
+- synthetic CI labels не считаются production calibration data.
+
+Открыто после checkpoint: накопление реальной human-reviewed shadow выборки, operational approval decision и проверка, что заявленные backup/snapshot сроки реально настроены у storage provider.
 
