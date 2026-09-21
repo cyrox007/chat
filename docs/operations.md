@@ -69,7 +69,7 @@ ConnectionManager хранит реальные WebSocket objects только �
 
 Проверяйте pub/sub reconnect, heartbeat/presence TTL, cross-worker delivery/restriction и reconnect клиента после rolling restart.
 
-Routine production deploy выполняется через `bash ops/deploy.sh`; legacy full-restart updater не должен использоваться после перехода на persistent socket deployment.
+Routine production deploy выполняется через `./update.sh` или напрямую `bash ops/deploy.sh`; корневой `update.sh` является совместимым wrapper и делегирует ту же rolling-deploy логику. Legacy full-restart updater не должен использоваться после перехода на persistent socket deployment.
 
 ## Activity reminder reconciliation worker
 
