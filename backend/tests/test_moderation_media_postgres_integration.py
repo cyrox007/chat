@@ -192,6 +192,9 @@ class ModerationMediaPostgresIntegrationTests(unittest.TestCase):
                             reason="Removed from public delivery after review.",
                         )
                         self.assertEqual(removed["status"], "removed")
+                        self.assertEqual(removed["evidence_state"], "retained")
+                        self.assertIsNotNone(removed["retention_due_at"])
+                        self.assertIsNone(removed["purged_at"])
                         self.assertFalse(source.exists())
 
                         message = (
