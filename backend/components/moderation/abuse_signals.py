@@ -222,6 +222,7 @@ def signal_projection(item: TrustSafetyAbuseSignal) -> dict:
         "details": item.details or {},
         "status": item.status,
         "review_note": item.review_note,
+        "calibration_label": item.calibration_label,
         "reviewed_by_account_uid": str(item.reviewed_by_account_uid) if item.reviewed_by_account_uid else None,
         "reviewed_at": item.reviewed_at.isoformat() if item.reviewed_at else None,
         "first_seen_at": item.first_seen_at.isoformat(),
@@ -253,6 +254,7 @@ async def review_abuse_signal(
     reviewer_account_uid: UUID,
     decision: str,
     note: str | None = None,
+    calibration_label: str | None = None,
 ) -> dict | None:
     result = await db.execute(
         select(TrustSafetyAbuseSignal)
@@ -262,8 +264,16 @@ async def review_abuse_signal(
     item = result.scalar_one_or_none()
     if not item:
         return None
+    if calibration_label not in {None, "true_positive", "false_positive", "unclear"}:
+        raise ValueError("invalid calibration label")
+    if calibration_label == "false_positive" and decision != "dismissed":
+        raise ValueError("false_positive calibration label requires dismissed decision")
+    if calibration_label in {"true_positive", "unclear"} and decision != "reviewed":
+        raise ValueError(f"{calibration_label} calibration label requires reviewed decision")
     item.status = decision
     item.review_note = (note or "").strip()[:1000] or None
+    if calibration_label is not None:
+        item.calibration_label = calibration_label
     item.reviewed_by_account_uid = reviewer_account_uid
     item.reviewed_at = datetime.utcnow()
     item.updated_at = datetime.utcnow()

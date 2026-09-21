@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.permissions import require_platform_moderator
@@ -15,6 +15,18 @@ class AbuseSignalReviewRequest(BaseModel):
 
     decision: str = Field(pattern=r"^(reviewed|dismissed)$")
     note: str | None = Field(default=None, max_length=1000)
+    calibration_label: str | None = Field(
+        default=None,
+        pattern=r"^(true_positive|false_positive|unclear)$",
+    )
+
+    @model_validator(mode="after")
+    def validate_calibration_pair(self):
+        if self.calibration_label == "false_positive" and self.decision != "dismissed":
+            raise ValueError("false_positive requires dismissed decision")
+        if self.calibration_label in {"true_positive", "unclear"} and self.decision != "reviewed":
+            raise ValueError(f"{self.calibration_label} requires reviewed decision")
+        return self
 
 
 async def require_signal_reviewer(request: Request) -> Account:
@@ -47,6 +59,7 @@ def install(app: FastAPI) -> None:
             reviewer_account_uid=moderator.uid,
             decision=payload.decision,
             note=payload.note,
+            calibration_label=payload.calibration_label,
         )
         if not item:
             raise HTTPException(

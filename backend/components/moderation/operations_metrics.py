@@ -8,7 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.moderation.abuse_model import TrustSafetyAbuseSignal
 from components.moderation.ai_model import ModerationAIRecommendation
-from components.moderation.automation_settings import moderation_automation_config
+from components.moderation.automation_settings import (
+    automation_mode,
+    moderation_automation_config,
+)
+from components.moderation.calibration import protective_hold_calibration_summary
 from components.moderation.media_model import ModerationMediaRecord
 from settings import config
 
@@ -155,6 +159,12 @@ async def trust_safety_metrics(
         ).scalar_one()
         or 0
     )
+    calibration = await protective_hold_calibration_summary(
+        db,
+        config=moderation_automation_config,
+        window_days=max(1, round(window_hours / 24)),
+    )
+    storage_lifecycle = config.moderation_media_storage_lifecycle_status()
 
     return {
         "window_hours": window_hours,
@@ -183,14 +193,17 @@ async def trust_safety_metrics(
         },
         "automation": {
             "enabled": moderation_automation_config.enabled,
+            "mode": automation_mode(moderation_automation_config),
             "hold_minutes": moderation_automation_config.hold_minutes,
             "lookback_seconds": moderation_automation_config.corroboration_lookback_seconds,
             "min_high_signals": moderation_automation_config.min_high_signals,
             "allowed_capabilities": ["invitation.send", "messenger.send"],
+            "calibration": calibration,
         },
         "media_retention": {
             "removed_retention_days": config.MODERATION_MEDIA_REMOVED_RETENTION_DAYS,
             "due_count": due_media_evidence,
             "purged_count": purged_media_evidence,
+            "storage_lifecycle": storage_lifecycle,
         },
     }

@@ -70,8 +70,10 @@ class AbuseSignalPostgresIntegrationTests(unittest.TestCase):
                         reviewer_account_uid=reviewer_uid,
                         decision="reviewed",
                         note="Reviewed as behavioral evidence only.",
+                        calibration_label="true_positive",
                     )
                     self.assertEqual(reviewed["status"], "reviewed")
+                    self.assertEqual(reviewed["calibration_label"], "true_positive")
                     self.assertEqual(reviewed["reviewed_by_account_uid"], str(reviewer_uid))
 
                     # Reviewing a signal does not create a platform restriction.
