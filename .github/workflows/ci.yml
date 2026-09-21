@@ -308,3 +308,39 @@ jobs:
           tail -n 200 /tmp/pubchat-browser-backend.log || true
           echo "=== frontend ==="
           tail -n 200 /tmp/pubchat-browser-frontend.log || true
+
+
+  dependency-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Audit production frontend dependencies
+        id: npm_audit
+        continue-on-error: true
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+      - name: Install pinned Python audit tool
+        run: python -m pip install pip-audit==2.10.1
+      - name: Audit backend dependencies
+        id: pip_audit
+        continue-on-error: true
+        run: pip-audit -r backend/requirements.txt --progress-spinner off
+      - name: Enforce dependency security gate
+        if: always()
+        run: |
+          echo "npm audit outcome: ${{ steps.npm_audit.outcome }}"
+          echo "pip-audit outcome: ${{ steps.pip_audit.outcome }}"
+          if [[ "${{ steps.npm_audit.outcome }}" != "success" || "${{ steps.pip_audit.outcome }}" != "success" ]]; then
+            echo "Production dependency vulnerability gate failed"
+            exit 1
+          fi
