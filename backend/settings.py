@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy.engine import URL
 
@@ -237,6 +238,28 @@ class Config:
         ConfigParser resolves %% back to % when the value is read.
         """
         return self.database_url().replace("%", "%%")
+
+    # Moderation private evidence. This directory must be a dedicated sibling
+    # (or otherwise disjoint path) from the public uploads tree.
+    MODERATION_MEDIA_ROOT = os.getenv("MODERATION_MEDIA_ROOT", "moderation_media").strip() or "moderation_media"
+    MODERATION_MEDIA_REMOVED_RETENTION_DAYS = max(
+        7, min(365, int(os.getenv("MODERATION_MEDIA_REMOVED_RETENTION_DAYS", "90")))
+    )
+    MODERATION_MEDIA_RETENTION_BATCH_SIZE = max(
+        1, min(500, int(os.getenv("MODERATION_MEDIA_RETENTION_BATCH_SIZE", "100")))
+    )
+
+    def ensure_moderation_media_retention_settings(self) -> None:
+        public_root = Path("uploads").resolve()
+        private_root = Path(self.MODERATION_MEDIA_ROOT).resolve()
+        if (
+            private_root == public_root
+            or private_root in public_root.parents
+            or public_root in private_root.parents
+        ):
+            raise RuntimeError(
+                "MODERATION_MEDIA_ROOT must be a dedicated path disjoint from public uploads"
+            )
 
     # File storage
     UPLOADS_BASE_URL = f"{SERVER_HTTP_PROTOCOL}{SERVER_ADDR}/uploads/"
