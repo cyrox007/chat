@@ -6,7 +6,7 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Release candidate текущей ветки: `0.6.21-alpha.2` — mobile routed-content/session hotfix. Последний выпущенный `main` checkpoint — `0.6.21-alpha.1`.
+Release candidate текущей ветки: `0.6.22-alpha.1` — Space capacity/DST data hardening. Последний выпущенный `main` checkpoint — `0.6.21-alpha.2`.
 
 Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 
@@ -20,7 +20,7 @@ AI moderation зафиксирован как copilot: он может помо�
 
 Message delivery различает online presence и активный conversation/Space: лишний toast/sound подавляется, если пользователь уже смотрит тот же context. Offline external re-engagement разрешён только для Messenger по opt-in. Для давно отсутствующего Account email worker создаёт агрегированное privacy-safe напоминание по durable ledger/cooldown/retry contract, а Web Push может доставить privacy-minimal уведомление на явно подписанное устройство. Space chat по-прежнему не создаёт background notification pressure отсутствующему Account.
 
-До beta всё ещё нужно накопить реальную human-reviewed shadow выборку для protective holds и подтвердить фактический provider backup/snapshot lifecycle, а также завершить rehearsal на anonymized production-like snapshot, member-capacity concurrency/DST hardening, broader HTTP/realtime/Redis/PostgreSQL/provider observability, upload/privacy review, accessibility и реальный iOS/iPadOS installed-PWA/device gate. Параллельно формализуются cost model и monetization boundaries, чтобы infrastructure/moderation не зависели от бессрочного ручного финансирования.
+До beta всё ещё нужно накопить реальную human-reviewed shadow выборку для protective holds и подтвердить фактический provider backup/snapshot lifecycle, а также завершить rehearsal на anonymized production-like snapshot, broader HTTP/realtime/Redis/PostgreSQL/provider observability, upload/privacy review, accessibility и реальный iOS/iPadOS installed-PWA/device gate. Параллельно формализуются cost model и monetization boundaries, чтобы infrastructure/moderation не зависели от бессрочного ручного финансирования.
 
 Канонический номер версии находится в `VERSION`, история выпусков — в `CHANGELOG.md`.
 
