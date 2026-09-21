@@ -1,6 +1,7 @@
 import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
+from uuid import uuid4
 
 from settings import config
 from utils.logger import setup_logger
@@ -22,6 +23,8 @@ def create_access_token(payload: Dict[str, Any]) -> str:
     return jwt.encode(
         {
             "sub": user_uid,
+            "iat": datetime.now(timezone.utc),
+            "jti": str(uuid4()),
             "exp": datetime.now(timezone.utc)
             + timedelta(minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES),
             "type": "access",
@@ -41,6 +44,8 @@ def create_refresh_token(payload: Dict[str, Any]) -> str:
     return jwt.encode(
         {
             "sub": user_uid,
+            "iat": datetime.now(timezone.utc),
+            "jti": str(uuid4()),
             "exp": datetime.now(timezone.utc)
             + timedelta(days=config.REFRESH_TOKEN_EXPIRE_DAYS),
             "type": "refresh",
