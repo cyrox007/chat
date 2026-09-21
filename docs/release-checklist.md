@@ -32,6 +32,7 @@
 - собрать frontend;
 - проверить `/health` и `/service/version`;
 - выполнить smoke test login/session, Space realtime и DM.
+- если email/Web Push delivery включены — проверить `python -m workers.external_delivery_observability --window-hours 24 --require-healthy` и разобрать stale backlog/expired claims до открытия трафика;
 
 Clean-database migration CI не заменяет backup/restore drill и rehearsal на legacy data перед реальным production deployment.
 
