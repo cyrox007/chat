@@ -142,6 +142,23 @@ class Config:
         30, int(os.getenv("WEB_PUSH_CONVERSATION_COOLDOWN_SECONDS", "90"))
     )
 
+    # Privacy-safe external delivery observability. These thresholds do not
+    # change delivery behavior; they only mark operational backlog as unhealthy.
+    EXTERNAL_DELIVERY_EMAIL_BACKLOG_ALERT_SECONDS = max(
+        300,
+        min(
+            86400,
+            int(os.getenv("EXTERNAL_DELIVERY_EMAIL_BACKLOG_ALERT_SECONDS", "3600")),
+        ),
+    )
+    EXTERNAL_DELIVERY_WEB_PUSH_BACKLOG_ALERT_SECONDS = max(
+        60,
+        min(
+            3600,
+            int(os.getenv("EXTERNAL_DELIVERY_WEB_PUSH_BACKLOG_ALERT_SECONDS", "300")),
+        ),
+    )
+
     # Security. There are intentionally no production-capable default secrets.
     JWT_ACCESS_SECRET_KEY = os.getenv("JWT_ACCESS_SECRET_KEY", "")
     JWT_REFRESH_SECRET_KEY = os.getenv("JWT_REFRESH_SECRET_KEY", "")
