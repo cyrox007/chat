@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from components.moderation.abuse_signals import _dedupe_key
 from components.moderation.abuse_settings import abuse_signal_config
+from views.moderation.abuse_routers import AbuseSignalReviewRequest
 
 
 class AbuseSignalContractTests(unittest.TestCase):
@@ -39,6 +40,24 @@ class AbuseSignalContractTests(unittest.TestCase):
         self.assertEqual(first, same)
         self.assertNotEqual(first, other_scope)
         self.assertEqual(len(first), 64)
+
+    def test_calibration_labels_must_match_review_decision(self):
+        valid = AbuseSignalReviewRequest(
+            decision="reviewed",
+            calibration_label="true_positive",
+        )
+        self.assertEqual(valid.calibration_label, "true_positive")
+
+        with self.assertRaises(ValueError):
+            AbuseSignalReviewRequest(
+                decision="dismissed",
+                calibration_label="true_positive",
+            )
+        with self.assertRaises(ValueError):
+            AbuseSignalReviewRequest(
+                decision="reviewed",
+                calibration_label="false_positive",
+            )
 
     def test_thresholds_are_bounded_to_nontrivial_values(self):
         self.assertGreaterEqual(abuse_signal_config.dm_distinct_recipient_threshold, 3)
