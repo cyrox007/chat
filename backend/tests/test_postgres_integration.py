@@ -25,6 +25,9 @@ from tests.test_trust_safety_postgres_integration import TrustSafetyPostgresInte
 from tests.test_trust_safety_operations_postgres_integration import (  # noqa: F401
     TrustSafetyOperationsPostgresIntegrationTests,
 )
+from tests.test_protective_hold_calibration_postgres_integration import (  # noqa: F401
+    ProtectiveHoldCalibrationPostgresIntegrationTests,
+)
 
 
 @unittest.skipUnless(
