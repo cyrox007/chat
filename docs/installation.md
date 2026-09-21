@@ -173,6 +173,14 @@ npm run build
 
 ## 9. Обновление существующей установки
 
+Для production-oriented установки основной entrypoint из корня проекта:
+
+```bash
+./update.sh
+```
+
+Он делегирует в `ops/deploy.sh`: обновляет `main`, зависимости, Alembic migrations, staged frontend build и rolling backend reload с readiness gate. Перед значимым alpha-обновлением всё равно сделайте backup PostgreSQL/uploads.
+
 Перед обновлением:
 
 1. Сделайте backup PostgreSQL и uploads.
