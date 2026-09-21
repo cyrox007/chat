@@ -52,11 +52,12 @@ def _private_path_for_record(
         raise ValueError("invalid moderation evidence relative path")
 
     root = private_root.resolve()
+    record_root = (root / str(record.uid)).resolve()
     candidate = (root / relative).resolve()
     try:
-        candidate.relative_to(root)
+        candidate.relative_to(record_root)
     except ValueError as exc:
-        raise ValueError("moderation evidence path escapes private root") from exc
+        raise ValueError("moderation evidence path escapes record directory") from exc
     return candidate
 
 
