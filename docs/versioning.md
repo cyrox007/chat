@@ -2,7 +2,7 @@
 
 ## Current release
 
-`0.6.20-alpha.1`
+`0.6.21-alpha.1`
 
 Current development milestone remains `0.6.x-alpha` — Pre-beta hardening.
 
@@ -48,6 +48,7 @@ Checkpoint progression:
 - `0.6.18-alpha.1` — protective-hold shadow calibration, human-reviewed enablement gate and moderation storage-lifecycle preflight;
 - `0.6.19-alpha.1` — privacy-safe external delivery observability: backlog/claim/retry/failure aggregates, admin metrics, health CLI and structured email/Web Push worker completion logs.
 - `0.6.20-alpha.1` — same-origin browser contract, explicit CSRF proof, cross-browser auth/session Playwright gate and production dependency audit.
+- `0.6.21-alpha.1` — UI motion/loading baseline with route/modal/popover transitions, navigation progress, skeleton/retry states and reduced-motion support.
 
 These checkpoints do not declare Stage 6 complete.
 
