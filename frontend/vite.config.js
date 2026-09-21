@@ -8,6 +8,16 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 const versionFile = fileURLToPath(new URL('../VERSION', import.meta.url))
 const projectVersion = process.env.PUBCHAT_VERSION
   || (existsSync(versionFile) ? readFileSync(versionFile, 'utf8').trim() : '0.0.0-alpha.0+unknown')
+const backendTarget = process.env.PUBCHAT_DEV_BACKEND || 'http://127.0.0.1:9000'
+
+const apiProxy = {
+  '/api': {
+    target: backendTarget,
+    changeOrigin: false,
+    ws: true,
+    rewrite: (path) => path.replace(/^\/api/, ''),
+  },
+}
 
 export default defineConfig({
   define: {
@@ -21,5 +31,11 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
+  },
+  server: {
+    proxy: apiProxy,
+  },
+  preview: {
+    proxy: apiProxy,
   },
 })
