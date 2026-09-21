@@ -57,7 +57,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_protective_hold_evaluation_calibration",
         "protective_hold_evaluations",
-        ["signal_type", "would_hold", "created_at"],
+        ["signal_type", "would_hold", "updated_at"],
         unique=False,
     )
     op.create_index(
