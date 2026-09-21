@@ -2,16 +2,48 @@ import axios from "axios";
 import store from "@/stores";
 import { clearAccessToken, getAccessToken, setAccessToken } from "@/API/session";
 
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+const CSRF_HEADER_NAME = 'X-CSRF-Token';
+const UNSAFE_METHODS = new Set(['post', 'put', 'patch', 'delete']);
+
 const $api = axios.create({
     withCredentials: true,
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000',
+    baseURL: API_BASE_URL,
 });
 
+let csrfToken = null;
+let csrfPromise = null;
 let isRefreshing = false;
 let failedQueue = [];
 
+export const clearCsrfToken = () => {
+    csrfToken = null;
+};
+
+export const ensureCsrfToken = async (force = false) => {
+    if (!force && csrfToken) return csrfToken;
+    if (!force && csrfPromise) return csrfPromise;
+
+    csrfPromise = axios.get(`${API_BASE_URL}/csrf/get`, {
+        withCredentials: true,
+        headers: { 'Cache-Control': 'no-cache' },
+    }).then((response) => {
+        const token = response.data?.csrf_token;
+        if (!token || typeof token !== 'string') {
+            throw new Error('CSRF bootstrap response did not include a token');
+        }
+        csrfToken = token;
+        return token;
+    }).finally(() => {
+        csrfPromise = null;
+    });
+
+    return csrfPromise;
+};
+
 const clearSessionStorage = () => {
     clearAccessToken();
+    clearCsrfToken();
     localStorage.removeItem('auth');
     localStorage.removeItem('user');
     localStorage.removeItem('identity');
@@ -23,10 +55,6 @@ const expireSession = () => {
     clearSessionStorage();
     store.dispatch('clearUser');
     window.dispatchEvent(new CustomEvent('pubchat:session-expired'));
-};
-
-const ensureCsrfCookie = async () => {
-    await axios.get(`${$api.defaults.baseURL}/csrf/get`, { withCredentials: true });
 };
 
 const processQueue = (error = null, accessToken = null) => {
@@ -41,9 +69,19 @@ const processQueue = (error = null, accessToken = null) => {
     failedQueue = [];
 };
 
-$api.interceptors.request.use((config) => {
+$api.interceptors.request.use(async (requestConfig) => {
+    const config = requestConfig;
+    const method = String(config.method || 'get').toLowerCase();
+
+    if (UNSAFE_METHODS.has(method)) {
+        const token = await ensureCsrfToken();
+        config.headers = config.headers || {};
+        config.headers[CSRF_HEADER_NAME] = token;
+    }
+
     const accessToken = getAccessToken();
     if (accessToken) {
+        config.headers = config.headers || {};
         config.headers.Authorization = `Bearer ${accessToken}`;
     }
     return config;
@@ -73,7 +111,9 @@ $api.interceptors.response.use(
         if (isCsrfFailure && !originalRequest?._csrfRetry) {
             originalRequest._csrfRetry = true;
             try {
-                await ensureCsrfCookie();
+                const token = await ensureCsrfToken(true);
+                originalRequest.headers = originalRequest.headers || {};
+                originalRequest.headers[CSRF_HEADER_NAME] = token;
                 return $api(originalRequest);
             } catch (csrfError) {
                 return Promise.reject(csrfError);
@@ -91,11 +131,14 @@ $api.interceptors.response.use(
             originalRequest._isRetry = true;
 
             try {
-                await ensureCsrfCookie();
+                const csrf = await ensureCsrfToken(true);
                 const refreshResponse = await axios.post(
-                    `${$api.defaults.baseURL}/identity/v2/refresh`,
+                    `${API_BASE_URL}/identity/v2/refresh`,
                     {},
-                    { withCredentials: true }
+                    {
+                        withCredentials: true,
+                        headers: { [CSRF_HEADER_NAME]: csrf },
+                    }
                 );
                 const accessToken = refreshResponse.data.access_token;
                 setAccessToken(accessToken);
@@ -103,6 +146,7 @@ $api.interceptors.response.use(
                     store.commit('setAccessRestriction', refreshResponse.data.access_restriction);
                     window.dispatchEvent(new CustomEvent('pubchat:account-access-restricted'));
                 }
+                originalRequest.headers = originalRequest.headers || {};
                 originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                 processQueue(null, accessToken);
                 return $api(originalRequest);
