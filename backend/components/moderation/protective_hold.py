@@ -10,7 +10,12 @@ from components.identity.model import Account
 from components.moderation.abuse_model import TrustSafetyAbuseSignal
 from components.moderation.automation_settings import (
     ModerationAutomationConfig,
+    automation_mode,
     moderation_automation_config,
+)
+from components.moderation.calibration import (
+    protective_hold_calibration_summary,
+    record_protective_hold_evaluation,
 )
 from components.moderation.model import PlatformRestriction, PlatformRestrictionAuditEvent
 from components.moderation.policy import effective_authority_level, restriction_projection
@@ -25,28 +30,75 @@ _SIGNAL_CAPABILITY: dict[str, str] = {
 _ALLOWED_CAPABILITIES = frozenset(_SIGNAL_CAPABILITY.values())
 
 
+async def _record_and_commit_evaluation(
+    db: AsyncSession,
+    *,
+    signal: TrustSafetyAbuseSignal,
+    mode: str,
+    capability: str | None,
+    decision: str,
+    would_hold: bool,
+    corroboration_count: int,
+    config: ModerationAutomationConfig,
+) -> None:
+    await record_protective_hold_evaluation(
+        db,
+        signal=signal,
+        mode=mode,
+        capability=capability,
+        decision=decision,
+        would_hold=would_hold,
+        corroboration_count=corroboration_count,
+        config=config,
+    )
+    await db.commit()
+
+
 async def maybe_apply_protective_hold(
     db: AsyncSession,
     *,
     signal_uid: UUID,
     config: ModerationAutomationConfig | None = None,
 ) -> dict | None:
-    """Apply a short reversible hold only after corroborated high-risk signals."""
+    """Evaluate a short protective hold and enforce only after calibration.
+
+    off:
+        no calibration row and no restriction.
+    shadow:
+        persist the privacy-minimal decision, never create a restriction.
+    enforce:
+        persist the decision and create a hold only when the human-reviewed
+        calibration gate is ready and explicit operational approval is enabled.
+    """
     cfg = config or moderation_automation_config
-    if not cfg.enabled:
+    mode = automation_mode(cfg)
+    if mode == "off":
         return None
 
     signal = await db.get(TrustSafetyAbuseSignal, signal_uid)
-    if (
-        signal is None
-        or signal.status != "open"
-        or signal.severity not in {"high", "critical"}
-        or signal.signal_type not in _SIGNAL_CAPABILITY
-    ):
+    if signal is None:
         return None
 
-    # Serialize automated decisions per Account so concurrent detectors cannot
-    # stack duplicate holds for the same capability.
+    capability = _SIGNAL_CAPABILITY.get(signal.signal_type)
+    if (
+        signal.status != "open"
+        or signal.severity not in {"high", "critical"}
+        or capability is None
+    ):
+        await _record_and_commit_evaluation(
+            db,
+            signal=signal,
+            mode=mode,
+            capability=capability,
+            decision="ineligible_signal",
+            would_hold=False,
+            corroboration_count=0,
+            config=cfg,
+        )
+        return None
+
+    # Serialize decisions per Account so shadow observations and actual holds use
+    # the same policy snapshot and concurrent detectors cannot stack duplicates.
     await db.execute(
         select(Account.uid)
         .where(Account.uid == signal.account_uid)
@@ -55,6 +107,16 @@ async def maybe_apply_protective_hold(
 
     target_authority = await effective_authority_level(db, signal.account_uid)
     if target_authority != 0:
+        await _record_and_commit_evaluation(
+            db,
+            signal=signal,
+            mode=mode,
+            capability=capability,
+            decision="privileged_target",
+            would_hold=False,
+            corroboration_count=0,
+            config=cfg,
+        )
         return None
 
     now = datetime.utcnow()
@@ -70,11 +132,56 @@ async def maybe_apply_protective_hold(
     )
     corroboration_count = int(corroboration_result.scalar_one() or 0)
     if corroboration_count < cfg.min_high_signals:
+        await _record_and_commit_evaluation(
+            db,
+            signal=signal,
+            mode=mode,
+            capability=capability,
+            decision="insufficient_corroboration",
+            would_hold=False,
+            corroboration_count=corroboration_count,
+            config=cfg,
+        )
         return None
 
-    capability = _SIGNAL_CAPABILITY[signal.signal_type]
     if capability not in _ALLOWED_CAPABILITIES:
+        await _record_and_commit_evaluation(
+            db,
+            signal=signal,
+            mode=mode,
+            capability=capability,
+            decision="capability_not_allowed",
+            would_hold=False,
+            corroboration_count=corroboration_count,
+            config=cfg,
+        )
         return None
+
+    await record_protective_hold_evaluation(
+        db,
+        signal=signal,
+        mode=mode,
+        capability=capability,
+        decision="candidate",
+        would_hold=True,
+        corroboration_count=corroboration_count,
+        config=cfg,
+    )
+
+    # Shadow mode is the production calibration default: keep the durable
+    # decision for later human comparison, but never change user capabilities.
+    if mode == "shadow":
+        await db.commit()
+        return None
+
+    # Production-loaded enforce mode is fail-closed behind both measured data and
+    # an explicit human operational approval bit. Custom test configs can opt out
+    # of this gate by leaving calibration_gate_required=False.
+    if cfg.calibration_gate_required:
+        gate = await protective_hold_calibration_summary(db, config=cfg)
+        if not gate["enforcement_ready"]:
+            await db.commit()
+            return None
 
     existing_result = await db.execute(
         select(PlatformRestriction)
@@ -95,6 +202,7 @@ async def maybe_apply_protective_hold(
     )
     existing = existing_result.scalar_one_or_none()
     if existing is not None:
+        await db.commit()
         return restriction_projection(existing)
 
     expires_at = now + timedelta(minutes=cfg.hold_minutes)
