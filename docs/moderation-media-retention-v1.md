@@ -57,7 +57,24 @@ Stored relative path обязан начинаться с собственног
 
 Worker реализует **application-level secure expiry**: bounded retention, path confinement, unlink, metadata scrub и audit.
 
-Это **не является гарантией forensic secure wipe** на SSD, copy-on-write filesystem, RAID, snapshots, backup или provider-managed storage. Для таких копий production storage/backup должен иметь отдельный lifecycle/retention policy, согласованный с этим приложением.
+Это **не является гарантией forensic secure wipe** на SSD, copy-on-write filesystem, RAID, snapshots, backup или provider-managed storage. Для таких копий production storage/backup должен иметь отдельный lifecycle/retention policy, согласованный с этим приложением. `0.6.18-alpha.1` требует явно объявить max-age backup и snapshot copies; preflight отклоняет отсутствующие значения и сроки выше application retention. Это проверка заявленной конфигурации, а не API к storage provider: оператор обязан отдельно подтвердить, что реальные lifecycle rules соответствуют этим значениям.
+
+## Secondary-copy preflight
+
+Production declarations:
+
+- `MODERATION_MEDIA_BACKUP_RETENTION_DAYS`;
+- `MODERATION_MEDIA_SNAPSHOT_RETENTION_DAYS`.
+
+Оба значения обязательны для production retention-worker installer и не могут быть больше `MODERATION_MEDIA_REMOVED_RETENTION_DAYS`.
+
+Проверка:
+
+```bash
+bash ops/check-moderation-storage-lifecycle.sh
+```
+
+Важно: preflight **не удаляет** backup/snapshot и не меняет provider settings. Он делает misconfiguration видимой и fail-closed на deployment boundary. Фактический provider lifecycle должен быть проверен отдельно.
 
 ## Worker
 
@@ -104,4 +121,5 @@ Metrics не возвращают file paths, Account IDs, report IDs или mes
 - после appeal finality retention window продлевается полностью;
 - purge удаляет bytes и file-locating metadata, но сохраняет audit;
 - path traversal/cross-record deletion невозможны contract tests;
-- production backup/snapshot retention не длиннее утверждённой privacy policy без отдельного обоснованного hold.
+- production backup/snapshot retention declarations проходят preflight и не длиннее application policy;
+- реальные lifecycle rules storage provider сверены с объявленными значениями; одного env declaration недостаточно.
