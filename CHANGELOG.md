@@ -2,6 +2,26 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.18-alpha.1] — 2026-09-21
+
+Stage 6.8 checkpoint 9 — protective-hold shadow calibration and moderation storage lifecycle gate.
+
+- protective holds получили явные режимы `off | shadow | enforce`; default остаётся `off`;
+- `shadow` вычисляет would-hold решение и пишет privacy-minimal evaluation, но никогда не меняет user capabilities;
+- добавлен durable `protective_hold_evaluations` ledger без message body, attachment URL, recipient list или Persona handle;
+- moderator queue получила явные human labels `true_positive / false_positive / unclear`, не создающие restriction;
+- aggregate calibration считает false-positive rate отдельно для DM burst и invite burst, а также ограниченный confirmed-candidate capture proxy;
+- enforce fail-closed: каждый signal family должен набрать минимум human-labeled candidates и пройти FP threshold, после чего всё равно требуется отдельный `MODERATION_PROTECTIVE_HOLD_ENFORCEMENT_APPROVED=true`;
+- legacy `MODERATION_PROTECTIVE_HOLDS_ENABLED=true` больше не является достаточным условием для санкции;
+- standalone calibration CLI умеет печатать отчёт и завершаться non-zero, если data gate не готов;
+- moderator operations dashboard показывает automation mode, calibration readiness/FP и storage-lifecycle status;
+- private moderation evidence backup/snapshot retention теперь должен быть явно объявлен; production preflight отклоняет отсутствующие значения и сроки, превышающие application retention;
+- retention-worker installer требует storage lifecycle declarations до включения timer;
+- CI отдельно rehearses shadow-without-sanction, false-positive gate, approval gate, allow-listed enforcement и storage retention preflight;
+- synthetic CI labels проверяют механику, но **не считаются production calibration data**.
+
+Реальное включение protective holds после этого checkpoint всё ещё требует накопления human-reviewed production-like/production shadow data. Preflight также не настраивает provider lifecycle автоматически: заявленные backup/snapshot сроки должны соответствовать фактической инфраструктуре.
+
 ## [0.6.17-alpha.1] — 2026-09-21
 
 Stage 6.8 checkpoint 8 — bounded private moderation evidence retention and application-level secure expiry.
