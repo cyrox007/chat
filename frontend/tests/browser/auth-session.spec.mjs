@@ -20,10 +20,10 @@ const assertNoPersistedBearer = async (page) => {
 const logout = async (page) => {
   const trigger = page.locator('.persona-trigger');
   await expect(trigger).toBeVisible();
-  await trigger.click({ force: true });
+  await trigger.click();
   const logoutItem = page.getByRole('menuitem', { name: 'Выйти' });
   await expect(logoutItem).toBeVisible();
-  await logoutItem.click({ force: true });
+  await logoutItem.click();
   await expect(page).toHaveURL(/\/login$/);
 };
 
