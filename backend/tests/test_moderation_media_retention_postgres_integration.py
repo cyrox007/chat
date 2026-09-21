@@ -65,6 +65,10 @@ class ModerationMediaRetentionPostgresIntegrationTests(unittest.TestCase):
                             assigned_to_account_uid=moderator_uid,
                         )
                     )
+                    # These models intentionally have no ORM relationship; flush
+                    # the FK parent explicitly so SQLAlchemy cannot reorder the
+                    # independent INSERTs in one unit of work.
+                    await setup_db.flush()
                     setup_db.add(
                         ModerationMediaRecord(
                             uid=record_uid,
