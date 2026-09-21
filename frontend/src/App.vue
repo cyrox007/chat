@@ -257,7 +257,9 @@ watch(() => store.getters.isAuth, (isAuthenticated, wasAuthenticated) => {
 		<main class="container app-content" :aria-busy="routePending ? 'true' : 'false'">
 			<RouterView v-slot="{ Component, route }">
 				<Transition name="ui-route" mode="out-in">
-					<component :is="Component" :key="route.path" />
+					<div :key="route.fullPath" class="route-view-frame">
+						<component :is="Component" />
+					</div>
 				</Transition>
 			</RouterView>
 		</main>
@@ -267,6 +269,7 @@ watch(() => store.getters.isAuth, (isAuthenticated, wasAuthenticated) => {
 <style scoped>
 .app-shell { min-height: 100dvh; }
 .app-content { margin-top: var(--ui-space-2); }
+.route-view-frame { width: 100%; min-width: 0; }
 .route-progress { position: fixed; inset: 0 0 auto; z-index: 1800; height: 3px; overflow: hidden; pointer-events: none; background: color-mix(in srgb, var(--ui-primary) 10%, transparent); }
 .route-progress__bar { position: absolute; inset: 0 auto 0 0; width: 38%; border-radius: var(--ui-radius-pill); background: var(--ui-primary); box-shadow: 0 0 12px color-mix(in srgb, var(--ui-primary) 36%, transparent); animation: route-progress 1s var(--ui-ease-out) infinite; }
 .route-progress-enter-active, .route-progress-leave-active { transition: opacity var(--ui-motion-fast) var(--ui-ease); }
