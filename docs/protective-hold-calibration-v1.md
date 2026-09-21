@@ -1,5 +1,7 @@
 # Protective hold calibration v1
 
+Checkpoint: `0.6.18-alpha.1`.
+
 Этот документ описывает безопасный путь от полностью выключенной автоматики к возможному ограниченному production enforcement.
 
 ## Режимы
