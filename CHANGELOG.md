@@ -2,6 +2,22 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.22-alpha.1] — 2026-09-21
+
+Stage 6 Data/migrations hardening — strict Space capacity + DST-correct recurring Activities.
+
+- open join, pending membership approval и invitation acceptance используют общий PostgreSQL row lock на canonical Room row перед capacity check/activation;
+- один последний слот нельзя занять двумя concurrent transactions: PostgreSQL integration реально запускает два join через независимые sessions и требует ровно один success + один `space_full`;
+- Space v1 update/archive/join/leave/member-role исправлены на lookup по public `Room.uid`, а не integer primary key `Room.id`;
+- `SpaceActivity` хранит IANA `timezone_name`, при этом durable `starts_at` и materialized occurrences остаются UTC instants;
+- migration переводит существующие Activities в timezone `UTC`, сохраняя прежнюю UTC-anchored семантику;
+- daily/weekly/monthly recurrence теперь выполняет calendar arithmetic в IANA timezone и сохраняет локальное wall-clock время через DST;
+- spring-forward nonexistent local time сдвигается вперёд на DST gap только для этой occurrence; fall-back ambiguous time использует первое вхождение (`fold=0`);
+- Activity API валидирует IANA timezone names, SPA отправляет текущую browser timezone и показывает её в форме;
+- deterministic tests фиксируют spring/fall DST semantics для `Europe/Amsterdam`;
+- repeat login в browser gate отправляет форму через Enter, устраняя Firefox pointer-stability flake и одновременно проверяя keyboard submit;
+- functional exact-head CI #677 fully green: migrations/schema, PostgreSQL concurrency, frontend, dependency-security, Redis/recovery и Chromium/Firefox/WebKit/mobile browser-smoke.
+
 ## [0.6.21-alpha.2] — 2026-09-21
 
 Hotfix — mobile routed-content visibility + unique session JWTs.
