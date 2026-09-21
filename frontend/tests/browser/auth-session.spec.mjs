@@ -29,7 +29,8 @@ const logout = async (page) => {
 
   const logoutItem = page.getByRole('menuitem', { name: 'Выйти' });
   await expect(logoutItem).toBeVisible();
-  await logoutItem.click();
+  await logoutItem.focus();
+  await logoutItem.press('Enter');
   await expect(page).toHaveURL(/\/login$/);
 };
 
@@ -63,6 +64,7 @@ test('registration, refresh rotation, logout and login survive real browser cook
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator('.persona-trigger')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Найдите место, куда хочется вернуться' })).toBeVisible();
   await assertNoPersistedBearer(page);
 
   const refreshCookie = (await context.cookies()).find((item) => item.name === 'refresh_token');
@@ -78,6 +80,7 @@ test('registration, refresh rotation, logout and login survive real browser cook
   await page.reload();
   await refreshResponse;
   await expect(page.locator('.persona-trigger')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Найдите место, куда хочется вернуться' })).toBeVisible();
   await assertNoPersistedBearer(page);
 
   // Core authenticated surfaces should remain routable after refresh recovery.
@@ -103,6 +106,7 @@ test('registration, refresh rotation, logout and login survive real browser cook
   await page.getByRole('button', { name: 'Войти' }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator('.persona-trigger')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Найдите место, куда хочется вернуться' })).toBeVisible();
   await assertNoPersistedBearer(page);
 
   expect(pageErrors).toEqual([]);
