@@ -35,6 +35,11 @@
 | Privileged target | automated hold запрещён | test_trust_safety_operations_postgres_integration.py |
 | Operations metrics | только aggregate values, без subject identifiers | test_trust_safety_operations_postgres_integration.py |
 | Reported media quarantine/restore/remove | reversible filesystem state + audit | test_moderation_media_postgres_integration.py |
+| Retention due while report active | bytes сохраняются; cleanup deferred | test_moderation_media_retention_postgres_integration.py |
+| Retention due with pending linked appeal | bytes сохраняются; cleanup deferred | test_moderation_media_retention_postgres_integration.py |
+| Appeal/report finality after old due date | полный retention window продлевается от latest finality | test_moderation_media_retention_postgres_integration.py |
+| Evidence expiry | private bytes удалены, file metadata scrubbed, audit сохранён, повторный run идемпотентен | test_moderation_media_retention_postgres_integration.py |
+| Retention path corruption/traversal | worker не может удалить sibling/out-of-root file | test_moderation_media_contract.py |
 
 ## Операционный порядок при инциденте
 
@@ -45,7 +50,10 @@
 5. При подозрении на false positives выключить MODERATION_PROTECTIVE_HOLDS_ENABLED. Уже созданные holds истекут самостоятельно не позднее configured maximum 15 минут.
 6. Серьёзные действия выполняются только human policy path: account.access, permanent restrictions, media removal, appeal resolution.
 7. После инцидента сохранить только агрегированные выводы/threshold changes; не переносить private evidence в свободные operational notes.
+8. Перед ручным storage cleanup проверить due private evidence, active reports и pending appeals; application worker остаётся source of truth для record-level expiry.
 
 ## Beta gate
 
 Protective holds не должны становиться enabled-by-default до накопления human-reviewed данных и явного решения Trust & Safety о приемлемом false-positive rate. Наличие реализации не означает разрешение автоматического punitive режима.
+
+Private moderation evidence retention считается operationally complete только если production snapshots/backups имеют согласованный lifecycle: application-level unlink сам по себе не гарантирует forensic deletion из storage-layer copies.
