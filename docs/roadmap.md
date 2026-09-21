@@ -2,7 +2,7 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.21-alpha.1`**; last merged `main` checkpoint: **`0.6.20-alpha.1`**.
+Release candidate: **`0.6.21-alpha.2`**; last merged `main` checkpoint: **`0.6.21-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
@@ -109,6 +109,11 @@ Direct/Sentinel topology abstraction, real master+replica+3-Sentinel promotion r
 - CI блокирует возврат `http://localhost:9000` browser fallback;
 - production dependencies проходят обязательные npm/pip vulnerability audits без allow-list исключений;
 - functional exact-head CI #637 green: dependency-security + frontend + full backend + all browser projects.
+
+### Stage 6 checkpoint 13.1 — Mobile routed-content hotfix ✅ `0.6.21-alpha.2`
+- route transition теперь анимирует стабильный DOM wrapper и не зависит от fragment-root конкретного view;
+- browser gate проверяет реальную видимость Space Discovery content после registration/reload/login;
+- JWT issuance получил unique `jti`, исключающий same-second refresh-token collisions.
 
 ### Stage 6 checkpoint 13 — UI motion / loading polish ✅ `0.6.21-alpha.1`
 - route transitions используют короткий out-in motion и delayed/min-visible progress, без искусственного ожидания быстрых переходов;
