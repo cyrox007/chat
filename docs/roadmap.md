@@ -2,13 +2,13 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.18-alpha.1`**; last merged `main` checkpoint: **`0.6.17-alpha.1`**.
+Release candidate: **`0.6.19-alpha.1`**; last merged `main` checkpoint: **`0.6.18-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
 Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression, durable unread-Messenger email delivery, Web Push/PWA Messenger delivery, full `account.access` enforcement и fine-grained platform moderation permission boundaries.
 
-Provider-neutral AI assessment / copilot, anti-spam/raid behavioral signals, reported-media moderation, operations metrics, incident rehearsal, private-evidence retention/expiry и shadow-calibration/storage-lifecycle gate уже закрыты отдельными checkpoints. Protective holds остаются default-off; следующий Trust & Safety operational task — **накопить human-reviewed shadow data и подтвердить фактический provider backup/snapshot lifecycle перед enforce**. Параллельно продолжаются delivery observability/browser matrix, security gates и формализация unit economics/monetization boundaries.
+Provider-neutral AI assessment / copilot, anti-spam/raid behavioral signals, reported-media moderation, operations metrics, incident rehearsal, private-evidence retention/expiry и shadow-calibration/storage-lifecycle gate уже закрыты отдельными checkpoints. Protective holds остаются default-off; следующий Trust & Safety operational task — **накопить human-reviewed shadow data и подтвердить фактический provider backup/snapshot lifecycle перед enforce**. External-delivery observability baseline уже закрывает ledger-side backlog/failure visibility; дальше остаются broader HTTP/realtime/Redis/PostgreSQL/provider telemetry, browser matrix, security gates и формализация unit economics/monetization boundaries.
 
 Отдельно зафиксированы два обязательных launch workstream, которые раньше были недооценены: **production-grade moderation / Trust & Safety** и **устойчивая монетизация / unit economics**. PubChat не может считать наличие таблиц moderation готовой системой и не может рассчитывать, что инфраструктура, поддержка и Trust & Safety будут бесконечно финансироваться только энтузиазмом команды.
 
@@ -88,6 +88,16 @@ Direct/Sentinel topology abstraction, real master+replica+3-Sentinel promotion r
 - service worker получил push/click flow без расширения static-only cache boundary;
 - logout/session teardown отвязывает local push subscription best-effort для shared-browser safety;
 - Notifications UI получил email/Web Push controls; deterministic provider/privacy/PWA guards закреплены в CI.
+
+### Stage 6 checkpoint 11 — External delivery observability ✅ `0.6.19-alpha.1`
+- aggregate email/Web Push metrics показывают pending/due backlog, processing, expired claims, retry pressure, delivered/failed и failure-class counts без Account IDs или message content;
+- stale backlog alert thresholds отделены от delivery policy и не меняют suppress/retry behavior;
+- admin-only operations endpoint и standalone CLI дают machine-readable health;
+- `--require-healthy` fail-ит на stale due backlog или expired processing claims;
+- email/Web Push workers пишут structured completion events с aggregate counters;
+- structured-log helper fail-closed отклоняет token/secret/password/email destination/push endpoint/key material/message-content field names;
+- PostgreSQL integration проверяет operational detection и отсутствие seeded private identifiers в metrics output;
+- CI запускает observability CLI как отдельный machine gate.
 
 ### Stage 6.8 checkpoint 1 — Trust & Safety foundation ✅ `0.6.10-alpha.1`
 - platform report intake отделён от Space-local moderation и поддерживает Persona, Messenger message и Space message reports;
@@ -174,7 +184,8 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ✅ Web Push adapter: Service Worker/Push API/Notifications API + VAPID + per-device subscription lifecycle;
 - ✅ terminal push subscription cleanup + retry/backoff integration;
 - ✅ notification preferences UI для email/Web Push;
-- ⏳ delivery metrics/health, load/idempotency profiling.
+- ✅ external delivery metrics/health + structured worker completion logs;
+- ⏳ provider-side telemetry, load/idempotency profiling.
 
 ### 6.4 Discovery / performance 🚧
 - multi-source bounded candidate generation вместо newest-catalog bias;
