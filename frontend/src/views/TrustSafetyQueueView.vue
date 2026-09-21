@@ -31,6 +31,7 @@
 				<div class="metric-card"><strong>{{ operationsMetrics.restrictions.active_automation_holds }}</strong><span>активных auto-hold</span><small>policy {{ operationsMetrics.automation.enabled ? 'включён' : 'выключен' }} · {{ operationsMetrics.automation.hold_minutes }} мин. · ≥{{ operationsMetrics.automation.min_high_signals }} high signals</small></div>
 				<div class="metric-card"><strong>{{ operationsMetrics.ai.outcome_counts.accepted || 0 }} / {{ operationsMetrics.ai.outcome_counts.modified || 0 }} / {{ operationsMetrics.ai.outcome_counts.rejected || 0 }}</strong><span>AI: принято / изменено / отклонено</span><small>AI остаётся advisory-only</small></div>
 				<div class="metric-card"><strong>{{ operationsMetrics.abuse_signals.open_count }}</strong><span>открытых abuse signals</span><small>{{ operationsMetrics.abuse_signals.status_counts.dismissed || 0 }} dismissed в окне</small></div>
+				<div class="metric-card"><strong>{{ operationsMetrics.media_retention.due_count }}</strong><span>evidence ждёт expiry</span><small>{{ operationsMetrics.media_retention.purged_count }} очищено в окне · policy {{ operationsMetrics.media_retention.removed_retention_days }} дн.</small></div>
 			</div>
 		</section>
 
@@ -123,7 +124,7 @@
 							<div v-if="evidenceMediaFiles.length" class="media-review">
 								<div class="media-review__head"><strong>Вложения жалобы</strong><span>Quarantine скрывает файл из публичного /uploads, но сохраняет evidence copy.</span></div>
 								<article v-for="(file, index) in evidenceMediaFiles" :key="`${index}-${file.url || file.name || 'attachment'}`" class="media-review__item">
-									<div><strong>{{ file.name || `Вложение ${index + 1}` }}</strong><span>{{ file.type || 'unknown type' }} · {{ mediaStatusLabel(mediaRecordFor(index)?.status || file.moderation_status) }}</span></div>
+									<div><strong>{{ file.name || `Вложение ${index + 1}` }}</strong><span>{{ file.type || 'unknown type' }} · {{ mediaStatusLabel(mediaRecordFor(index)?.status || file.moderation_status) }}</span><small v-if="mediaRecordFor(index)?.purged_at">Private evidence expired {{ formatDate(mediaRecordFor(index).purged_at) }}</small><small v-else-if="mediaRecordFor(index)?.retention_due_at">Retention due {{ formatDate(mediaRecordFor(index).retention_due_at) }}; active review/appeal can defer cleanup.</small></div>
 									<div v-if="ownsSelected" class="review-actions">
 										<button v-if="!mediaRecordFor(index) || mediaRecordFor(index)?.status === 'restored'" class="ui-button ui-button--ghost" type="button" :disabled="mediaBusy || mediaReason.trim().length < 3" @click="quarantineMedia(index)">Карантин</button>
 										<button v-if="mediaRecordFor(index)?.status === 'quarantined'" class="ui-button ui-button--ghost" type="button" :disabled="mediaBusy" @click="restoreMedia(mediaRecordFor(index))">Восстановить</button>
@@ -632,7 +633,7 @@ const aiDurationLabel = (value) => ({ 60: '1 час', 1440: '24 часа', 10080
 const restrictionStatusLabel = (value) => ({ active: 'активно', expired: 'завершено', revoked: 'снято' }[value] || value);
 const restrictionScopeLabel = (item) => item.scope_type === 'space' ? 'конкретное пространство' : 'вся платформа';
 const mediaStatusLabel = (value) => ({ quarantined: 'в карантине', restored: 'восстановлено', removed: 'удалено из публичной выдачи' }[value] || 'активно');
-const auditLabel = (value) => ({ report_created: 'Жалоба создана', duplicate_submission: 'Повторная отправка', report_claimed: 'Взято в работу', report_released: 'Возвращено в очередь', evidence_viewed: 'Evidence просмотрен', restriction_issued: 'Применено ограничение', restriction_appeal_created: 'Создана апелляция', restriction_appeal_resolved: 'Апелляция рассмотрена', media_quarantined: 'Вложение помещено в карантин', media_restored: 'Вложение восстановлено', media_removed: 'Вложение удалено из публичной выдачи', report_decided: 'Решение сохранено' }[value] || value);
+const auditLabel = (value) => ({ report_created: 'Жалоба создана', duplicate_submission: 'Повторная отправка', report_claimed: 'Взято в работу', report_released: 'Возвращено в очередь', evidence_viewed: 'Evidence просмотрен', restriction_issued: 'Применено ограничение', restriction_appeal_created: 'Создана апелляция', restriction_appeal_resolved: 'Апелляция рассмотрена', media_quarantined: 'Вложение помещено в карантин', media_restored: 'Вложение восстановлено', media_removed: 'Вложение удалено из публичной выдачи', media_evidence_expired: 'Private evidence очищено по retention policy', report_decided: 'Решение сохранено' }[value] || value);
 const formatDate = (value) => value ? new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '';
 const durationLabel = (seconds) => {
 	const value = Math.max(0, Number(seconds) || 0);
