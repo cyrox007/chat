@@ -59,7 +59,7 @@ Retention baseline reported-media checkpoint был сознательно conse
 
 - `GET /trust-safety/v1/metrics` возвращает только агрегаты: active queue/age, average decision time, appeal overturn rate, AI outcomes, abuse-signal backlog, restriction origins и active auto-holds;
 - endpoint не возвращает Account/source/report identifiers, message contents или attachment metadata;
-- protective holds по умолчанию выключены через `MODERATION_PROTECTIVE_HOLDS_ENABLED=false`;
+- protective holds используют canonical mode `off | shadow | enforce`; default — `off`;
 - один signal никогда не достаточен: нужен минимум двух distinct high/critical signal buckets в bounded lookback;
 - automation allow-list содержит только `messenger.send` и `invitation.send`;
 - hold всегда временный, 5–15 минут, с `origin=automation`, audit event и обычной возможностью human revoke/appeal;
@@ -69,7 +69,7 @@ Retention baseline reported-media checkpoint был сознательно conse
 - AI provider outage аудируется без создания recommendation/restriction и без изменения claim;
 - operational rehearsal matrix зафиксирована в `docs/trust-safety-incident-rehearsal-v1.md`.
 
-Наличие policy-engine не означает его production enablement. До human-reviewed calibration он остаётся выключенным; включение — отдельное операционное решение с наблюдением false positives, appeals и moderator feedback.
+Наличие policy-engine не означает production enablement. `0.6.18-alpha.1` добавляет shadow-calibration: система может собирать would-hold evaluations без санкций, а `enforce` fail-closed требует human-reviewed data gate и отдельный operational approval.
 
 ## Реализованный private-evidence retention checkpoint
 
@@ -90,6 +90,27 @@ Retention baseline reported-media checkpoint был сознательно conse
 Этот механизм является **application-level secure expiry**, а не обещанием forensic secure wipe. SSD/COW filesystem, storage snapshots и backups требуют отдельного lifecycle, согласованного с retention policy. Raw source-message metadata также живёт по собственному message-retention contract; этот worker отвечает именно за private moderation evidence copy.
 
 Подробный operational contract: `docs/moderation-media-retention-v1.md`.
+
+## Реализованный shadow-calibration checkpoint
+
+В `0.6.18-alpha.1` protective-hold path получил отдельный безопасный calibration lifecycle.
+
+- `off` не выполняет evaluation и не создаёт restriction;
+- `shadow` записывает privacy-minimal would-hold decision, но не меняет capabilities пользователя;
+- `enforce` остаётся тем же коротким allow-listed path, но теперь дополнительно закрыт data gate + explicit approval;
+- `protective_hold_evaluations` хранит только signal/policy metadata, corroboration и would-hold result; message body, recipient list, attachment metadata и Persona handle туда не попадают;
+- moderator явно ставит calibration label: `true_positive`, `false_positive` или `unclear`;
+- gate оценивает DM burst и invite burst **раздельно**; default требует минимум 25 decisive would-hold labels на каждый signal family и FP rate ≤ 5%;
+- `unclear` не влияет на gate;
+- confirmed-candidate capture показывается только как proxy внутри emitted/labeled signals и не называется global recall;
+- data-ready состояние само не включает санкции: требуется `MODERATION_PROTECTIVE_HOLD_ENFORCEMENT_APPROVED=true`;
+- legacy `MODERATION_PROTECTIVE_HOLDS_ENABLED=true` не обходит новый production gate;
+- CLI `python -m workers.protective_hold_calibration --require-ready` даёт machine-checkable readiness result;
+- dashboard показывает mode, labels/FP readiness и approval state.
+
+CI использует synthetic labels только для проверки механики. Настоящий production calibration status появляется только после накопления human-reviewed shadow data; до этого enforce не должен считаться разрешённым.
+
+Подробный rollout contract: `docs/protective-hold-calibration-v1.md`.
 
 ## Иерархия платформенных ролей
 
@@ -356,6 +377,7 @@ Discovery независимого reviewer ищет только Account, у к
 7. ✅ AI assessment model + provider-neutral adapter + moderator recommendation UI.
 8. ✅ Anti-abuse signals + disabled-by-default bounded protective holds with explicit safety gates.
 9. ✅ Aggregate metrics, incident rehearsal and private moderation evidence retention/expiry baseline.
+10. ✅ Shadow-calibration ledger, explicit human labels, fail-closed data/approval gate and storage lifecycle preflight.
 
 ## Beta gate
 
@@ -363,6 +385,6 @@ Trust & Safety считается beta-ready только если проход�
 
 `report → triage/AI assist → human claim/review → hierarchy/permission check → restriction → runtime enforcement → audit → target notification → appeal → independent review/revoke/uphold`.
 
-Human enforcement/appeal, advisory AI, abuse signals, operations metrics, incident rehearsal и private-evidence retention baseline уже реализованы. Оставшиеся Trust & Safety beta-critical риски — human-reviewed production calibration protective holds и подтверждение, что production backup/snapshot lifecycle не нарушает утверждённую evidence retention policy.
+Human enforcement/appeal, advisory AI, abuse signals, operations metrics, incident rehearsal, private-evidence retention и shadow-calibration tooling уже реализованы. Оставшиеся Trust & Safety beta-critical риски — накопление реальной human-reviewed shadow выборки до data-ready состояния, отдельное operational approval решение и подтверждение фактических provider backup/snapshot lifecycle settings.
 
 Существование таблиц или AI-классификатора без реального server-side capability enforcement не считается готовой модерацией.
