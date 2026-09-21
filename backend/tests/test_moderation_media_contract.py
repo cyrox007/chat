@@ -1,4 +1,5 @@
 import tempfile
+from datetime import datetime
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -96,6 +97,7 @@ class ModerationMediaContractTests(unittest.TestCase):
 
     def test_private_filesystem_path_is_never_projected(self):
         uid = uuid4()
+        now = datetime.utcnow()
         record = ModerationMediaRecord(
             uid=uid,
             report_uid=uuid4(),
@@ -107,6 +109,8 @@ class ModerationMediaContractTests(unittest.TestCase):
             private_relative_path=f"{uid}/reported.jpg",
             status="removed",
             reason="policy",
+            created_at=now,
+            updated_at=now,
         )
         projection = media_record_projection(record)
         self.assertNotIn("private_relative_path", projection)
