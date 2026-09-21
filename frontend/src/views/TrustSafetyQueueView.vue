@@ -28,17 +28,19 @@
 				<div class="metric-card"><strong>{{ operationsMetrics.queue.open_count }}</strong><span>активных жалоб</span><small>старейшая: {{ durationLabel(operationsMetrics.queue.oldest_age_seconds) }}</small></div>
 				<div class="metric-card"><strong>{{ durationLabel(operationsMetrics.queue.average_decision_seconds) }}</strong><span>среднее время решения</span><small>{{ operationsMetrics.queue.resolved_count }} решений в окне</small></div>
 				<div class="metric-card"><strong>{{ operationsMetrics.appeals.overturn_rate_percent }}%</strong><span>overturn rate</span><small>апелляции, завершённые в окне</small></div>
-				<div class="metric-card"><strong>{{ operationsMetrics.restrictions.active_automation_holds }}</strong><span>активных auto-hold</span><small>policy {{ operationsMetrics.automation.enabled ? 'включён' : 'выключен' }} · {{ operationsMetrics.automation.hold_minutes }} мин. · ≥{{ operationsMetrics.automation.min_high_signals }} high signals</small></div>
+				<div class="metric-card"><strong>{{ operationsMetrics.restrictions.active_automation_holds }}</strong><span>активных auto-hold</span><small>режим {{ automationModeLabel(operationsMetrics.automation.mode) }} · {{ operationsMetrics.automation.hold_minutes }} мин. · ≥{{ operationsMetrics.automation.min_high_signals }} high signals</small></div>
+				<div class="metric-card"><strong>{{ operationsMetrics.automation.calibration.data_ready ? 'готово' : 'сбор данных' }}</strong><span>калибровка protective holds</span><small>{{ calibrationSummaryLabel(operationsMetrics.automation.calibration) }}</small></div>
 				<div class="metric-card"><strong>{{ operationsMetrics.ai.outcome_counts.accepted || 0 }} / {{ operationsMetrics.ai.outcome_counts.modified || 0 }} / {{ operationsMetrics.ai.outcome_counts.rejected || 0 }}</strong><span>AI: принято / изменено / отклонено</span><small>AI остаётся advisory-only</small></div>
 				<div class="metric-card"><strong>{{ operationsMetrics.abuse_signals.open_count }}</strong><span>открытых abuse signals</span><small>{{ operationsMetrics.abuse_signals.status_counts.dismissed || 0 }} dismissed в окне</small></div>
-				<div class="metric-card"><strong>{{ operationsMetrics.media_retention.due_count }}</strong><span>evidence ждёт expiry</span><small>{{ operationsMetrics.media_retention.purged_count }} очищено в окне · policy {{ operationsMetrics.media_retention.removed_retention_days }} дн.</small></div>
+				<div class="metric-card"><strong>{{ operationsMetrics.media_retention.due_count }}</strong><span>evidence ждёт expiry</span><small>{{ operationsMetrics.media_retention.purged_count }} очищено · app policy {{ operationsMetrics.media_retention.removed_retention_days }} дн.</small></div>
+				<div class="metric-card"><strong>{{ operationsMetrics.media_retention.storage_lifecycle.aligned ? 'согласовано' : 'не подтверждено' }}</strong><span>backup / snapshot retention</span><small>{{ storageLifecycleLabel(operationsMetrics.media_retention.storage_lifecycle) }}</small></div>
 			</div>
 		</section>
 
 		<section class="appeal-review">
 			<header class="section-head">
 				<div><span class="eyebrow">Abuse signals</span><h2>Поведенческие сигналы</h2></div>
-				<span>{{ abuseSignals.length }} открытых · evidence для человека; protective holds по умолчанию выключены</span>
+				<span>{{ abuseSignals.length }} открытых · human labels калибруют shadow policy; shadow не ограничивает пользователей</span>
 			</header>
 			<div v-if="signalsLoading" class="state state--compact">Загружаем сигналы…</div>
 			<div v-else-if="!abuseSignals.length" class="state state--compact"><strong>Открытых сигналов нет</strong><span>Rate-limit и burst-detectors появятся здесь только после достижения порогов.</span></div>
@@ -50,8 +52,9 @@
 						<small>Account {{ signal.account_uid }} · {{ formatDate(signal.last_seen_at) }}</small>
 					</div>
 					<div class="review-actions">
-						<button class="ui-button ui-button--ghost" type="button" :disabled="busy" @click="reviewSignal(signal, 'reviewed')">Просмотрено</button>
-						<button class="ui-button ui-button--ghost" type="button" :disabled="busy" @click="reviewSignal(signal, 'dismissed')">Не учитывать</button>
+						<button class="ui-button ui-button--ghost" type="button" :disabled="busy" @click="reviewSignal(signal, 'reviewed', 'true_positive')">Подтвердить спам</button>
+						<button class="ui-button ui-button--ghost" type="button" :disabled="busy" @click="reviewSignal(signal, 'dismissed', 'false_positive')">Ложное срабатывание</button>
+						<button class="ui-button ui-button--ghost" type="button" :disabled="busy" @click="reviewSignal(signal, 'reviewed', 'unclear')">Неясно</button>
 					</div>
 				</article>
 			</div>
@@ -319,12 +322,17 @@ const loadAbuseSignals = async () => {
 		abuseSignals.value = [];
 	} finally { signalsLoading.value = false; }
 };
-const reviewSignal = async (signal, decision) => {
+const reviewSignal = async (signal, decision, calibrationLabel) => {
 	busy.value = true;
 	try {
-		await ModerationService.reviewAbuseSignal(signal.uid, { decision });
-		await loadAbuseSignals();
-		flash(decision === 'dismissed' ? 'Сигнал помечен как нерелевантный.' : 'Сигнал отмечен как просмотренный.');
+		await ModerationService.reviewAbuseSignal(signal.uid, { decision, calibration_label: calibrationLabel });
+		await Promise.all([loadAbuseSignals(), loadMetrics()]);
+		const messages = {
+			true_positive: 'Сигнал подтверждён человеком как реальный abuse.',
+			false_positive: 'Сигнал помечен как ложное срабатывание для калибровки.',
+			unclear: 'Сигнал отмечен как неясный и не влияет на calibration gate.',
+		};
+		flash(messages[calibrationLabel] || 'Результат проверки сигнала сохранён.');
 	} catch { flash('Не удалось обновить поведенческий сигнал.', 'error'); }
 	finally { busy.value = false; }
 };
@@ -617,6 +625,19 @@ const decide = async () => {
 watch(() => decision.status, (value) => { if (value === 'escalated') decision.resolution_code = 'needs_platform_action'; else if (decision.resolution_code === 'needs_platform_action') decision.resolution_code = value === 'dismissed' ? 'no_violation' : 'handled'; });
 watch(() => selected.value?.source_space_uid, (value) => { if (!value && restriction.scope_type === 'space') restriction.scope_type = 'platform'; });
 
+const automationModeLabel = (value) => ({ off: 'выключен', shadow: 'shadow — без санкций', enforce: 'enforce' }[value] || value || 'выключен');
+const calibrationSummaryLabel = (calibration) => {
+	if (!calibration) return 'нет данных';
+	const dm = calibration.signal_types?.dm_distinct_recipient_burst;
+	const invites = calibration.signal_types?.space_invite_recipient_burst;
+	const dmLabel = dm ? `DM: ${dm.would_hold_labeled_count} labels / FP ${dm.false_positive_percent}%` : 'DM: нет данных';
+	const inviteLabel = invites ? `invites: ${invites.would_hold_labeled_count} labels / FP ${invites.false_positive_percent}%` : 'invites: нет данных';
+	return `${dmLabel} · ${inviteLabel} · approval ${calibration.enforcement_approved ? 'да' : 'нет'}`;
+};
+const storageLifecycleLabel = (value) => {
+	if (!value?.declared) return 'production backup/snapshot сроки ещё не объявлены';
+	return `backup ${value.backup_retention_days} дн. · snapshot ${value.snapshot_retention_days} дн.`;
+};
 const abuseSignalLabel = (value) => ({ message_rate_limit: 'Повторное превышение лимита сообщений', dm_distinct_recipient_burst: 'Массовые личные контакты', space_invite_recipient_burst: 'Массовые приглашения' }[value] || value);
 const abuseSeverityLabel = (value) => ({ low: 'низкий риск', medium: 'средний риск', high: 'высокий риск', critical: 'критический риск' }[value] || value);
 const abuseSurfaceLabel = (value) => ({ messenger: 'Messenger', space: 'Space chat', space_invitation: 'Приглашения в Space' }[value] || value);
