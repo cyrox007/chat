@@ -51,7 +51,7 @@
 - каждое действие пишется в Trust & Safety audit как `media_quarantined`, `media_restored` или `media_removed`;
 - AI copilot и anti-abuse automation не имеют права выполнять эти punitive media actions.
 
-Retention baseline этого checkpoint сознательно conservative: evidence copy не удаляется автоматически. Operations metrics и incident rehearsal закрыты в `0.6.16-alpha.1`; secure deletion/expiry остаётся отдельным privacy-retention slice.
+Retention baseline reported-media checkpoint был сознательно conservative. В `0.6.17-alpha.1` removed private evidence получил bounded retention/expiry: active report и pending linked appeal блокируют cleanup, полный retention window пересчитывается после case finality, а application-level expiry удаляет private bytes и file-locating metadata с audit event.
 
 ## Реализованный operations / protective-hold checkpoint
 
@@ -70,6 +70,26 @@ Retention baseline этого checkpoint сознательно conservative: ev
 - operational rehearsal matrix зафиксирована в `docs/trust-safety-incident-rehearsal-v1.md`.
 
 Наличие policy-engine не означает его production enablement. До human-reviewed calibration он остаётся выключенным; включение — отдельное операционное решение с наблюдением false positives, appeals и moderator feedback.
+
+## Реализованный private-evidence retention checkpoint
+
+В `0.6.17-alpha.1` private reported-media evidence получил явный lifecycle вместо бессрочного скрытого хранения.
+
+- `removed` record получает `retention_due_at`; default policy — 90 дней, bounded 7–365;
+- фактический срок считается от самой поздней точки removal, final report resolution или latest resolved linked restriction appeal, поэтому длительное расследование не сокращает retention window;
+- report в `triage/in_review/escalated` и любая linked appeal в `pending` блокируют expiry;
+- deferred rows исключаются из bounded candidate batch до lock, чтобы они не starvation-или eligible evidence;
+- cleanup claim-ит rows через PostgreSQL `FOR UPDATE SKIP LOCKED`;
+- `MODERATION_MEDIA_ROOT` обязан быть disjoint от public `uploads`; quarantine storage hardening использует directory/file modes 0700/0600, systemd worker — `UMask=0077`;
+- stored private path должен оставаться внутри directory собственного `record.uid`, поэтому sibling-record traversal и выход за private root запрещены;
+- при expiry удаляются private bytes и file-locating metadata (`private_relative_path`, original URL/path/name/MIME), но сохраняются moderation status/reason, actor/target/report linkage и append-only audit;
+- отсутствие file на retry обрабатывается идемпотентно: metadata всё равно scrub-ится, audit фиксирует `already_missing`;
+- operations metrics возвращают только aggregate due/purged counts и policy days, без paths/IDs/content;
+- отдельный daily systemd worker выполняет cleanup вне Uvicorn lifecycle.
+
+Этот механизм является **application-level secure expiry**, а не обещанием forensic secure wipe. SSD/COW filesystem, storage snapshots и backups требуют отдельного lifecycle, согласованного с retention policy. Raw source-message metadata также живёт по собственному message-retention contract; этот worker отвечает именно за private moderation evidence copy.
+
+Подробный operational contract: `docs/moderation-media-retention-v1.md`.
 
 ## Иерархия платформенных ролей
 
@@ -333,9 +353,9 @@ Discovery независимого reviewer ищет только Account, у к
 4. ✅ Enforcement hooks в Messenger/Space chat/uploads/invitations/Space creation/discovery/account session + HTTP/realtime path.
 5. ✅ Human moderator action UX + target-visible explanation + restriction appeal linkage baseline.
 6. ✅ Permission/hierarchy hardening: queue access отделён от issue/revoke/appeal-review; higher-authority decisions защищены от lower-authority revoke; permanent/account-access остаются elevated.
-7. ⏳ AI assessment model + provider-neutral adapter + moderator recommendation UI.
-8. ⏳ Anti-abuse automation signals и, только после отдельного review, optional short-lived system protection holds.
-9. ⏳ Metrics, privacy/retention, incident rehearsal and launch gate.
+7. ✅ AI assessment model + provider-neutral adapter + moderator recommendation UI.
+8. ✅ Anti-abuse signals + disabled-by-default bounded protective holds with explicit safety gates.
+9. ✅ Aggregate metrics, incident rehearsal and private moderation evidence retention/expiry baseline.
 
 ## Beta gate
 
@@ -343,6 +363,6 @@ Trust & Safety считается beta-ready только если проход�
 
 `report → triage/AI assist → human claim/review → hierarchy/permission check → restriction → runtime enforcement → audit → target notification → appeal → independent review/revoke/uphold`.
 
-Human enforcement/appeal baseline уже существует, включая full Account suspension и explicit punitive permission boundaries. Следующие beta-critical риски — AI-assist boundary implementation, anti-abuse/metrics/retention и incident rehearsal.
+Human enforcement/appeal, advisory AI, abuse signals, operations metrics, incident rehearsal и private-evidence retention baseline уже реализованы. Оставшиеся Trust & Safety beta-critical риски — human-reviewed production calibration protective holds и подтверждение, что production backup/snapshot lifecycle не нарушает утверждённую evidence retention policy.
 
 Существование таблиц или AI-классификатора без реального server-side capability enforcement не считается готовой модерацией.
