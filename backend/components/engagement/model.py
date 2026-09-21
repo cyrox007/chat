@@ -39,6 +39,7 @@ class SpaceActivity(Database.Base):
     description = Column(Text, nullable=True)
     activity_type = Column(String(32), nullable=False, default="hangout")
     starts_at = Column(DateTime, nullable=False)
+    timezone_name = Column(String(64), nullable=False, default="UTC", server_default="UTC")
     recurrence = Column(String(24), nullable=False, default="none")
     status = Column(String(24), nullable=False, default="scheduled")
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
