@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from components.identity.model import Account, Persona
 from components.realtime import RealtimeUnavailable, realtime_service
 from components.room.model import Room, RoomBan, RoomMember
+from components.space.capacity import assert_space_has_capacity, lock_space_admission_policy
 from components.space.model import SpaceMembership, SpaceSettings
 from components.space.service import (
     DEFAULT_MEMBER_LIMIT,
@@ -212,25 +213,44 @@ async def manage_membership(
         )
 
     if action == "approve":
+        policy = await lock_space_admission_policy(
+            db,
+            room.uid,
+            default_join_policy="open",
+            default_member_limit=DEFAULT_MEMBER_LIMIT,
+        )
+        locked_membership_result = await db.execute(
+            select(SpaceMembership)
+            .where(SpaceMembership.uid == target_membership.uid)
+            .with_for_update()
+        )
+        target_membership = locked_membership_result.scalar_one_or_none()
+        if not target_membership:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error_type": "member_not_found"},
+            )
+        if target_account.uid == viewer_account.uid or target_membership.role == "owner":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"error_type": "cannot_manage_space_owner"},
+            )
+        if manager_role == "moderator" and target_membership.role == "moderator":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error_type": "moderator_cannot_manage_moderator"},
+            )
         if target_membership.status != "pending":
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={"error_type": "membership_not_pending"},
             )
 
-        settings = await db.get(SpaceSettings, room.uid)
-        member_limit = settings.member_limit if settings else DEFAULT_MEMBER_LIMIT
-        count_result = await db.execute(
-            select(func.count(SpaceMembership.uid)).where(
-                SpaceMembership.room_uid == room.uid,
-                SpaceMembership.status == "active",
-            )
+        await assert_space_has_capacity(
+            db,
+            room.uid,
+            member_limit=policy.member_limit,
         )
-        if int(count_result.scalar_one() or 0) >= member_limit:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={"error_type": "space_full"},
-            )
 
         if target_account.legacy_user_uid and await RoomBan.is_user_banned(
             db, room.uid, target_account.legacy_user_uid
