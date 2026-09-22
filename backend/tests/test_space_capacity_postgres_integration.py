@@ -210,20 +210,44 @@ class SpaceCapacityPostgresIntegrationTests(unittest.TestCase):
                 )
                 return db
 
+            async def run_while_gate_locked(*coroutines):
+                gate_db = await hold_admission_lock()
+                tasks = [asyncio.create_task(item) for item in coroutines]
+                released = False
+                try:
+                    # Give each service call enough time to reach the shared
+                    # admission lock. No activation is allowed to complete while
+                    # the gate transaction owns that row.
+                    done, _ = await asyncio.wait(
+                        tasks,
+                        timeout=1.0,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    self.assertEqual(done, set())
+                    await gate_db.commit()
+                    released = True
+                    return await asyncio.wait_for(
+                        asyncio.gather(*tasks),
+                        timeout=5.0,
+                    )
+                finally:
+                    if not released:
+                        await gate_db.rollback()
+                    await gate_db.close()
+                    for task in tasks:
+                        if not task.done():
+                            task.cancel()
+                    if tasks:
+                        await asyncio.gather(*tasks, return_exceptions=True)
+
             try:
                 # Direct join and invitation acceptance must compete for the same
                 # final slot. Hold the admission lock first so both service calls
                 # reach the lock boundary before either can commit.
-                gate_db = await hold_admission_lock()
-                join_task = asyncio.create_task(run_join(join_account_uid))
-                invite_task = asyncio.create_task(run_invite_accept())
-                await asyncio.sleep(0.15)
-                self.assertFalse(join_task.done())
-                self.assertFalse(invite_task.done())
-                await gate_db.commit()
-                await gate_db.close()
-
-                results = await asyncio.gather(join_task, invite_task)
+                results = await run_while_gate_locked(
+                    run_join(join_account_uid),
+                    run_invite_accept(),
+                )
                 self.assertCountEqual(results, ["active", "space_full"])
 
                 async with Database.sessionmaker()() as verify_db:
@@ -243,16 +267,10 @@ class SpaceCapacityPostgresIntegrationTests(unittest.TestCase):
                 # Reset the final slot and repeat with owner approval versus a
                 # direct join. This proves manager approval uses the same lock.
                 await reset_non_owner_memberships()
-                gate_db = await hold_admission_lock()
-                join_task = asyncio.create_task(run_join(join_account_uid))
-                approval_task = asyncio.create_task(run_approval())
-                await asyncio.sleep(0.15)
-                self.assertFalse(join_task.done())
-                self.assertFalse(approval_task.done())
-                await gate_db.commit()
-                await gate_db.close()
-
-                results = await asyncio.gather(join_task, approval_task)
+                results = await run_while_gate_locked(
+                    run_join(join_account_uid),
+                    run_approval(),
+                )
                 self.assertCountEqual(results, ["active", "space_full"])
 
                 async with Database.sessionmaker()() as verify_db:
@@ -272,16 +290,10 @@ class SpaceCapacityPostgresIntegrationTests(unittest.TestCase):
                 # Same-Account duplicate joins must remain idempotent rather than
                 # racing into uq_space_membership.
                 await reset_non_owner_memberships()
-                gate_db = await hold_admission_lock()
-                first = asyncio.create_task(run_join(join_account_uid))
-                second = asyncio.create_task(run_join(join_account_uid))
-                await asyncio.sleep(0.15)
-                self.assertFalse(first.done())
-                self.assertFalse(second.done())
-                await gate_db.commit()
-                await gate_db.close()
-
-                results = await asyncio.gather(first, second)
+                results = await run_while_gate_locked(
+                    run_join(join_account_uid),
+                    run_join(join_account_uid),
+                )
                 self.assertEqual(results, ["active", "active"])
 
                 async with Database.sessionmaker()() as verify_db:
