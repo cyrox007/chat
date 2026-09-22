@@ -9,7 +9,7 @@ from components.identity.model import Account, Persona
 from components.realtime import RealtimeUnavailable, realtime_service
 from components.room.model import Room, RoomBan, RoomMember
 from components.space.capacity import assert_space_has_capacity, lock_space_admission_policy
-from components.space.model import SpaceMembership, SpaceSettings
+from components.space.model import SpaceMembership
 from components.space.service import (
     DEFAULT_MEMBER_LIMIT,
     _get_account,
