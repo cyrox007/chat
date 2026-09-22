@@ -35,6 +35,7 @@
 - [`web-push-delivery-v1.md`](web-push-delivery-v1.md) — per-device Web Push/VAPID/service-worker/provider/privacy contract (`0.6.9-alpha.1`).
 - [`external-delivery-observability-v1.md`](external-delivery-observability-v1.md) — privacy-safe email/Web Push backlog/failure metrics, health CLI и structured-log boundary (`0.6.19-alpha.1`).
 - [`browser-compatibility-v1.md`](browser-compatibility-v1.md) — same-origin/CSRF contract и Chromium/Firefox/WebKit/mobile launch gate (`0.6.20-alpha.1`).
+- [`space-capacity-concurrency-v1.md`](space-capacity-concurrency-v1.md) — atomic Space member-limit admission and PostgreSQL concurrency rehearsal (`0.6.22-alpha.1`).
 - [`prebeta-hardening-v1.md`](prebeta-hardening-v1.md) — PostgreSQL/migration baseline (`0.6.0-alpha.1`).
 - [`database-recovery-v1.md`](database-recovery-v1.md) — PostgreSQL backup/restore (`0.6.1-alpha.1`).
 - [`redis-realtime-integration-v1.md`](redis-realtime-integration-v1.md) — Redis distributed realtime baseline (`0.6.2-alpha.1`).
