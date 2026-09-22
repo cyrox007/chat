@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.identity.model import Account, Persona
 from components.room.model import Room, RoomBan, RoomMember
+from components.space.capacity import assert_space_has_capacity, lock_space_admission_policy
 from components.space.model import SpaceMembership, SpaceSettings, SpaceTag
 from components.space.schemas import SpaceCreateRequest, SpaceUpdateRequest
 
@@ -495,10 +496,6 @@ async def join_space(
             detail={"error_type": "space_not_found"},
         )
 
-    settings = await db.get(SpaceSettings, room.uid)
-    join_policy = settings.join_policy if settings else DEFAULT_JOIN_POLICY
-    member_limit = settings.member_limit if settings else DEFAULT_MEMBER_LIMIT
-
     result = await db.execute(
         select(SpaceMembership)
         .where(
@@ -511,6 +508,30 @@ async def join_space(
 
     if membership and membership.status == "active":
         return (await build_space_projections(db, [room], account.uid))[0]
+
+    # Every path that can make a membership active serializes on the same
+    # SpaceSettings row. Re-read this Account's membership after acquiring the
+    # lock so two concurrent joins from the same Account remain idempotent.
+    policy = await lock_space_admission_policy(
+        db,
+        room.uid,
+        default_join_policy=DEFAULT_JOIN_POLICY,
+        default_member_limit=DEFAULT_MEMBER_LIMIT,
+    )
+    result = await db.execute(
+        select(SpaceMembership)
+        .where(
+            SpaceMembership.room_uid == room.uid,
+            SpaceMembership.account_uid == account.uid,
+        )
+        .limit(1)
+    )
+    membership = result.scalar_one_or_none()
+    if membership and membership.status == "active":
+        await db.commit()
+        return (await build_space_projections(db, [room], account.uid))[0]
+
+    join_policy = policy.join_policy
 
     if join_policy == "invite" and room.owner_uid != account.legacy_user_uid:
         raise HTTPException(
@@ -531,17 +552,11 @@ async def join_space(
     )
 
     if target_status == "active":
-        count_result = await db.execute(
-            select(func.count(SpaceMembership.uid)).where(
-                SpaceMembership.room_uid == room.uid,
-                SpaceMembership.status == "active",
-            )
+        await assert_space_has_capacity(
+            db,
+            room.uid,
+            member_limit=policy.member_limit,
         )
-        if int(count_result.scalar_one() or 0) >= member_limit:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={"error_type": "space_full"},
-            )
 
     if membership:
         if membership.role == "owner":
