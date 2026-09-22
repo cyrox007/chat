@@ -31,6 +31,9 @@ from tests.test_trust_safety_operations_postgres_integration import (  # noqa: F
 from tests.test_protective_hold_calibration_postgres_integration import (  # noqa: F401
     ProtectiveHoldCalibrationPostgresIntegrationTests,
 )
+from tests.test_space_capacity_postgres_integration import (  # noqa: F401
+    SpaceCapacityPostgresIntegrationTests,
+)
 
 
 @unittest.skipUnless(
