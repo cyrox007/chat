@@ -10,7 +10,7 @@ from components.moderation.abuse_signals import detect_invitation_burst
 from components.room.model import RoomBan
 from components.space.capacity import assert_space_has_capacity, lock_space_admission_policy
 from components.space.membership_service import _load_membership, _load_room, _manager_context
-from components.space.model import SpaceInvitation, SpaceMembership, SpaceSettings
+from components.space.model import SpaceInvitation, SpaceMembership
 from components.space.service import (
     DEFAULT_MEMBER_LIMIT,
     _get_account,
