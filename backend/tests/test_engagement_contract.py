@@ -13,6 +13,7 @@ from components.engagement.schemas import (
     PersonaAppearanceUpdateRequest,
     SpaceAppearanceUpdateRequest,
 )
+from components.engagement.recurrence import occurrences_between
 from components.engagement.service import _next_occurrence
 
 
@@ -73,6 +74,7 @@ class EngagementContractTests(unittest.TestCase):
         )
         self.assertEqual(payload.activity_type, "quiz")
         self.assertEqual(payload.recurrence, "weekly")
+        self.assertEqual(payload.timezone, "UTC")
         self.assertEqual(ActivityRSVPRequest(status="going").status, "going")
         with self.assertRaises(ValidationError):
             ActivityRSVPRequest(status="paid_priority")
@@ -80,6 +82,12 @@ class EngagementContractTests(unittest.TestCase):
             ActivityCreateRequest(title="Без зоны", starts_at="2026-09-20T18:00:00")
         with self.assertRaises(ValidationError):
             ActivityUpdateRequest(starts_at="2026-09-20T18:00:00")
+        with self.assertRaises(ValidationError):
+            ActivityCreateRequest(
+                title="Неверная зона",
+                starts_at="2026-09-20T18:00:00Z",
+                timezone="Europe/Not-A-Real-City",
+            )
 
     def test_recurring_activity_projects_next_occurrence_without_rows(self):
         now = datetime(2026, 9, 15, 17, 0, tzinfo=timezone.utc)
@@ -95,6 +103,50 @@ class EngagementContractTests(unittest.TestCase):
         )
         self.assertEqual(weekly, datetime(2026, 9, 15, 18, 0))
         self.assertEqual(monthly, datetime(2026, 2, 28, 18, 0))
+
+    def test_weekly_recurrence_preserves_local_wall_clock_across_dst(self):
+        next_start = _next_occurrence(
+            datetime(2026, 3, 23, 18, 0, tzinfo=timezone.utc),
+            "weekly",
+            datetime(2026, 3, 30, 12, 0, tzinfo=timezone.utc),
+            timezone_name="Europe/Amsterdam",
+        )
+        # 19:00 Europe/Amsterdam is 18:00 UTC before DST and 17:00 UTC after it.
+        self.assertEqual(next_start, datetime(2026, 3, 30, 17, 0))
+
+    def test_nonexistent_spring_forward_wall_time_shifts_only_that_occurrence(self):
+        values = occurrences_between(
+            datetime(2026, 3, 28, 1, 30, tzinfo=timezone.utc),
+            "daily",
+            datetime(2026, 3, 28, 0, 0, tzinfo=timezone.utc),
+            datetime(2026, 3, 30, 23, 0, tzinfo=timezone.utc),
+            timezone_name="Europe/Amsterdam",
+        )
+        self.assertEqual(
+            values,
+            [
+                datetime(2026, 3, 28, 1, 30),
+                datetime(2026, 3, 29, 1, 30),  # local 02:30 -> 03:30 gap shift
+                datetime(2026, 3, 30, 0, 30),  # local 02:30 restored
+            ],
+        )
+
+    def test_ambiguous_fall_back_wall_time_uses_first_occurrence(self):
+        values = occurrences_between(
+            datetime(2026, 10, 24, 0, 30, tzinfo=timezone.utc),
+            "daily",
+            datetime(2026, 10, 24, 0, 0, tzinfo=timezone.utc),
+            datetime(2026, 10, 26, 3, 0, tzinfo=timezone.utc),
+            timezone_name="Europe/Amsterdam",
+        )
+        self.assertEqual(
+            values,
+            [
+                datetime(2026, 10, 24, 0, 30),
+                datetime(2026, 10, 25, 0, 30),  # first local 02:30 (CEST)
+                datetime(2026, 10, 26, 1, 30),  # local 02:30 (CET)
+            ],
+        )
 
     def test_appearance_and_activity_fk_boundaries(self):
         persona_targets = {fk.target_fullname for fk in PersonaAppearance.__table__.c.persona_uid.foreign_keys}
