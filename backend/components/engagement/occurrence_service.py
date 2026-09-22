@@ -51,6 +51,7 @@ async def materialize_activity_occurrences(
         activity.recurrence,
         window_start,
         window_end,
+        timezone_name=activity.timezone_name or "UTC",
         limit=MAX_MATERIALIZED_PER_ACTIVITY,
     )
     if not starts:
