@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.identity.model import Account, Persona
 from components.room.model import Room, RoomBan, RoomMember
+from components.space.capacity import assert_space_has_capacity, lock_space_admission_policy
 from components.space.model import SpaceMembership, SpaceSettings, SpaceTag
 from components.space.schemas import SpaceCreateRequest, SpaceUpdateRequest
 
@@ -23,6 +24,27 @@ def _slugify_tag(value: str) -> str:
     normalized = re.sub(r"\s+", " ", str(value)).strip().casefold()
     normalized = re.sub(r"[^\w-]+", "-", normalized, flags=re.UNICODE).strip("-_")
     return normalized[:64]
+
+
+async def _load_active_room_by_uid(
+    db: AsyncSession,
+    space_uid: UUID,
+) -> Room:
+    result = await db.execute(
+        select(Room)
+        .where(
+            Room.uid == space_uid,
+            Room.is_active.is_(True),
+        )
+        .limit(1)
+    )
+    room = result.scalar_one_or_none()
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error_type": "space_not_found"},
+        )
+    return room
 
 
 async def _get_account(db: AsyncSession, account_uid: UUID | str) -> Account:
@@ -422,12 +444,7 @@ async def update_space(
     payload: SpaceUpdateRequest,
 ) -> dict:
     account = await _get_account(db, viewer_uid)
-    room = await db.get(Room, space_uid)
-    if not room or not room.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error_type": "space_not_found"},
-        )
+    room = await _load_active_room_by_uid(db, space_uid)
     await _require_owner(db, room, account)
 
     settings = await db.get(SpaceSettings, room.uid)
@@ -470,12 +487,7 @@ async def archive_space(
     viewer_uid: UUID | str,
 ) -> None:
     account = await _get_account(db, viewer_uid)
-    room = await db.get(Room, space_uid)
-    if not room or not room.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error_type": "space_not_found"},
-        )
+    room = await _load_active_room_by_uid(db, space_uid)
 
     await _require_owner(db, room, account)
     room.is_active = False
@@ -488,16 +500,7 @@ async def join_space(
     viewer_uid: UUID | str,
 ) -> dict:
     account = await _get_account(db, viewer_uid)
-    room = await db.get(Room, space_uid)
-    if not room or not room.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error_type": "space_not_found"},
-        )
-
-    settings = await db.get(SpaceSettings, room.uid)
-    join_policy = settings.join_policy if settings else DEFAULT_JOIN_POLICY
-    member_limit = settings.member_limit if settings else DEFAULT_MEMBER_LIMIT
+    room = await _load_active_room_by_uid(db, space_uid)
 
     result = await db.execute(
         select(SpaceMembership)
@@ -511,6 +514,30 @@ async def join_space(
 
     if membership and membership.status == "active":
         return (await build_space_projections(db, [room], account.uid))[0]
+
+    # Every path that can make a membership active serializes on the same
+    # SpaceSettings row. Re-read this Account's membership after acquiring the
+    # lock so two concurrent joins from the same Account remain idempotent.
+    policy = await lock_space_admission_policy(
+        db,
+        room.uid,
+        default_join_policy=DEFAULT_JOIN_POLICY,
+        default_member_limit=DEFAULT_MEMBER_LIMIT,
+    )
+    result = await db.execute(
+        select(SpaceMembership)
+        .where(
+            SpaceMembership.room_uid == room.uid,
+            SpaceMembership.account_uid == account.uid,
+        )
+        .limit(1)
+    )
+    membership = result.scalar_one_or_none()
+    if membership and membership.status == "active":
+        await db.commit()
+        return (await build_space_projections(db, [room], account.uid))[0]
+
+    join_policy = policy.join_policy
 
     if join_policy == "invite" and room.owner_uid != account.legacy_user_uid:
         raise HTTPException(
@@ -531,17 +558,11 @@ async def join_space(
     )
 
     if target_status == "active":
-        count_result = await db.execute(
-            select(func.count(SpaceMembership.uid)).where(
-                SpaceMembership.room_uid == room.uid,
-                SpaceMembership.status == "active",
-            )
+        await assert_space_has_capacity(
+            db,
+            room.uid,
+            member_limit=policy.member_limit,
         )
-        if int(count_result.scalar_one() or 0) >= member_limit:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={"error_type": "space_full"},
-            )
 
     if membership:
         if membership.role == "owner":
@@ -570,12 +591,7 @@ async def leave_space(
     viewer_uid: UUID | str,
 ) -> None:
     account = await _get_account(db, viewer_uid)
-    room = await db.get(Room, space_uid)
-    if not room or not room.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error_type": "space_not_found"},
-        )
+    room = await _load_active_room_by_uid(db, space_uid)
     if room.owner_uid == account.legacy_user_uid:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -664,12 +680,7 @@ async def update_member_role(
     role: str,
 ) -> dict:
     owner_account = await _get_account(db, viewer_uid)
-    room = await db.get(Room, space_uid)
-    if not room or not room.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error_type": "space_not_found"},
-        )
+    room = await _load_active_room_by_uid(db, space_uid)
 
     await _require_owner(db, room, owner_account)
 

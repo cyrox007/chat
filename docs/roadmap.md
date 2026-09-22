@@ -2,7 +2,7 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.21-alpha.2`**; last merged `main` checkpoint: **`0.6.21-alpha.1`**.
+Release candidate: **`0.6.22-alpha.1`**; last merged `main` checkpoint: **`0.6.21-alpha.2`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
@@ -110,6 +110,13 @@ Direct/Sentinel topology abstraction, real master+replica+3-Sentinel promotion r
 - production dependencies проходят обязательные npm/pip vulnerability audits без allow-list исключений;
 - functional exact-head CI #637 green: dependency-security + frontend + full backend + all browser projects.
 
+### Stage 6 checkpoint 14 — Space member-capacity concurrency ✅ `0.6.22-alpha.1`
+- direct join, invitation accept и pending-member approval используют общий PostgreSQL admission lock;
+- active membership COUNT выполняется после lock, поэтому `member_limit` не переполняется конкурентными запросами;
+- duplicate same-Account join остаётся идемпотентным;
+- deterministic PostgreSQL rehearsal конкурирует за последнее место между разными activation paths;
+- Space service UUID lookup исправлен: public UUID больше не передаётся как integer primary key.
+
 ### Stage 6 checkpoint 13.1 — Mobile routed-content hotfix ✅ `0.6.21-alpha.2`
 - route transition теперь анимирует стабильный DOM wrapper и не зависит от fragment-root конкретного view;
 - browser gate проверяет реальную видимость Space Discovery content после registration/reload/login;
@@ -184,7 +191,7 @@ Direct/Sentinel topology abstraction, real master+replica+3-Sentinel promotion r
 - ✅ PostgreSQL 16 integration, historical clean migration, zero drift;
 - ✅ synthetic legacy rehearsal и backup/restore drill;
 - ⏳ anonymized production-like snapshot rehearsal;
-- ⏳ member-capacity concurrency hardening;
+- ✅ member-capacity concurrency hardening;
 - ⏳ IANA timezone storage и DST-correct recurring wall-clock semantics.
 
 ### 6.2 Redis / realtime reliability ✅ baseline complete

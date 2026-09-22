@@ -20,7 +20,7 @@ from components.space.model import (
     SpaceRule,
 )
 from components.space.schemas import SpaceCreateRequest, SpaceUpdateRequest
-from components.space.service import _slugify_tag
+from components.space.service import _load_active_room_by_uid, _slugify_tag
 
 
 class SpaceContractTests(unittest.TestCase):
@@ -80,6 +80,22 @@ class SpaceContractTests(unittest.TestCase):
     def test_membership_is_unique_per_space_and_account(self):
         names = {constraint.name for constraint in SpaceMembership.__table__.constraints if constraint.name}
         self.assertIn("uq_space_membership", names)
+
+    def test_space_service_room_loader_queries_public_uuid(self):
+        space_uid = uuid4()
+        room = Room(uid=space_uid, name="UUID service room", is_active=True)
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = room
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+
+        loaded = asyncio.run(_load_active_room_by_uid(db, space_uid))
+
+        self.assertIs(loaded, room)
+        statement = db.execute.await_args.args[0]
+        sql = str(statement)
+        self.assertIn("rooms.uid", sql)
+        self.assertNotIn("rooms.id =", sql)
 
     def test_membership_room_loader_queries_public_uuid(self):
         space_uid = uuid4()

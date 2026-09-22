@@ -2,6 +2,22 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.22-alpha.1] — 2026-09-22
+
+Stage 6 checkpoint 14 — Space member-capacity concurrency hardening.
+
+- `member_limit` теперь защищён единым PostgreSQL admission lock на `space_settings` для direct join, invitation accept и manager approval;
+- legacy/partial Space без settings использует Room-row fallback lock вместо возврата к racy COUNT;
+- после lock выполняется повторный active-membership COUNT, поэтому два параллельных запроса не могут занять одно последнее место;
+- concurrent join одного Account идемпотентен: membership повторно читается после lock и не гоняется в `uq_space_membership`;
+- manager approval после lock повторно блокирует/re-validates target membership и role/status boundaries;
+- PostgreSQL rehearsal намеренно удерживает admission lock и проверяет join-vs-invite, join-vs-approval и duplicate same-Account join;
+- concurrency test fail-fast: bounded wait/timeout и гарантированное освобождение gate transaction;
+- rehearsal обнаружил и исправил отдельный UUID bug: Space service больше не вызывает `db.get(Room, space_uid)` при integer PK `Room.id`; update/archive/join/leave/member-role загружают Space по публичному `Room.uid`;
+- functional exact-head CI #682 полностью зелёный: backend/PostgreSQL concurrency rehearsal, frontend, dependency-security и browser-smoke.
+
+Следующий Data hardening slice — IANA timezone storage и DST-correct recurring Activity wall-clock semantics.
+
 ## [0.6.21-alpha.2] — 2026-09-21
 
 Hotfix — mobile routed-content visibility + unique session JWTs.

@@ -8,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from components.identity.model import Account, AccountRelationship, Persona
 from components.moderation.abuse_signals import detect_invitation_burst
 from components.room.model import RoomBan
+from components.space.capacity import assert_space_has_capacity, lock_space_admission_policy
 from components.space.membership_service import _load_membership, _load_room, _manager_context
-from components.space.model import SpaceInvitation, SpaceMembership, SpaceSettings
+from components.space.model import SpaceInvitation, SpaceMembership
 from components.space.service import (
     DEFAULT_MEMBER_LIMIT,
     _get_account,
@@ -276,21 +277,19 @@ async def respond_to_invitation(
             detail={"error_type": "space_access_restricted"},
         )
 
-    settings = await db.get(SpaceSettings, room.uid)
-    member_limit = settings.member_limit if settings else DEFAULT_MEMBER_LIMIT
+    policy = await lock_space_admission_policy(
+        db,
+        room.uid,
+        default_join_policy="open",
+        default_member_limit=DEFAULT_MEMBER_LIMIT,
+    )
     membership = await _load_membership(db, room.uid, viewer.uid)
     if not membership or membership.status != "active":
-        count_result = await db.execute(
-            select(func.count(SpaceMembership.uid)).where(
-                SpaceMembership.room_uid == room.uid,
-                SpaceMembership.status == "active",
-            )
+        await assert_space_has_capacity(
+            db,
+            room.uid,
+            member_limit=policy.member_limit,
         )
-        if int(count_result.scalar_one() or 0) >= member_limit:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={"error_type": "space_full"},
-            )
 
     if membership:
         membership.status = "active"
