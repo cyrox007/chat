@@ -1,7 +1,7 @@
 # PubChat version quick reference
 
-- Current release candidate: **0.6.22-alpha.2** — mobile room navigation/viewport hotfix.
-- Last released `main` checkpoint: **0.6.22-alpha.1** until the final exact-head gate passes and the release candidate merges.
+- Current release candidate: **0.6.23-alpha.1** — DST-correct recurring Activities.
+- Last released `main` checkpoint: **0.6.22-alpha.2** until the final exact-head gate passes and the release candidate merges.
 - Current milestone: **0.6.x-alpha** — Pre-beta hardening continues.
 - Proven so far: PostgreSQL 16 migration/recovery; Redis 7.2 distributed semantics, restart recovery and real Sentinel master promotion; multi-process Uvicorn/WebSocket + bounded backpressure; persistent systemd-owned production listener; message notification preferences/active-context suppression; durable unread-Messenger email delivery; Web Push/PWA Messenger delivery.
 - Trust & Safety baseline: platform report intake/triage/evidence audit; Account-level capability restrictions; target-visible reasons/expiry; independent appeal queue; full `account.access` suspension; server-side enforcement for Messenger send, Space chat/media, Space create/join/invite, Persona edit and organic discovery publication.
@@ -22,7 +22,8 @@
 - Mobile routed-content hotfix wraps dynamic routes in a stable DOM transition root and requires real browser visibility assertions; session JWT issuance is collision-safe via unique `jti`.
 - Space capacity admission is PostgreSQL-serialized across direct join, invitation acceptance and manager approval; concurrent final-slot activation cannot exceed `member_limit`.
 - Room navigation/viewport gate now creates a real Space in browser CI, enters it through SPA navigation without reload and verifies mobile `100dvh` fit with no document-level vertical overflow.
-- Still open before beta: accumulation of real shadow-calibration data and provider-level backup/snapshot lifecycle verification, anonymized production-like legacy snapshot rehearsal, DST-correct recurrence, production-like load/pool profiling, broader provider/HTTP/realtime/Redis/PostgreSQL observability, upload/privacy review, real iOS/iPadOS PWA/device testing and accessibility hardening and unit-economics/monetization planning.
+- Recurring Activities now persist an IANA timezone and preserve local wall-clock semantics across DST, including deterministic spring-gap/fall-back handling.
+- Still open before beta: accumulation of real shadow-calibration data and provider-level backup/snapshot lifecycle verification, anonymized production-like legacy snapshot rehearsal, production-like load/pool profiling, broader provider/HTTP/realtime/Redis/PostgreSQL observability, upload/privacy review, real iOS/iPadOS PWA/device testing and accessibility hardening and unit-economics/monetization planning.
 - Alpha: hardening is incomplete; exact checkpoint CI is mandatory.
 - Beta: launch-critical flows and production-like gates are complete; focus shifts to stabilization.
 - Stable: starts at **1.0.0** after the full launch gate passes.
