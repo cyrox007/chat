@@ -256,7 +256,7 @@ watch(() => store.getters.isAuth, (isAuthenticated, wasAuthenticated) => {
 
 		<main class="container app-content" :aria-busy="routePending ? 'true' : 'false'">
 			<RouterView v-slot="{ Component, route }">
-				<Transition name="ui-route" mode="out-in">
+				<Transition name="ui-route">
 					<div :key="route.fullPath" class="route-view-frame">
 						<component :is="Component" />
 					</div>
@@ -268,8 +268,8 @@ watch(() => store.getters.isAuth, (isAuthenticated, wasAuthenticated) => {
 
 <style scoped>
 .app-shell { min-height: 100dvh; }
-.app-content { margin-top: var(--ui-space-2); }
-.route-view-frame { width: 100%; min-width: 0; }
+.app-content { position: relative; margin-top: var(--ui-space-2); }
+.route-view-frame { position: relative; width: 100%; min-width: 0; }
 .route-progress { position: fixed; inset: 0 0 auto; z-index: 1800; height: 3px; overflow: hidden; pointer-events: none; background: color-mix(in srgb, var(--ui-primary) 10%, transparent); }
 .route-progress__bar { position: absolute; inset: 0 auto 0 0; width: 38%; border-radius: var(--ui-radius-pill); background: var(--ui-primary); box-shadow: 0 0 12px color-mix(in srgb, var(--ui-primary) 36%, transparent); animation: route-progress 1s var(--ui-ease-out) infinite; }
 .route-progress-enter-active, .route-progress-leave-active { transition: opacity var(--ui-motion-fast) var(--ui-ease); }
@@ -290,7 +290,7 @@ watch(() => store.getters.isAuth, (isAuthenticated, wasAuthenticated) => {
 @keyframes route-progress { 0% { transform: translateX(-115%); } 55% { transform: translateX(145%); } 100% { transform: translateX(300%); } }
 @media (prefers-reduced-motion: reduce) { .connection-notice__pulse, .route-progress__bar { animation: none; } .route-progress__bar { width: 100%; opacity: .72; } }
 @media (max-width: 720px) {
-	.app-shell { padding-bottom: 4.75rem; }
+	.app-shell { padding-bottom: calc(var(--ui-mobile-nav-height) + env(safe-area-inset-bottom)); }
 	.app-content { margin-top: 0; }
 	.connection-notice { top: var(--ui-space-2); width: calc(100% - 16px); padding: var(--ui-space-3); border-radius: var(--ui-radius-md); }
 }
