@@ -682,10 +682,15 @@ onUnmounted(() => {
 
 /* Адаптивные стили */
 @media (max-width: 768px) {
+	.chat-window-inputs { padding: 6px 8px; }
+	.input-container input[type='text'] { height: 38px; padding-block: 7px; }
+	.input-container button { font-size: 18px; }
 	.reply-preview {
-		padding: 6px;
-		margin-bottom: 6px;
+		padding: 5px 6px;
+		margin-bottom: 5px;
 	}
+	.file-preview { margin-bottom: 6px; gap: 6px; }
+	.emoji-picker { margin-bottom: 6px; gap: 4px; }
 }
 
 .message-composer.disabled {
