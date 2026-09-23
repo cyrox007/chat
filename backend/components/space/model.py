@@ -35,6 +35,10 @@ class SpaceSettings(Database.Base):
 
     room = relationship("Room")
 
+    __table_args__ = (
+        Index("ix_space_settings_purpose_updated", "purpose", "updated_at", "room_uid"),
+    )
+
 
 class SpaceMembership(Database.Base):
     __tablename__ = "space_memberships"
@@ -152,6 +156,7 @@ class SpaceEvent(Database.Base):
     __table_args__ = (
         Index("ix_space_events_room_start", "room_uid", "starts_at"),
         Index("ix_space_events_room_status", "room_uid", "status"),
+        Index("ix_space_events_status_start", "status", "starts_at", "room_uid"),
     )
 
 

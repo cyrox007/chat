@@ -1,7 +1,7 @@
 from typing import List, Optional
 from uuid import uuid4, UUID
 from datetime import datetime, timedelta
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, exists, or_, select, update
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Index, exists, or_, select, update
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import relationship, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +22,10 @@ class Room(Database.Base):
     owner_uid = Column(PG_UUID(as_uuid=True), ForeignKey("users.uid"))
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
+
+    __table_args__ = (
+        Index("ix_rooms_discovery_active_created", "is_active", "created_at", "uid"),
+    )
 
     owner = relationship("User", back_populates="owned_rooms")
     members = relationship("RoomMember", back_populates="room")
