@@ -88,6 +88,8 @@
     --ui-reading-max: 760px;
     --ui-control-height: 44px;
     --ui-control-height-compact: 36px;
+    --ui-mobile-topbar-height: 3.1rem;
+    --ui-mobile-nav-height: 3.55rem;
 
     /* Legacy aliases */
     --bg-light: var(--ui-bg);
@@ -392,19 +394,22 @@ textarea.ui-input {
 }
 
 .ui-route-leave-active {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    pointer-events: none;
     transition:
-        opacity var(--ui-motion-fast) var(--ui-ease),
-        transform var(--ui-motion-fast) var(--ui-ease);
+        opacity var(--ui-motion-fast) var(--ui-ease);
 }
 
 .ui-route-enter-from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(5px);
 }
 
 .ui-route-leave-to {
     opacity: 0;
-    transform: translateY(-3px);
 }
 
 .ui-state-enter-active,
