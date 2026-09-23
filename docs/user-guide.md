@@ -157,7 +157,9 @@ Activities имеют concrete bounded occurrences и opt-in in-app reminders.
 
 ### Время и DST
 
-Activity сейчас хранит canonical UTC instant. Для recurring schedule пока не сохраняется IANA timezone name, поэтому при переходе летнего/зимнего времени локальное wall-clock время weekly/monthly серии может сдвинуться на час. Reminder следует фактическому UTC schedule. Это известное alpha-ограничение и будет исправлено до beta на backend.
+Activity хранит canonical UTC instant и отдельное IANA timezone name. Recurring `daily/weekly/monthly` schedule вычисляется в локальном календаре этой timezone, поэтому привычное wall-clock время сохраняется при переходе на летнее/зимнее время.
+
+Если локальное время попадает в spring-forward gap, конкретный occurrence сдвигается вперёд на размер DST gap; следующие occurrence возвращаются к исходному локальному времени. При неоднозначном fall-back времени используется первый occurrence. Reminders/materialized occurrences используют тот же recurrence engine, поэтому не расходятся с `next_starts_at`.
 
 ## 16. Поддержка Persona и Spaces
 
