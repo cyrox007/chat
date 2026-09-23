@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 PersonaAccent = Literal["plum", "berry", "forest", "ocean", "sand"]
@@ -13,6 +14,17 @@ ActivityType = Literal["hangout", "quiz", "game", "watch", "local", "creative"]
 ActivityRecurrence = Literal["none", "daily", "weekly", "monthly"]
 ActivityStatus = Literal["scheduled", "cancelled"]
 RSVPStatus = Literal["interested", "going"]
+
+
+def _normalize_timezone_name(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    try:
+        ZoneInfo(normalized)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError("timezone must be a valid IANA timezone name") from exc
+    return normalized
 
 
 def _require_timezone(value: datetime | None) -> None:
@@ -53,7 +65,13 @@ class ActivityCreateRequest(BaseModel):
     description: Optional[str] = Field(default=None, max_length=2000)
     activity_type: ActivityType = "hangout"
     starts_at: datetime
+    timezone: str = Field(default="UTC", min_length=1, max_length=64)
     recurrence: ActivityRecurrence = "none"
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        return _normalize_timezone_name(value) or "UTC"
 
     @model_validator(mode="after")
     def normalize_text(self):
@@ -69,8 +87,14 @@ class ActivityUpdateRequest(BaseModel):
     description: Optional[str] = Field(default=None, max_length=2000)
     activity_type: Optional[ActivityType] = None
     starts_at: Optional[datetime] = None
+    timezone: Optional[str] = Field(default=None, min_length=1, max_length=64)
     recurrence: Optional[ActivityRecurrence] = None
     status: Optional[ActivityStatus] = None
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str | None) -> str | None:
+        return _normalize_timezone_name(value)
 
     @model_validator(mode="after")
     def normalize_text(self):

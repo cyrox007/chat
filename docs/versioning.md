@@ -2,7 +2,7 @@
 
 ## Current release
 
-`0.6.22-alpha.2`
+`0.6.23-alpha.1`
 
 Current development milestone remains `0.6.x-alpha` — Pre-beta hardening.
 
@@ -35,7 +35,7 @@ After `1.0.0`, normal SemVer rules apply.
 
 Alpha is used while launch-critical hardening or product domains are incomplete. Every recorded alpha checkpoint must pass CI on the exact versioned head.
 
-PubChat remains alpha because Stage 6 still requires production-like legacy snapshot rehearsal, DST/timezone work, broader load/pool profiling and observability, upload/privacy review, accessibility hardening and real iOS/iPadOS PWA/device rehearsal.
+PubChat remains alpha because Stage 6 still requires production-like legacy snapshot rehearsal, broader load/pool profiling and observability, upload/privacy review, accessibility hardening and real iOS/iPadOS PWA/device rehearsal.
 
 Checkpoint progression:
 - `0.6.0-alpha.1` — PostgreSQL migration/schema-drift/async integration baseline;
@@ -52,6 +52,7 @@ Checkpoint progression:
 - `0.6.21-alpha.2` — mobile routed-content transition hotfix plus collision-safe JWT session issuance via unique `jti`.
 - `0.6.22-alpha.1` — Space member-capacity concurrency hardening with shared PostgreSQL admission lock and UUID lookup repair.
 - `0.6.22-alpha.2` — mobile room navigation/viewport hotfix with overlap-safe route transitions and real browser overflow gate.
+- `0.6.23-alpha.1` — IANA timezone storage and DST-correct recurring Activity wall-clock semantics.
 
 These checkpoints do not declare Stage 6 complete.
 

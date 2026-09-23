@@ -2,6 +2,21 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.23-alpha.1] — 2026-09-23
+
+Stage 6 checkpoint 15 — DST-correct recurring Activities.
+
+- `space_activities` получил durable IANA `timezone_name`; существующие записи мигрируют с `UTC`, сохраняя прежнее расписание;
+- recurring daily/weekly/monthly arithmetic выполняется в локальном календаре выбранной timezone, а durable `starts_at`/occurrence instants остаются UTC;
+- weekly/monthly серии сохраняют локальное wall-clock время при переходе CET/CEST и других DST boundary;
+- nonexistent spring-forward wall time сдвигается вперёд на DST gap только для конкретного occurrence, следующий occurrence возвращается к исходному wall-clock времени;
+- ambiguous fall-back wall time использует первый occurrence (`fold=0`) как детерминированную политику;
+- materialized Activity occurrences используют тот же timezone-aware recurrence engine, поэтому reminders и UI не расходятся с `next_starts_at`;
+- Activity API валидирует реальные IANA timezone names;
+- SPA передаёт browser IANA timezone при создании Activity и показывает выбранную timezone рядом с datetime-local input;
+- contract tests детерминированно проверяют Amsterdam spring-forward, fall-back, weekly и monthly semantics;
+- functional exact-head CI #702 полностью зелёный: backend/PostgreSQL, frontend, dependency-security и Chromium/Firefox/WebKit/mobile browser-smoke.
+
 ## [0.6.22-alpha.2] — 2026-09-23
 
 Hotfix — mobile room navigation / viewport fit.

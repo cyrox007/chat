@@ -2,7 +2,7 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.22-alpha.2`**; last merged `main` checkpoint: **`0.6.22-alpha.1`**.
+Release candidate: **`0.6.23-alpha.1`**; last merged `main` checkpoint: **`0.6.22-alpha.2`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
@@ -28,6 +28,14 @@ Spaces/memberships/scoped roles, social graph, invitations, Rules/Events/History
 
 ### Stage 5.1–5.6 ✅ `0.5.0-alpha.1` → `0.5.5-alpha.1`
 Product identity/Activities, earned engagement, occurrences/reminders, cosmetic support, organic discovery и installable PWA/external reminder-worker baseline.
+
+### Stage 6 checkpoint 15 — DST-correct recurring Activities ✅ `0.6.23-alpha.1`
+- Activity хранит IANA timezone отдельно от canonical UTC instant;
+- daily/weekly/monthly recurrence сохраняет локальное wall-clock время через DST;
+- spring-forward gap и fall-back ambiguity имеют детерминированную политику;
+- occurrence materialization/reminders используют тот же timezone-aware recurrence engine;
+- SPA передаёт browser timezone, API валидирует IANA zone names;
+- Amsterdam DST contract tests закрепляют spring/fall/weekly/monthly semantics.
 
 ### Stage 6 checkpoint 14.1 — Mobile room navigation / viewport hotfix ✅ `0.6.22-alpha.2`
 - incoming route view монтируется сразу; outgoing frame fade-ится absolute и не может оставить пустой shell;
@@ -199,7 +207,7 @@ Direct/Sentinel topology abstraction, real master+replica+3-Sentinel promotion r
 - ✅ synthetic legacy rehearsal и backup/restore drill;
 - ⏳ anonymized production-like snapshot rehearsal;
 - ✅ member-capacity concurrency hardening;
-- ⏳ IANA timezone storage и DST-correct recurring wall-clock semantics.
+- ✅ IANA timezone storage и DST-correct recurring wall-clock semantics.
 
 ### 6.2 Redis / realtime reliability ✅ baseline complete
 - ✅ distributed Redis semantics и production fail-closed;
