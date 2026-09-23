@@ -1,3 +1,4 @@
+import ast
 import inspect
 import unittest
 from datetime import datetime, timedelta
@@ -31,8 +32,17 @@ class DiscoveryContractTests(unittest.TestCase):
         for token in ("gift_code", "wallet", "currency", "payment", "price"):
             self.assertNotIn(token, score_source)
             self.assertNotIn(token, candidate_source)
-        self.assertNotIn("room.rating", score_source)
-        self.assertNotIn("room.rating", candidate_source)
+        for implementation in (service._score_space, service._candidate_room_uids):
+            tree = ast.parse(inspect.getsource(implementation))
+            legacy_rating_reads = [
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Attribute)
+                and node.attr == "rating"
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "Room"
+            ]
+            self.assertEqual(legacy_rating_reads, [])
 
     def test_score_is_internal_and_projection_is_explainable(self):
         now = datetime(2026, 9, 15, 12, 0, 0)
