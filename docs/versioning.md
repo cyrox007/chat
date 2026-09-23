@@ -2,7 +2,7 @@
 
 ## Current release
 
-`0.6.22-alpha.1`
+`0.6.22-alpha.2`
 
 Current development milestone remains `0.6.x-alpha` — Pre-beta hardening.
 
@@ -51,6 +51,7 @@ Checkpoint progression:
 - `0.6.21-alpha.1` — UI motion/loading baseline with route/modal/popover transitions, navigation progress, skeleton/retry states and reduced-motion support.
 - `0.6.21-alpha.2` — mobile routed-content transition hotfix plus collision-safe JWT session issuance via unique `jti`.
 - `0.6.22-alpha.1` — Space member-capacity concurrency hardening with shared PostgreSQL admission lock and UUID lookup repair.
+- `0.6.22-alpha.2` — mobile room navigation/viewport hotfix with overlap-safe route transitions and real browser overflow gate.
 
 These checkpoints do not declare Stage 6 complete.
 

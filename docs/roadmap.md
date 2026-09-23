@@ -2,7 +2,7 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.22-alpha.1`**; last merged `main` checkpoint: **`0.6.21-alpha.2`**.
+Release candidate: **`0.6.22-alpha.2`**; last merged `main` checkpoint: **`0.6.22-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
@@ -28,6 +28,13 @@ Spaces/memberships/scoped roles, social graph, invitations, Rules/Events/History
 
 ### Stage 5.1–5.6 ✅ `0.5.0-alpha.1` → `0.5.5-alpha.1`
 Product identity/Activities, earned engagement, occurrences/reminders, cosmetic support, organic discovery и installable PWA/external reminder-worker baseline.
+
+### Stage 6 checkpoint 14.1 — Mobile room navigation / viewport hotfix ✅ `0.6.22-alpha.2`
+- incoming route view монтируется сразу; outgoing frame fade-ится absolute и не может оставить пустой shell;
+- room loading встроен в `space-main` skeleton вместо отдельного flex-loader;
+- mobile room shell следует `100dvh` + shared topbar/bottom-nav/safe-area tokens без legacy minimum height;
+- mobile navigation/composer/header density уменьшена;
+- browser gate создаёт реальный Space, входит в комнату без reload и проверяет отсутствие document vertical overflow.
 
 ### Stage 6 checkpoint 1 — PostgreSQL migration baseline ✅ `0.6.0-alpha.1`
 PostgreSQL 16 clean historical migration, schema-drift gate, synthetic legacy rehearsal и standalone ORM registry.

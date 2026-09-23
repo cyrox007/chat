@@ -83,6 +83,38 @@ test('registration, refresh rotation, logout and login survive real browser cook
   await expect(page.getByRole('heading', { name: 'Найдите место, куда хочется вернуться' })).toBeVisible();
   await assertNoPersistedBearer(page);
 
+  // Enter a real room through SPA navigation. This guards the mobile regression
+  // where the shell stayed visible but the routed room content disappeared
+  // until a full page reload.
+  const spaceName = `Browser room ${testInfo.project.name} ${Date.now().toString(36)}`;
+  await page.getByRole('button', { name: 'Создать пространство' }).first().click();
+  await expect(page.getByRole('dialog', { name: 'Создать пространство' })).toBeVisible();
+  await page.getByLabel('Название').fill(spaceName);
+  await page.getByRole('dialog', { name: 'Создать пространство' })
+    .getByRole('button', { name: 'Создать пространство' }).click();
+
+  await expect(page).toHaveURL(/\/spaces\/[^/]+$/);
+  await expect(page.getByRole('heading', { name: spaceName })).toBeVisible();
+  await expect(page.locator('.route-view-frame')).toHaveCount(1);
+
+  if (testInfo.project.name === 'mobile-chromium') {
+    const viewport = await page.evaluate(() => {
+      const root = document.documentElement;
+      const room = document.querySelector('.space-shell')?.getBoundingClientRect();
+      const nav = document.querySelector('.mobile-nav')?.getBoundingClientRect();
+      return {
+        innerHeight: window.innerHeight,
+        scrollHeight: Math.max(root.scrollHeight, document.body.scrollHeight),
+        roomBottom: room?.bottom ?? null,
+        navTop: nav?.top ?? null,
+      };
+    });
+    expect(viewport.scrollHeight).toBeLessThanOrEqual(viewport.innerHeight + 2);
+    expect(viewport.roomBottom).not.toBeNull();
+    expect(viewport.navTop).not.toBeNull();
+    expect(viewport.roomBottom).toBeLessThanOrEqual(viewport.navTop + 2);
+  }
+
   // Core authenticated surfaces should remain routable after refresh recovery.
   await page.goto('/messenger');
   await expect(page).toHaveURL(/\/messenger$/);
