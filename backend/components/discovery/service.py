@@ -81,7 +81,7 @@ async def _blocked_account_uids(db: AsyncSession, viewer_uid: UUID) -> set[UUID]
 async def _viewer_context(
     db: AsyncSession,
     viewer_uid: UUID,
-) -> tuple[set[str], set[str], str | None]:
+) -> tuple[set[str], set[str], set[str], str | None]:
     membership_result = await db.execute(
         select(SpaceMembership.room_uid).where(
             SpaceMembership.account_uid == viewer_uid,
@@ -92,6 +92,7 @@ async def _viewer_context(
 
     purposes: set[str] = set()
     tags: set[str] = set()
+    tag_slugs: set[str] = set()
     if room_uids:
         purpose_result = await db.execute(
             select(SpaceSettings.purpose).where(SpaceSettings.room_uid.in_(room_uids))
@@ -99,12 +100,18 @@ async def _viewer_context(
         purposes = {str(purpose) for (purpose,) in purpose_result.all() if purpose}
 
         tag_result = await db.execute(
-            select(SpaceTag.label).where(SpaceTag.room_uid.in_(room_uids))
+            select(SpaceTag.label, SpaceTag.slug).where(SpaceTag.room_uid.in_(room_uids))
         )
+        tag_rows = tag_result.all()
         tags = {
             _normalize_topic(label)
-            for (label,) in tag_result.all()
+            for label, _ in tag_rows
             if label and _normalize_topic(label)
+        }
+        tag_slugs = {
+            str(slug)
+            for _, slug in tag_rows
+            if slug
         }
 
     persona_result = await db.execute(
@@ -113,7 +120,7 @@ async def _viewer_context(
         .limit(1)
     )
     social_intent = persona_result.scalar_one_or_none()
-    return purposes, tags, str(social_intent) if social_intent else None
+    return purposes, tags, tag_slugs, str(social_intent) if social_intent else None
 
 
 def _round_robin_unique(
@@ -154,6 +161,7 @@ async def _candidate_room_uids(
     *,
     viewer_purposes: set[str],
     viewer_tags: set[str],
+    viewer_tag_slugs: set[str],
     now: datetime,
 ) -> list[UUID]:
     """Build an internal bounded candidate pool from independent organic sources.
@@ -242,11 +250,11 @@ async def _candidate_room_uids(
             break
 
     shared_sources: list[list[UUID]] = []
-    if viewer_tags:
+    if viewer_tag_slugs:
         tag_match_count = func.count(func.distinct(SpaceTag.slug))
         tag_result = await db.execute(
             select(SpaceTag.room_uid, tag_match_count)
-            .where(func.lower(SpaceTag.label).in_(sorted(viewer_tags)))
+            .where(SpaceTag.slug.in_(sorted(viewer_tag_slugs)))
             .group_by(SpaceTag.room_uid)
             .order_by(tag_match_count.desc(), SpaceTag.room_uid.asc())
             .limit(DISCOVERY_SOURCE_LIMIT)
@@ -464,7 +472,7 @@ async def discover_spaces(
     viewer = UUID(str(viewer_uid))
 
     now = datetime.utcnow()
-    viewer_purposes, viewer_tags, social_intent = await _viewer_context(db, viewer)
+    viewer_purposes, viewer_tags, viewer_tag_slugs, social_intent = await _viewer_context(db, viewer)
 
     # Explicit search/filter mode retains the canonical bounded catalog
     # semantics. Default organic discovery instead uses multiple independent
@@ -486,6 +494,7 @@ async def discover_spaces(
             viewer,
             viewer_purposes=viewer_purposes,
             viewer_tags=viewer_tags,
+            viewer_tag_slugs=viewer_tag_slugs,
             now=now,
         )
         candidate_spaces = await list_spaces(
