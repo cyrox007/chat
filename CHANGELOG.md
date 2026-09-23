@@ -2,6 +2,19 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.22-alpha.2] — 2026-09-23
+
+Hotfix — mobile room navigation / viewport fit.
+
+- SPA route transition больше не использует `mode="out-in"`: новая route view монтируется сразу, а старая кратко fade-ится поверх неё с `pointer-events: none`, поэтому переход в комнату не может оставить shell без content до reload;
+- outgoing route frame во время leave становится absolute и не раздувает document flow;
+- room loading перенесён внутрь `space-main` как skeleton; старый standalone Loader больше не участвует отдельным flex-соседом;
+- mobile room height вычисляется из реального `100dvh`, topbar, bottom-nav и safe-area; legacy `min-height: 32rem` на mobile сброшен;
+- mobile topbar/bottom-nav и composer/header уплотнены, bottom-nav reserve синхронизирован с его реальной высотой;
+- browser-smoke создаёт настоящий Space через UI и переходит в `/spaces/:uid` без reload, проверяя видимый room heading;
+- mobile Chromium дополнительно проверяет отсутствие document-level vertical overflow и что room заканчивается перед fixed bottom-nav;
+- functional exact-head CI #693 полностью зелёный: backend, frontend, dependency-security и browser-smoke.
+
 ## [0.6.22-alpha.1] — 2026-09-22
 
 Stage 6 checkpoint 14 — Space member-capacity concurrency hardening.
