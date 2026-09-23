@@ -12,12 +12,14 @@ from components.engagement.model import SpaceActivity
 from components.engagement.occurrence_model import ActivityOccurrence
 from components.identity.model import AccountRelationship, Persona
 from components.message.model import Message
+from components.room.model import Room
 from components.space.model import SpaceEvent, SpaceMembership, SpaceSettings, SpaceTag
 from components.space.service import list_spaces
 
 
 DISCOVERY_POOL_LIMIT = 200
-DISCOVERY_ALGORITHM = "organic-v1"
+DISCOVERY_SOURCE_LIMIT = 64
+DISCOVERY_ALGORITHM = "organic-v2"
 UPCOMING_WINDOW_DAYS = 14
 RECENT_ACTIVITY_HOURS = 24
 
@@ -112,6 +114,180 @@ async def _viewer_context(
     )
     social_intent = persona_result.scalar_one_or_none()
     return purposes, tags, str(social_intent) if social_intent else None
+
+
+def _round_robin_unique(
+    sources: list[list[UUID]],
+    *,
+    limit: int,
+) -> list[UUID]:
+    """Interleave bounded candidate sources without letting one source dominate."""
+    if limit <= 0:
+        return []
+
+    iterators = [iter(source) for source in sources if source]
+    seen: set[UUID] = set()
+    result: list[UUID] = []
+
+    while iterators and len(result) < limit:
+        next_round = []
+        for iterator in iterators:
+            try:
+                value = next(iterator)
+            except StopIteration:
+                continue
+            next_round.append(iterator)
+            if value in seen:
+                continue
+            seen.add(value)
+            result.append(value)
+            if len(result) >= limit:
+                break
+        iterators = next_round
+
+    return result
+
+
+async def _candidate_room_uids(
+    db: AsyncSession,
+    viewer_uid: UUID,
+    *,
+    viewer_purposes: set[str],
+    viewer_tags: set[str],
+    now: datetime,
+) -> list[UUID]:
+    """Build an internal bounded candidate pool from independent organic sources.
+
+    Candidate generation never grants visibility. Every UID is passed through
+    canonical Space eligibility afterwards, before any ranking metadata is read
+    or returned to the client.
+    """
+    membership_result = await db.execute(
+        select(SpaceMembership.room_uid)
+        .where(
+            SpaceMembership.account_uid == viewer_uid,
+            SpaceMembership.status.in_(["active", "pending"]),
+        )
+        .order_by(
+            SpaceMembership.updated_at.desc(),
+            SpaceMembership.joined_at.desc(),
+        )
+        .limit(DISCOVERY_SOURCE_LIMIT)
+    )
+    membership_uids = [room_uid for (room_uid,) in membership_result.all()]
+
+    recent_since = now - timedelta(hours=RECENT_ACTIVITY_HOURS)
+    recent_count = func.count(func.distinct(Message.author_uid))
+    recent_latest = func.max(Message.created_at)
+    recent_result = await db.execute(
+        select(Message.room_uid, recent_count, recent_latest)
+        .where(
+            Message.room_uid.is_not(None),
+            Message.author_uid.is_not(None),
+            Message.created_at >= recent_since,
+        )
+        .group_by(Message.room_uid)
+        .order_by(recent_count.desc(), recent_latest.desc())
+        .limit(DISCOVERY_SOURCE_LIMIT)
+    )
+    recent_uids = [room_uid for room_uid, _, _ in recent_result.all() if room_uid]
+
+    upcoming_until = now + timedelta(days=UPCOMING_WINDOW_DAYS)
+    next_event = func.min(SpaceEvent.starts_at)
+    event_result = await db.execute(
+        select(SpaceEvent.room_uid, next_event)
+        .where(
+            SpaceEvent.status == "scheduled",
+            SpaceEvent.starts_at >= now,
+            SpaceEvent.starts_at <= upcoming_until,
+        )
+        .group_by(SpaceEvent.room_uid)
+        .order_by(next_event.asc())
+        .limit(DISCOVERY_SOURCE_LIMIT)
+    )
+    upcoming_items = [
+        (room_uid, starts_at)
+        for room_uid, starts_at in event_result.all()
+        if room_uid and starts_at
+    ]
+
+    next_occurrence = func.min(ActivityOccurrence.starts_at)
+    occurrence_result = await db.execute(
+        select(SpaceActivity.room_uid, next_occurrence)
+        .join(ActivityOccurrence, ActivityOccurrence.activity_uid == SpaceActivity.uid)
+        .where(
+            SpaceActivity.status == "scheduled",
+            ActivityOccurrence.status == "scheduled",
+            ActivityOccurrence.starts_at >= now,
+            ActivityOccurrence.starts_at <= upcoming_until,
+        )
+        .group_by(SpaceActivity.room_uid)
+        .order_by(next_occurrence.asc())
+        .limit(DISCOVERY_SOURCE_LIMIT)
+    )
+    upcoming_items.extend(
+        (room_uid, starts_at)
+        for room_uid, starts_at in occurrence_result.all()
+        if room_uid and starts_at
+    )
+    upcoming_items.sort(key=lambda item: (item[1], str(item[0])))
+    upcoming_uids: list[UUID] = []
+    upcoming_seen: set[UUID] = set()
+    for room_uid, _ in upcoming_items:
+        if room_uid in upcoming_seen:
+            continue
+        upcoming_seen.add(room_uid)
+        upcoming_uids.append(room_uid)
+        if len(upcoming_uids) >= DISCOVERY_SOURCE_LIMIT:
+            break
+
+    shared_sources: list[list[UUID]] = []
+    if viewer_tags:
+        tag_match_count = func.count(func.distinct(SpaceTag.slug))
+        tag_result = await db.execute(
+            select(SpaceTag.room_uid, tag_match_count)
+            .where(func.lower(SpaceTag.label).in_(sorted(viewer_tags)))
+            .group_by(SpaceTag.room_uid)
+            .order_by(tag_match_count.desc(), SpaceTag.room_uid.asc())
+            .limit(DISCOVERY_SOURCE_LIMIT)
+        )
+        shared_sources.append([room_uid for room_uid, _ in tag_result.all()])
+
+    if viewer_purposes:
+        purpose_result = await db.execute(
+            select(SpaceSettings.room_uid)
+            .where(SpaceSettings.purpose.in_(sorted(viewer_purposes)))
+            .order_by(SpaceSettings.updated_at.desc(), SpaceSettings.room_uid.asc())
+            .limit(DISCOVERY_SOURCE_LIMIT)
+        )
+        shared_sources.append([room_uid for (room_uid,) in purpose_result.all()])
+
+    shared_uids = _round_robin_unique(
+        shared_sources,
+        limit=DISCOVERY_SOURCE_LIMIT,
+    )
+
+    # Freshness is a fallback source large enough to keep bounded pagination
+    # useful even on a quiet installation. Round-robin interleaving ensures it
+    # cannot crowd out active/upcoming/shared-context candidates.
+    fresh_result = await db.execute(
+        select(Room.uid)
+        .where(Room.is_active.is_(True))
+        .order_by(Room.created_at.desc(), Room.uid.asc())
+        .limit(DISCOVERY_POOL_LIMIT)
+    )
+    fresh_uids = [room_uid for (room_uid,) in fresh_result.all()]
+
+    return _round_robin_unique(
+        [
+            membership_uids,
+            recent_uids,
+            upcoming_uids,
+            shared_uids,
+            fresh_uids,
+        ],
+        limit=DISCOVERY_POOL_LIMIT,
+    )
 
 
 async def _recent_contributor_counts(
@@ -287,18 +463,41 @@ async def discover_spaces(
 ) -> list[dict]:
     viewer = UUID(str(viewer_uid))
 
-    # Eligibility is resolved first by the canonical Space service. Ranking never
-    # makes an otherwise private/inactive Space visible.
-    candidate_spaces = await list_spaces(
-        db,
-        viewer_uid=viewer,
-        query=query,
-        purpose=purpose,
-        tag=tag,
-        limit=DISCOVERY_POOL_LIMIT,
-        offset=0,
-    )
+    now = datetime.utcnow()
+    viewer_purposes, viewer_tags, social_intent = await _viewer_context(db, viewer)
 
+    # Explicit search/filter mode retains the canonical bounded catalog
+    # semantics. Default organic discovery instead uses multiple independent
+    # bounded sources so an older Space can re-enter the pool after new social
+    # activity rather than being permanently excluded by creation date.
+    if query or purpose or tag:
+        candidate_spaces = await list_spaces(
+            db,
+            viewer_uid=viewer,
+            query=query,
+            purpose=purpose,
+            tag=tag,
+            limit=DISCOVERY_POOL_LIMIT,
+            offset=0,
+        )
+    else:
+        candidate_uids = await _candidate_room_uids(
+            db,
+            viewer,
+            viewer_purposes=viewer_purposes,
+            viewer_tags=viewer_tags,
+            now=now,
+        )
+        candidate_spaces = await list_spaces(
+            db,
+            viewer_uid=viewer,
+            limit=DISCOVERY_POOL_LIMIT,
+            offset=0,
+            candidate_uids=candidate_uids,
+        )
+
+    # Eligibility is resolved by the canonical Space service before ranking;
+    # candidate generation never makes a private/inactive Space visible.
     blocked_accounts = await _blocked_account_uids(db, viewer)
     eligible: list[dict] = []
     for space in candidate_spaces:
@@ -319,10 +518,8 @@ async def discover_spaces(
         eligible.append(space)
 
     room_uids = [UUID(str(space["uid"])) for space in eligible]
-    now = datetime.utcnow()
     recent_by_room = await _recent_contributor_counts(db, room_uids, now)
     upcoming_by_room = await _upcoming_by_room(db, room_uids, now)
-    viewer_purposes, viewer_tags, social_intent = await _viewer_context(db, viewer)
 
     ranked: list[dict] = []
     for space in eligible:
