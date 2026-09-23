@@ -57,7 +57,18 @@
 				<span>{{ realtimeNotice.message }}</span>
 			</div>
 
-			<section v-if="accessGate && !isLoading" class="access-gate">
+			<section v-if="isLoading" class="space-loading" role="status" aria-live="polite" aria-label="Открываем пространство">
+				<div class="space-loading__line space-loading__line--title ui-skeleton" aria-hidden="true"></div>
+				<div class="space-loading__line ui-skeleton" aria-hidden="true"></div>
+				<div class="space-loading__line space-loading__line--short ui-skeleton" aria-hidden="true"></div>
+				<div class="space-loading__messages" aria-hidden="true">
+					<span class="space-loading__bubble ui-skeleton"></span>
+					<span class="space-loading__bubble space-loading__bubble--right ui-skeleton"></span>
+					<span class="space-loading__bubble space-loading__bubble--short ui-skeleton"></span>
+				</div>
+			</section>
+
+			<section v-else-if="accessGate" class="access-gate">
 				<div class="access-gate__icon" aria-hidden="true"><i :class="accessGate.icon"></i></div>
 				<span class="space-header__eyebrow">{{ accessGate.eyebrow }}</span>
 				<h2>{{ accessGate.title }}</h2>
@@ -76,7 +87,7 @@
 				</div>
 			</section>
 
-			<div v-else-if="currentRoom?.uid && !isLoading" class="conversation-area">
+			<div v-else-if="currentRoom?.uid" class="conversation-area">
 				<section id="chat-messages" class="message-stream" aria-label="Сообщения пространства">
 					<div v-if="messages.length === 0" class="stream-empty">
 						<div class="stream-empty__icon" aria-hidden="true"><i class="fas fa-mug-hot"></i></div>
@@ -105,7 +116,7 @@
 				/>
 			</div>
 
-			<section v-else-if="!isLoading" class="space-placeholder">
+			<section v-else class="space-placeholder">
 				<div class="space-placeholder__art" aria-hidden="true"><i class="fas fa-compass"></i></div>
 				<h2>Пространство недоступно</h2>
 				<p>Оно могло быть архивировано или ссылка больше не ведёт в активное место.</p>
@@ -113,7 +124,6 @@
 			</section>
 		</section>
 
-		<Loader :isLoading="isLoading" />
 
 		<RightSidebar
 			v-if="currentRoom?.uid && !isLoading && !accessGate"
@@ -135,7 +145,6 @@ import { v4 as uuidv4 } from 'uuid';
 import DOMPurify from 'dompurify';
 
 import SpacesService from '@/API/SpacesService';
-import Loader from '@/components/Loader/index.vue';
 import LeftSidebar from '@/components/LeftSidebar/index.vue';
 import RightSidebar from '@/components/RightSidebar/index.vue';
 import Message from '@/components/Message/ChatMessage.vue';
@@ -417,6 +426,14 @@ onBeforeUnmount(() => {
 .space-notice { display: flex; align-items: center; gap: var(--ui-space-2); padding: var(--ui-space-2) var(--ui-space-4); border-bottom: 1px solid var(--ui-border); background: var(--ui-info-soft); color: var(--ui-info); font-size: var(--ui-text-sm); }
 .space-notice--warning { background: var(--ui-warning-soft); color: var(--ui-warning); }
 .space-notice--error, .space-notice--restricted { background: var(--ui-danger-soft); color: var(--ui-danger); }
+.space-loading { min-height: 0; flex: 1; display: flex; flex-direction: column; gap: var(--ui-space-3); padding: var(--ui-space-5) clamp(var(--ui-space-3), 3vw, var(--ui-space-6)); overflow: hidden; }
+.space-loading__line { width: min(72%, 28rem); height: .8rem; border-radius: var(--ui-radius-pill); }
+.space-loading__line--title { width: min(46%, 18rem); height: 1rem; }
+.space-loading__line--short { width: min(34%, 13rem); }
+.space-loading__messages { min-height: 0; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: var(--ui-space-3); }
+.space-loading__bubble { width: min(64%, 28rem); height: 3.2rem; border-radius: 1rem; }
+.space-loading__bubble--right { align-self: flex-end; width: min(52%, 23rem); }
+.space-loading__bubble--short { width: min(38%, 16rem); height: 2.6rem; }
 .conversation-area { min-height: 0; flex: 1; display: flex; flex-direction: column; }
 .message-stream { min-height: 0; flex: 1; overflow-y: auto; padding: var(--ui-space-4) clamp(var(--ui-space-3), 3vw, var(--ui-space-6)); scroll-behavior: smooth; }
 .stream-empty { min-height: 100%; display: grid; place-items: center; align-content: center; gap: var(--ui-space-2); text-align: center; color: var(--ui-text-muted); }
@@ -430,6 +447,32 @@ onBeforeUnmount(() => {
 .access-gate__icon { background: var(--ui-warning-soft); color: var(--ui-warning); transform: rotate(4deg); }
 .access-gate__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--ui-space-2); margin-top: var(--ui-space-2); }
 .ui-button--ghost { border: 1px solid var(--ui-border); background: transparent; color: var(--ui-text-muted); }
-@media (max-width: 991px) { .space-shell { height: calc(100dvh - 8.4rem); border-radius: var(--ui-radius-lg); } .space-header { padding-inline: var(--ui-space-3); } }
-@media (max-width: 560px) { .space-shell { margin-inline: calc(var(--ui-space-3) * -1); border-right: 0; border-left: 0; border-radius: 0; } .space-header__eyebrow { display: none; } .space-header__title-row { gap: var(--ui-space-2); } .space-header h1 { font-size: var(--ui-text-md); } .connection-chip { max-width: 7.5rem; overflow: hidden; text-overflow: ellipsis; } .message-stream { padding-inline: var(--ui-space-3); } .access-gate, .space-placeholder { padding-inline: var(--ui-space-4); } }
+@media (max-width: 991px) {
+	.space-shell { height: calc(100dvh - 4.35rem); min-height: 0; border-radius: var(--ui-radius-lg); }
+	.space-header { padding-inline: var(--ui-space-3); }
+}
+@media (max-width: 720px) {
+	.space-shell {
+		height: calc(100dvh - var(--ui-mobile-topbar-height) - var(--ui-mobile-nav-height) - env(safe-area-inset-bottom));
+		min-height: 0;
+	}
+	.space-header {
+		min-height: 3.35rem;
+		grid-template-columns: 2.35rem minmax(0, 1fr) 2.35rem;
+		gap: var(--ui-space-2);
+		padding: .3rem var(--ui-space-3);
+	}
+	.space-header__icon { width: 2.25rem; height: 2.25rem; }
+	.message-stream { padding-block: var(--ui-space-3); }
+}
+@media (max-width: 560px) {
+	.space-shell { margin-inline: calc(var(--ui-space-3) * -1); border-right: 0; border-left: 0; border-radius: 0; }
+	.space-header__eyebrow { display: none; }
+	.space-header__title-row { gap: var(--ui-space-2); }
+	.space-header h1 { font-size: var(--ui-text-md); }
+	.connection-chip { max-width: 6.5rem; min-height: 1.5rem; overflow: hidden; text-overflow: ellipsis; }
+	.message-stream { padding-inline: var(--ui-space-3); }
+	.space-loading { padding: var(--ui-space-3); }
+	.access-gate, .space-placeholder { padding-inline: var(--ui-space-4); }
+}
 </style>
