@@ -80,6 +80,7 @@ class DiscoveryCandidatesPostgresIntegrationTests(unittest.TestCase):
                             viewer_uid,
                             viewer_purposes=set(),
                             viewer_tags=set(),
+                            viewer_tag_slugs=set(),
                             now=now,
                         )
 
