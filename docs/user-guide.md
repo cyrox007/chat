@@ -1,6 +1,6 @@
 # PubChat — руководство пользователя
 
-Документ описывает пользовательские функции выпущенного checkpoint PubChat `0.5.5-alpha.1`.
+Документ описывает пользовательские функции release candidate PubChat `0.6.23-alpha.1`.
 
 ## 1. Account и Persona
 
