@@ -89,6 +89,16 @@ Candidate generation не является eligibility: собранные UID �
 
 После score применяется небольшой diversity pass: когда подряд идут слишком похожие purpose, близкий по score кандидат другого формата может подняться выше. Diversity не обходит eligibility.
 
+## Performance contract
+
+`0.6.25-alpha.1` добавляет отдельный query/latency guard для discovery.
+
+- основной CI budget измеряется по количеству реальных SQL round-trips, а не по хрупкому локальному таймингу;
+- default `organic-v2` path должен оставаться bounded и не превращаться в N+1 при росте candidate set;
+- explicit filter path измеряется отдельно;
+- operational profiler возвращает только aggregate counts/timing и не выводит identifiers, SQL parameters или result payload;
+- подробности и CLI: [`discovery-performance-v1.md`](discovery-performance-v1.md).
+
 ## SPA
 
 Основной Space Discovery screen использует `/discovery/v1/spaces`.
