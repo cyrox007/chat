@@ -62,7 +62,7 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Release candidate текущей ветки: `0.6.25-alpha.1`; последний выпущенный `main` checkpoint — `0.6.24-alpha.1` до финального exact-head CI и merge.
+Release candidate текущей ветки: `0.6.26-alpha.1`; последний выпущенный `main` checkpoint — `0.6.25-alpha.1` до финального exact-head CI и merge.
 
 Текущая development-линия: `0.6.x-alpha`. `0.6.23-alpha.1` закрывает IANA timezone/DST semantics для recurring Activities поверх уже выпущенных capacity/mobile hardening checkpoints.
 
