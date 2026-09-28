@@ -18,6 +18,9 @@ from tests.test_discovery_candidates_postgres_integration import (  # noqa: F401
 from tests.test_discovery_performance_postgres_integration import (  # noqa: F401
     DiscoveryPerformancePostgresIntegrationTests,
 )
+from tests.test_discovery_privacy_large_pool_postgres_integration import (  # noqa: F401
+    DiscoveryPrivacyLargePoolPostgresIntegrationTests,
+)
 from tests.test_abuse_signal_postgres_integration import AbuseSignalPostgresIntegrationTests  # noqa: F401
 from tests.test_moderation_ai_postgres_integration import ModerationAIPostgresIntegrationTests  # noqa: F401
 from tests.test_moderation_media_postgres_integration import ModerationMediaPostgresIntegrationTests  # noqa: F401
