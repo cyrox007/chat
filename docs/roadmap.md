@@ -2,7 +2,7 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.23-alpha.1`**; last merged `main` checkpoint: **`0.6.22-alpha.2`**.
+Release candidate: **`0.6.24-alpha.1`**; last merged `main` checkpoint: **`0.6.23-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
@@ -28,6 +28,15 @@ Spaces/memberships/scoped roles, social graph, invitations, Rules/Events/History
 
 ### Stage 5.1–5.6 ✅ `0.5.0-alpha.1` → `0.5.5-alpha.1`
 Product identity/Activities, earned engagement, occurrences/reminders, cosmetic support, organic discovery и installable PWA/external reminder-worker baseline.
+
+### Stage 6 checkpoint 16 — Multi-source organic discovery candidates ✅ `0.6.24-alpha.1`
+- default discovery pool больше не начинается только с newest catalog slice;
+- bounded источники: membership/pending, recent distinct-author activity, upcoming Events/Activities, shared tags/purposes и freshness fallback;
+- round-robin dedupe не позволяет одному источнику монополизировать общий cap;
+- старые Spaces могут вернуться в candidate pool после новой активности;
+- canonical eligibility остаётся до ranking, explicit filters сохраняют catalog semantics;
+- `organic-v2` не использует paid/support/currency или legacy `Room.rating`;
+- PostgreSQL + contract tests фиксируют source diversity, bounded work и privacy/ranking boundaries.
 
 ### Stage 6 checkpoint 15 — DST-correct recurring Activities ✅ `0.6.23-alpha.1`
 - Activity хранит IANA timezone отдельно от canonical UTC instant;
@@ -235,7 +244,7 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ⏳ provider-side telemetry, load/idempotency profiling.
 
 ### 6.4 Discovery / performance 🚧
-- multi-source bounded candidate generation вместо newest-catalog bias;
+- ✅ multi-source bounded candidate generation вместо newest-catalog bias;
 - query/DB profiling и ranking latency/load tests;
 - privacy/block regression на большом candidate set;
 - production-like realtime/Redis pool saturation profiling.
