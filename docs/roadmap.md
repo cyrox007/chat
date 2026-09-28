@@ -2,7 +2,7 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.24-alpha.1`**; last merged `main` checkpoint: **`0.6.23-alpha.1`**.
+Release candidate: **`0.6.25-alpha.1`**; last merged `main` checkpoint: **`0.6.24-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
@@ -28,6 +28,14 @@ Spaces/memberships/scoped roles, social graph, invitations, Rules/Events/History
 
 ### Stage 5.1–5.6 ✅ `0.5.0-alpha.1` → `0.5.5-alpha.1`
 Product identity/Activities, earned engagement, occurrences/reminders, cosmetic support, organic discovery и installable PWA/external reminder-worker baseline.
+
+### Stage 6 checkpoint 17 — Discovery query profiling / latency guard ✅ `0.6.25-alpha.1`
+- privacy-safe profiler измеряет SQL statement/select count, DB time и wall time без params/IDs/payload;
+- operational CLI поддерживает machine-readable JSON и max-statements/max-wall gates;
+- PostgreSQL fixture содержит 260 Spaces плюс membership/shared/recent/upcoming candidate context;
+- organic-v2 path ограничен 30 round-trips, explicit-filter path — 20;
+- broad 5s wall ceiling ловит N+1/catastrophic regressions без flaky microbenchmark semantics;
+- performance rehearsal входит в общий PostgreSQL CI gate.
 
 ### Stage 6 checkpoint 16 — Multi-source organic discovery candidates ✅ `0.6.24-alpha.1`
 - default discovery pool больше не начинается только с newest catalog slice;
@@ -245,7 +253,7 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 
 ### 6.4 Discovery / performance 🚧
 - ✅ multi-source bounded candidate generation вместо newest-catalog bias;
-- query/DB profiling и ranking latency/load tests;
+- ✅ query/DB profiling и bounded ranking latency/load guard;
 - privacy/block regression на большом candidate set;
 - production-like realtime/Redis pool saturation profiling.
 

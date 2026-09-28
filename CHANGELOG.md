@@ -2,6 +2,19 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.25-alpha.1] — 2026-09-28
+
+Stage 6 checkpoint 17 — discovery query profiling / latency guard.
+
+- добавлен privacy-safe discovery profiler: считает aggregate SQL statement/select count, суммарное DB cursor time и wall time без SQL params, Account/Space IDs или result payload;
+- standalone CLI `python -m workers.discovery_profile --viewer-uid ...` умеет печатать JSON profile и fail-ить по `--max-statements` / `--max-wall-ms`;
+- PostgreSQL rehearsal создаёт 260 Spaces с memberships, tags, recent activity и upcoming Events, то есть candidate set превышает общий discovery pool cap;
+- default `organic-v2` path обязан укладываться максимум в 30 SQL statements независимо от количества кандидатов;
+- explicit purpose-filter path обязан укладываться максимум в 20 SQL statements и быть дешевле organic path по round-trips;
+- оба пути имеют широкий 5s wall ceiling: это guard от N+1/catastrophic scan, а не нестабильный microbenchmark;
+- profiler schema намеренно содержит только aggregate operational metrics;
+- functional exact-head CI #731 полностью зелёный: backend/PostgreSQL performance rehearsal, frontend, dependency-security и Chromium/Firefox/WebKit/mobile browser-smoke.
+
 ## [0.6.24-alpha.1] — 2026-09-28
 
 Stage 6 checkpoint 16 — multi-source organic discovery candidates.

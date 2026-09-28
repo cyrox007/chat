@@ -6,7 +6,7 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Release candidate текущей ветки: `0.6.24-alpha.1` — multi-source organic discovery candidates. Последний выпущенный `main` checkpoint — `0.6.23-alpha.1`.
+Release candidate текущей ветки: `0.6.25-alpha.1` — discovery query profiling / latency guard. Последний выпущенный `main` checkpoint — `0.6.24-alpha.1`.
 
 Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 
@@ -43,6 +43,7 @@ Message delivery различает online presence и активный conversa
 - [`docs/message-email-delivery-v1.md`](docs/message-email-delivery-v1.md) — durable unread-Messenger email queue/provider/retry/systemd contract;
 - [`docs/web-push-delivery-v1.md`](docs/web-push-delivery-v1.md) — per-device Web Push/VAPID/service-worker/provider/privacy contract;
 - [`docs/external-delivery-observability-v1.md`](docs/external-delivery-observability-v1.md) — aggregate email/Web Push backlog/failure health, structured logs и privacy boundaries;
+- [`docs/discovery-performance-v1.md`](docs/discovery-performance-v1.md) — discovery query-budget/latency profiling и operational CLI;
 - [`docs/space-capacity-concurrency-v1.md`](docs/space-capacity-concurrency-v1.md) — atomic Space member-limit admission under concurrent joins/invites/approvals;
 - [`docs/trust-safety-v1.md`](docs/trust-safety-v1.md) — hierarchical platform moderation, capability restrictions, enforcement/appeals и AI-copilot boundaries;
 - [`docs/trust-safety-incident-rehearsal-v1.md`](docs/trust-safety-incident-rehearsal-v1.md) — moderation incident matrix, protective-hold safety gates и beta enablement boundary;
