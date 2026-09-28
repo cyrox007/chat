@@ -1,7 +1,7 @@
 from typing import List, Optional
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Boolean, and_, desc, asc, func, or_
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Boolean, Index, and_, desc, asc, func, or_
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import relationship, joinedload
@@ -34,6 +34,10 @@ class Message(Database.Base):
     # Поля для ответа на сообщение
     reply_to_uid = Column(UUID(as_uuid=True), ForeignKey("messages.uid"), nullable=True)
     reply_to = relationship("Message", remote_side=[uid], foreign_keys=[reply_to_uid], post_update=True)
+
+    __table_args__ = (
+        Index("ix_messages_discovery_recent", "created_at", "room_uid", "author_uid"),
+    )
 
     def __repr__(self):
         return f"<Message(uid={self.uid}, type={self.content_type}, room={self.room_uid})>"

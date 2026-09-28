@@ -1,6 +1,8 @@
+import ast
 import inspect
 import unittest
 from datetime import datetime, timedelta
+from uuid import UUID
 
 from app import app
 from components.discovery import service
@@ -22,13 +24,25 @@ class DiscoveryContractTests(unittest.TestCase):
             "SupportLedgerEntry",
             "CosmeticEntitlement",
             "CreatorSupportProfile",
-            "Room",
         }
         self.assertTrue(forbidden_models.isdisjoint(imported_names))
 
         score_source = inspect.getsource(service._score_space).casefold()
+        candidate_source = inspect.getsource(service._candidate_room_uids).casefold()
         for token in ("gift_code", "wallet", "currency", "payment", "price"):
             self.assertNotIn(token, score_source)
+            self.assertNotIn(token, candidate_source)
+        for implementation in (service._score_space, service._candidate_room_uids):
+            tree = ast.parse(inspect.getsource(implementation))
+            legacy_rating_reads = [
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Attribute)
+                and node.attr == "rating"
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "Room"
+            ]
+            self.assertEqual(legacy_rating_reads, [])
 
     def test_score_is_internal_and_projection_is_explainable(self):
         now = datetime(2026, 9, 15, 12, 0, 0)
@@ -100,9 +114,49 @@ class DiscoveryContractTests(unittest.TestCase):
         result = service._diversify(ranked)
         self.assertEqual(result[2]["space"]["purpose"], "conversation")
 
+    def test_round_robin_candidate_merge_prevents_source_monopoly(self):
+        one = UUID("00000000-0000-0000-0000-000000000001")
+        two = UUID("00000000-0000-0000-0000-000000000002")
+        three = UUID("00000000-0000-0000-0000-000000000003")
+        four = UUID("00000000-0000-0000-0000-000000000004")
+        five = UUID("00000000-0000-0000-0000-000000000005")
+        six = UUID("00000000-0000-0000-0000-000000000006")
+
+        merged = service._round_robin_unique(
+            [
+                [one, two, three],
+                [four, five],
+                [one, six],
+            ],
+            limit=5,
+        )
+        self.assertEqual(merged, [one, four, two, five, six])
+
+    def test_default_candidate_generation_uses_multiple_bounded_sources(self):
+        source = inspect.getsource(service._candidate_room_uids)
+        for token in (
+            "SpaceMembership.room_uid",
+            "Message.room_uid",
+            "SpaceEvent.room_uid",
+            "ActivityOccurrence.starts_at",
+            "SpaceTag.room_uid",
+            "SpaceSettings.room_uid",
+            "Room.created_at",
+        ):
+            self.assertIn(token, source)
+        self.assertIn("DISCOVERY_SOURCE_LIMIT", source)
+        self.assertIn("DISCOVERY_POOL_LIMIT", source)
+        self.assertEqual(service.DISCOVERY_ALGORITHM, "organic-v2")
+
+    def test_explicit_filters_keep_canonical_catalog_semantics(self):
+        source = inspect.getsource(service.discover_spaces)
+        self.assertIn("if query or purpose or tag", source)
+        self.assertIn("candidate_uids=candidate_uids", source)
+
     def test_candidate_pool_is_bounded(self):
         self.assertGreaterEqual(service.DISCOVERY_POOL_LIMIT, 50)
         self.assertLessEqual(service.DISCOVERY_POOL_LIMIT, 500)
+        self.assertGreater(service.DISCOVERY_POOL_LIMIT, service.DISCOVERY_SOURCE_LIMIT)
 
 
 if __name__ == "__main__":

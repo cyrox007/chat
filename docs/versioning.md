@@ -2,7 +2,7 @@
 
 ## Current release
 
-`0.6.23-alpha.1`
+`0.6.24-alpha.1`
 
 Current development milestone remains `0.6.x-alpha` — Pre-beta hardening.
 
@@ -53,6 +53,7 @@ Checkpoint progression:
 - `0.6.22-alpha.1` — Space member-capacity concurrency hardening with shared PostgreSQL admission lock and UUID lookup repair.
 - `0.6.22-alpha.2` — mobile room navigation/viewport hotfix with overlap-safe route transitions and real browser overflow gate.
 - `0.6.23-alpha.1` — IANA timezone storage and DST-correct recurring Activity wall-clock semantics.
+- `0.6.24-alpha.1` — multi-source bounded organic-discovery candidate generation without newest-catalog monopoly.
 
 These checkpoints do not declare Stage 6 complete.
 

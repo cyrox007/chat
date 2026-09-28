@@ -278,6 +278,7 @@ async def list_spaces(
     tag: str | None = None,
     limit: int = 30,
     offset: int = 0,
+    candidate_uids: list[UUID] | None = None,
 ) -> list[dict]:
     account = await _get_account(db, viewer_uid)
 
@@ -303,6 +304,11 @@ async def list_spaces(
             ),
         )
     )
+
+    if candidate_uids is not None:
+        if not candidate_uids:
+            return []
+        stmt = stmt.where(Room.uid.in_(candidate_uids))
 
     if query:
         normalized_query = query.strip()
