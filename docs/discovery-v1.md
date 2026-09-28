@@ -1,6 +1,6 @@
 # PubChat Stage 5.5 — Explainable Organic Discovery
 
-Released in: `0.5.4-alpha.1`.
+Released in: `0.5.4-alpha.1`; candidate-generation hardening: `0.6.24-alpha.1`.
 
 ## Цель
 
@@ -71,15 +71,23 @@ Score остаётся server-only implementation detail и не являетс�
 
 ## Bounded work
 
-Первая версия ranking работает на bounded candidate pool до 200 Spaces. Это защищает latency и БД от unbounded personalized scan.
+Ranking работает на общем candidate pool до 200 Spaces. Это защищает latency и БД от unbounded personalized scan.
+
+Начиная с `organic-v2` (`0.6.24-alpha.1`) default discovery собирает этот pool из нескольких независимых bounded источников:
+
+- active/pending memberships пользователя;
+- recent activity по distinct authors;
+- ближайшие scheduled Events и materialized Activity occurrences;
+- shared tags и purpose из уже знакомых Spaces;
+- newest active Spaces как freshness fallback.
+
+Каждый источник имеет собственный cap, затем источники interleave-ятся round-robin с dedupe. Поэтому freshness не может вытеснить весь recent/upcoming/shared context, а старый Space может снова попасть в выдачу после новой активности.
+
+Candidate generation не является eligibility: собранные UID обязательно проходят canonical Space visibility/membership policy до ranking/projection.
+
+Явный search/purpose/tag mode сохраняет canonical catalog filtering semantics и не использует personalized source mixing.
 
 После score применяется небольшой diversity pass: когда подряд идут слишком похожие purpose, близкий по score кандидат другого формата может подняться выше. Diversity не обходит eligibility.
-
-### Известное alpha-ограничение
-
-Candidate pool organic-v1 начинается с canonical catalog, отсортированного по новизне. Поэтому очень старый Space за пределами первых 200 кандидатов может не попасть в персонализированный ranking даже после новой активности.
-
-До beta candidate generation должен собираться из нескольких bounded источников — recent activity, upcoming events/activities, shared context и freshness — без unbounded scan.
 
 ## SPA
 
