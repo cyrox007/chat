@@ -2,7 +2,7 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.25-alpha.1`**; last merged `main` checkpoint: **`0.6.24-alpha.1`**.
+Release candidate: **`0.6.26-alpha.1`**; last merged `main` checkpoint: **`0.6.25-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
@@ -28,6 +28,14 @@ Spaces/memberships/scoped roles, social graph, invitations, Rules/Events/History
 
 ### Stage 5.1–5.6 ✅ `0.5.0-alpha.1` → `0.5.5-alpha.1`
 Product identity/Activities, earned engagement, occurrences/reminders, cosmetic support, organic discovery и installable PWA/external reminder-worker baseline.
+
+### Stage 6 checkpoint 18 — Large-pool discovery privacy/block regression ✅ `0.6.26-alpha.1`
+- 260+ Space fixture проверяет privacy/block semantics после насыщения candidate pool;
+- blocked-owner public recommendation подавляется без membership, existing active membership сохраняется;
+- private outsider Space не проходит canonical eligibility даже при recent/upcoming candidate signals;
+- pending private membership не получает recent/upcoming live-context reasons/projection;
+- response проверяется на отсутствие sensitive sentinel name/UID;
+- privacy path остаётся внутри discovery query/latency budget.
 
 ### Stage 6 checkpoint 17 — Discovery query profiling / latency guard ✅ `0.6.25-alpha.1`
 - privacy-safe profiler измеряет SQL statement/select count, DB time и wall time без params/IDs/payload;
@@ -254,7 +262,7 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 ### 6.4 Discovery / performance 🚧
 - ✅ multi-source bounded candidate generation вместо newest-catalog bias;
 - ✅ query/DB profiling и bounded ranking latency/load guard;
-- privacy/block regression на большом candidate set;
+- ✅ privacy/block regression на большом candidate set;
 - production-like realtime/Redis pool saturation profiling.
 
 ### 6.5 Security/privacy 🚧
