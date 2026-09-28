@@ -55,13 +55,14 @@
 - [`activity-occurrences-v1.md`](activity-occurrences-v1.md) — occurrences/reminders/inbox.
 - [`creator-support-v1.md`](creator-support-v1.md) — cosmetic gifts/support.
 - [`discovery-v1.md`](discovery-v1.md) — eligibility-first organic discovery; multi-source bounded candidate generation (`0.6.24-alpha.1`).
+- [`discovery-performance-v1.md`](discovery-performance-v1.md) — query-count/latency profiling and load guard (`0.6.25-alpha.1`).
 - [`web-application-maturity-v1.md`](web-application-maturity-v1.md) — PWA/offline shell и client lifecycle.
 
 ## Статус документов
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Release candidate текущей ветки: `0.6.24-alpha.1`; последний выпущенный `main` checkpoint — `0.6.23-alpha.1` до финального exact-head CI и merge.
+Release candidate текущей ветки: `0.6.25-alpha.1`; последний выпущенный `main` checkpoint — `0.6.24-alpha.1` до финального exact-head CI и merge.
 
 Текущая development-линия: `0.6.x-alpha`. `0.6.23-alpha.1` закрывает IANA timezone/DST semantics для recurring Activities поверх уже выпущенных capacity/mobile hardening checkpoints.
 
