@@ -2,7 +2,7 @@
 
 ## Current release
 
-`0.6.25-alpha.1`
+`0.6.26-alpha.1`
 
 Current development milestone remains `0.6.x-alpha` — Pre-beta hardening.
 
@@ -55,6 +55,7 @@ Checkpoint progression:
 - `0.6.23-alpha.1` — IANA timezone storage and DST-correct recurring Activity wall-clock semantics.
 - `0.6.24-alpha.1` — multi-source bounded organic-discovery candidate generation without newest-catalog monopoly.
 - `0.6.25-alpha.1` — discovery query-budget/latency profiling gate over a synthetic large candidate set.
+- `0.6.26-alpha.1` — large-pool discovery privacy/block regression for blocked owners, private eligibility and pending-context leakage.
 
 These checkpoints do not declare Stage 6 complete.
 
