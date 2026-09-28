@@ -2,6 +2,22 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.24-alpha.1] — 2026-09-28
+
+Stage 6 checkpoint 16 — multi-source organic discovery candidates.
+
+- default organic discovery больше не ограничен только newest catalog slice: candidate pool собирается из нескольких независимых bounded источников;
+- источники включают current/pending membership, recent distinct-author activity, upcoming Events/materialized Activities, shared tags/purposes и freshness fallback;
+- источники interleave-ятся round-robin с dedupe, поэтому один источник не может полностью вытеснить остальные до общего cap 200;
+- старый Space может снова попасть в discovery после новой социальной активности, даже если давно вышел за пределы newest slice;
+- explicit q/purpose/tag filter mode сохраняет canonical bounded catalog semantics;
+- canonical Space eligibility/visibility/membership policy по-прежнему применяется до ranking и projection;
+- алгоритм повышен до `organic-v2`;
+- paid/support/currency signals и legacy `Room.rating` по-прежнему не участвуют ни в candidate generation, ни в scoring;
+- добавлены индексы для recent activity, active-room freshness, purpose и upcoming event candidate sources;
+- PostgreSQL rehearsal доказывает, что старый активный Space возвращается в bounded candidate pool;
+- functional exact-head CI #722 полностью зелёный: backend, frontend, dependency-security и Chromium/Firefox/WebKit/mobile browser-smoke.
+
 ## [0.6.23-alpha.1] — 2026-09-23
 
 Stage 6 checkpoint 15 — DST-correct recurring Activities.
