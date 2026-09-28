@@ -6,7 +6,7 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Release candidate текущей ветки: `0.6.23-alpha.1` — DST-correct recurring Activities. Последний выпущенный `main` checkpoint — `0.6.22-alpha.2`.
+Release candidate текущей ветки: `0.6.24-alpha.1` — multi-source organic discovery candidates. Последний выпущенный `main` checkpoint — `0.6.23-alpha.1`.
 
 Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 
