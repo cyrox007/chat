@@ -357,6 +357,17 @@ class Config:
             int(os.getenv("MAX_MESSAGE_MEDIA_TOTAL_SIZE", 25 * 1024 * 1024)),
         ),
     )
+    MEDIA_UPLOAD_RATE_LIMIT_BYTES = max(
+        MAX_MESSAGE_MEDIA_TOTAL_SIZE,
+        min(
+            1024 * 1024 * 1024,
+            int(os.getenv("MEDIA_UPLOAD_RATE_LIMIT_BYTES", 50 * 1024 * 1024)),
+        ),
+    )
+    MEDIA_UPLOAD_RATE_WINDOW_SECONDS = max(
+        10,
+        min(3600, int(os.getenv("MEDIA_UPLOAD_RATE_WINDOW_SECONDS", "60"))),
+    )
 
 
 config = Config()
