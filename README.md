@@ -6,7 +6,7 @@ PubChat — SPA-приложение для свободного общения 
 
 ## Статус
 
-Release candidate текущей ветки: `0.6.25-alpha.1` — discovery query profiling / latency guard. Последний выпущенный `main` checkpoint — `0.6.24-alpha.1`.
+Release candidate текущей ветки: `0.6.26-alpha.1` — large-pool discovery privacy/block regression. Последний выпущенный `main` checkpoint — `0.6.25-alpha.1`.
 
 Текущая development-линия: `0.6.x-alpha` — Pre-beta hardening продолжается.
 

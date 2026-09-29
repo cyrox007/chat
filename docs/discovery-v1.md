@@ -89,6 +89,15 @@ Candidate generation не является eligibility: собранные UID �
 
 После score применяется небольшой diversity pass: когда подряд идут слишком похожие purpose, близкий по score кандидат другого формата может подняться выше. Diversity не обходит eligibility.
 
+## Large-pool privacy regression
+
+`0.6.26-alpha.1` закрепляет privacy/block semantics на candidate set, который превышает общий discovery pool cap.
+
+- block suppresses новую owner-led public recommendation, но не стирает уже существующую active/pending community relation;
+- private Space без membership не проходит canonical eligibility даже если activity/event source внутренне выбрал его как candidate;
+- pending membership в private Space не даёт права на recent-conversation/upcoming live context;
+- privacy regression одновременно проверяет отсутствие sensitive sentinel data в serialized response и сохранение bounded query budget.
+
 ## Performance contract
 
 `0.6.25-alpha.1` добавляет отдельный query/latency guard для discovery.

@@ -2,6 +2,19 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.26-alpha.1] — 2026-09-28
+
+Stage 6 checkpoint 18 — large-pool discovery privacy/block regression.
+
+- PostgreSQL rehearsal насыщает discovery 260 public Spaces и отдельными privacy/block sentinel Spaces, то есть превышает общий candidate-pool cap;
+- public Space владельца, заблокированного viewer Account, не появляется как новая рекомендация без существующей membership relation;
+- existing active membership в Space blocked owner сохраняется как отдельная community relation и не удаляется discovery-фильтром;
+- private Space без membership не попадает в projection даже если recent activity/upcoming Event сделали его внутренним candidate;
+- private Space с pending membership может быть показан как известная заявка, но не раскрывает recent-conversation/upcoming-event live context;
+- response дополнительно проверяется на отсутствие sentinel name/UID закрытого Space;
+- privacy/block path остаётся внутри существующего discovery performance budget: ≤30 SQL statements и broad <5s wall ceiling;
+- functional exact-head CI #740 полностью зелёный: backend/PostgreSQL privacy rehearsal, frontend, dependency-security и Chromium/Firefox/WebKit/mobile browser-smoke.
+
 ## [0.6.25-alpha.1] — 2026-09-28
 
 Stage 6 checkpoint 17 — discovery query profiling / latency guard.
