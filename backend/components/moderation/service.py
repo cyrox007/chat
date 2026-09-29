@@ -164,7 +164,6 @@ async def list_my_reports(
         .offset(offset)
     )
     reports = result.scalars().all()
-    personas = await _persona_map(db, {item.target_account_uid for item in reports if item.target_account_uid})
     return [
         {
             "uid": str(item.uid),
@@ -173,7 +172,6 @@ async def list_my_reports(
             "description": item.description,
             "status": item.status,
             "message_uid": str(item.message_uid) if item.message_uid else None,
-            "target": _persona_projection(item.target_account_uid, personas),
             "created_at": item.created_at.isoformat(),
             "resolved_at": item.resolved_at.isoformat() if item.resolved_at else None,
         }
