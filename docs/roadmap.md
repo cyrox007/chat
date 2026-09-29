@@ -2,7 +2,7 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.28-alpha.1`**; last merged `main` checkpoint: **`0.6.27-alpha.1`**.
+Release candidate: **`0.6.29-alpha.1`**; last merged `main` checkpoint: **`0.6.28-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
@@ -36,6 +36,15 @@ Product identity/Activities, earned engagement, occurrences/reminders, cosmetic 
 - pending private membership не получает recent/upcoming live-context reasons/projection;
 - response проверяется на отсутствие sensitive sentinel name/UID;
 - privacy path остаётся внутри discovery query/latency budget.
+
+### Stage 6 checkpoint 21 — Moderation privacy projections ✅ `0.6.29-alpha.1`
+- reporter Trust & Safety history больше не выводит target Account UID/primary Persona, queue priority, moderator assignment или internal resolution code;
+- Space report history не выполняет скрытую Account→primary-Persona корреляцию;
+- target-facing platform restrictions содержат только scope/capability/public explanation/status/timing;
+- moderator-only restriction view сохраняет report/actor/target/reason/origin для внутренних workflows;
+- Safety Center не рендерит target identity из moderation history;
+- PostgreSQL rehearsal проверяет две Persona одного Account и отсутствие утечки второй Persona через report projection;
+- functional exact-head CI #770 green: backend, frontend, dependency-security и browser-smoke.
 
 ### Stage 6 checkpoint 20 — Upload / media security hardening ✅ `0.6.28-alpha.1`
 - strict server MIME allowlist; unknown/SVG/HTML/legacy office/archive payloads rejected;
@@ -292,7 +301,7 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ✅ registration/login/refresh automated Chromium/Firefox/WebKit/mobile compatibility gate;
 - ✅ upload/media baseline review for current allowlist;
 - ⏳ malware scanning/CDR + shared/object storage/public URL policy for broader file support;
-- moderation/report/appeal privacy audit;
+- ✅ moderation/report/appeal privacy projection audit;
 - Account block coverage + privacy side-channel + secret/logging review;
 - financial threat model до real payments.
 
