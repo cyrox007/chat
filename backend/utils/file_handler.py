@@ -35,13 +35,8 @@ MIME_TO_EXTENSION = {
     "audio/mp4": ".m4a",
     "audio/x-m4a": ".m4a",
     "application/pdf": ".pdf",
-    "application/msword": ".doc",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
-    "application/vnd.ms-excel": ".xls",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
-    "application/zip": ".zip",
-    "application/x-rar-compressed": ".rar",
-    "application/vnd.rar": ".rar",
 }
 
 IMAGE_MIME_TYPES = frozenset(
@@ -64,13 +59,8 @@ AUDIO_MIME_TYPES = frozenset(
 DOCUMENT_MIME_TYPES = frozenset(
     {
         "application/pdf",
-        "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.ms-excel",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/zip",
-        "application/x-rar-compressed",
-        "application/vnd.rar",
     }
 )
 
@@ -205,13 +195,6 @@ def _matches_declared_type(content: bytes, mime_type: str) -> bool:
 
     if mime_type == "application/pdf":
         return head.startswith(b"%PDF-")
-    if mime_type in {"application/msword", "application/vnd.ms-excel"}:
-        return head.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
-    if mime_type == "application/zip":
-        return head.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"))
-    if mime_type in {"application/x-rar-compressed", "application/vnd.rar"}:
-        return head.startswith((b"Rar!\x1a\x07\x00", b"Rar!\x1a\x07\x01\x00"))
-
     if mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         names = _zip_names(content)
         return "[Content_Types].xml" in names and any(name.startswith("word/") for name in names)
@@ -307,9 +290,18 @@ def save_file_record(
     )
 
 
-def save_file(file_data: dict, *, upload_root: Path = PUBLIC_UPLOAD_ROOT) -> str:
+def save_file(
+    file_data: dict,
+    *,
+    upload_root: Path = PUBLIC_UPLOAD_ROOT,
+    allowed_mime_types: set[str] | frozenset[str] | None = None,
+) -> str:
     """Backward-compatible wrapper returning only the public URL."""
-    return save_file_record(file_data, upload_root=upload_root)["url"]
+    return save_file_record(
+        file_data,
+        upload_root=upload_root,
+        allowed_mime_types=allowed_mime_types,
+    )["url"]
 
 
 def save_data_url(
@@ -396,9 +388,16 @@ def remove_saved_file(url: str, *, upload_root: Path = PUBLIC_UPLOAD_ROOT) -> No
         logger.warning("Не удалось удалить orphan upload", exc_info=True)
 
 
-def save_uploaded_file(file: UploadFile, *, upload_root: Path = PUBLIC_UPLOAD_ROOT) -> str:
+def save_uploaded_file(
+    file: UploadFile,
+    *,
+    upload_root: Path = PUBLIC_UPLOAD_ROOT,
+    allowed_mime_types: set[str] | frozenset[str] | None = None,
+) -> str:
     """Store one multipart upload with a streaming byte cap and content signature check."""
     mime_type = normalize_mime_type(file.content_type)
+    if allowed_mime_types is not None and mime_type not in allowed_mime_types:
+        raise _upload_error("upload_type_not_allowed", "Этот тип файла не поддерживается здесь.")
     extension = MIME_TO_EXTENSION[mime_type]
     folder_name = _folder_for_mime(mime_type)
     root = upload_root.resolve()
