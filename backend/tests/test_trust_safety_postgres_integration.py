@@ -9,6 +9,7 @@ from sqlalchemy import delete, select
 from components.identity.model import Account, Persona
 from components.model_registry import ensure_models_registered
 from components.moderation.model import TrustSafetyAuditEvent, TrustSafetyReport
+from components.user.model import User
 from components.moderation.trust_safety import (
     claim_trust_safety_report,
     list_my_trust_safety_reports,
@@ -26,17 +27,31 @@ class TrustSafetyPostgresIntegrationTests(unittest.TestCase):
         async def run_case():
             ensure_models_registered()
             reporter_uid = uuid4()
+            legacy_reporter_uid = uuid4()
             target_uid = uuid4()
             moderator_uids = [uuid4(), uuid4()]
             persona_uid = uuid4()
             report_uid = uuid4()
 
             async with Database.sessionmaker()() as setup_db:
+                setup_db.add(
+                    User(
+                        uid=legacy_reporter_uid,
+                        username=f"ts-reporter-{legacy_reporter_uid.hex[:10]}",
+                        email=f"ts-reporter-{legacy_reporter_uid.hex[:10]}@example.test",
+                        phone=f"+1999{legacy_reporter_uid.int % 10000000:07d}",
+                        hashed_password="integration-test-not-a-real-password-hash",
+                        is_active=True,
+                    )
+                )
+                await setup_db.flush()
                 for account_uid in [reporter_uid, target_uid, *moderator_uids]:
                     setup_db.add(
                         Account(
                             uid=account_uid,
-                            legacy_user_uid=account_uid if account_uid == reporter_uid else None,
+                            legacy_user_uid=(
+                                legacy_reporter_uid if account_uid == reporter_uid else None
+                            ),
                             status="active",
                             trust_level="new",
                         )
@@ -138,6 +153,9 @@ class TrustSafetyPostgresIntegrationTests(unittest.TestCase):
                         delete(Account).where(
                             Account.uid.in_([reporter_uid, target_uid, *moderator_uids])
                         )
+                    )
+                    await cleanup_db.execute(
+                        delete(User).where(User.uid == legacy_reporter_uid)
                     )
                     await cleanup_db.commit()
                 await Database.dispose()
