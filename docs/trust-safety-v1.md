@@ -112,6 +112,18 @@ CI использует synthetic labels только для проверки м
 
 Подробный rollout contract: `docs/protective-hold-calibration-v1.md`.
 
+## Privacy projection boundary
+
+Начиная с `0.6.29-alpha.1`, Trust & Safety API разделяет user-facing и moderator-only projections.
+
+- reporter history не раскрывает target Account UID, другую/primary Persona target Account, queue priority, assignee или internal resolution code;
+- source UID пожалованного объекта сохраняется, потому что reporter уже взаимодействовал именно с этим объектом;
+- target-facing restriction history не возвращает moderator actor UID, report linkage, internal reason taxonomy, origin или authority metadata;
+- privileged moderator endpoints сохраняют operational metadata за server-side permission boundary;
+- regression test использует две Persona одного Account и доказывает, что жалоба на одну не раскрывает вторую через moderation projection.
+
+Подробный контракт: `docs/moderation-privacy-v1.md`.
+
 ## Иерархия платформенных ролей
 
 `PlatformRole` имеет явный `authority_level`. При нескольких ролях эффективный уровень Account — максимальный уровень его активных platform roles.
