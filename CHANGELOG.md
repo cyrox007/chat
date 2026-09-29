@@ -2,6 +2,21 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.29-alpha.1] — 2026-09-29
+
+Stage 6 checkpoint 21 — moderation/report/appeal privacy projection hardening.
+
+- reporter-facing Trust & Safety API больше не использует moderator projection и не раскрывает target Account UID, target primary Persona, queue priority, moderator assignment или internal resolution code;
+- жалоба сохраняет только идентификатор реально пожалованного source object; другая Persona того же Account не выводится и не коррелируется;
+- legacy Space report history также перестал выводить target Account→primary Persona projection;
+- target-facing `/trust-safety/v1/me/restrictions` теперь скрывает moderator actor UID, target Account UID, report linkage, internal reason taxonomy и restriction origin;
+- moderator-only restriction lookup явно использует internal projection и сохраняет operational данные для работы очереди;
+- Safety Center больше не ожидает и не показывает target identity в истории собственных жалоб;
+- contract + PostgreSQL integration tests фиксируют разделение reporter/target и moderator projections, включая сценарий двух Persona одного Account;
+- functional exact-head CI #770 полностью зелёный: backend, frontend, dependency-security и browser-smoke.
+
+Цель checkpoint — не скрыть объект, на который пользователь сам пожаловался, а не допустить, чтобы moderation API раскрывал дополнительные Account/Persona связи и внутреннюю операционную метаинформацию.
+
 ## [0.6.28-alpha.1] — 2026-09-29
 
 Stage 6 checkpoint 20 — upload/media security hardening.
