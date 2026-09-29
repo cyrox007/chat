@@ -9,6 +9,28 @@ from utils.csrf import validate_csrf_token
 logger = logging.getLogger(__name__)
 
 
+def apply_response_security_headers(request: Request, response):
+    """Apply browser hardening without exposing or transforming response bodies."""
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    path = request.url.path
+    if path.startswith("/uploads/"):
+        # Public user content must never become an active same-origin document.
+        response.headers["Content-Security-Policy"] = "sandbox; default-src 'none'"
+        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        if path.startswith("/uploads/documents/"):
+            response.headers["Content-Disposition"] = "attachment"
+    return response
+
+
+def security_headers_middleware(app):
+    @app.middleware("http")
+    async def security_headers_handler(request: Request, call_next):
+        response = await call_next(request)
+        return apply_response_security_headers(request, response)
+
+
 def csrf_middleware(app):
     @app.middleware("http")
     async def csrf_handler(request: Request, call_next):
