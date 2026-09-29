@@ -44,6 +44,12 @@ MIME_TO_EXTENSION = {
     "application/vnd.rar": ".rar",
 }
 
+IMAGE_MIME_TYPES = frozenset(
+    {"image/jpeg", "image/png", "image/webp", "image/gif"}
+)
+VIDEO_MIME_TYPES = frozenset(
+    {"video/mp4", "video/webm", "video/ogg"}
+)
 AUDIO_MIME_TYPES = frozenset(
     {
         "audio/mpeg",
@@ -55,6 +61,31 @@ AUDIO_MIME_TYPES = frozenset(
         "audio/x-m4a",
     }
 )
+DOCUMENT_MIME_TYPES = frozenset(
+    {
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/zip",
+        "application/x-rar-compressed",
+        "application/vnd.rar",
+    }
+)
+
+
+def allowed_mime_types_for_message(content_type: str) -> frozenset[str]:
+    normalized = str(content_type or "").strip().lower()
+    if normalized == "image":
+        return IMAGE_MIME_TYPES
+    if normalized == "video":
+        return VIDEO_MIME_TYPES
+    if normalized in {"voice", "audio"}:
+        return AUDIO_MIME_TYPES
+    if normalized == "file":
+        return DOCUMENT_MIME_TYPES
+    return frozenset()
 
 _DATA_URL_RE = re.compile(
     r"^data:(?P<mime>[^;,]+)(?P<params>(?:;[^,]*)*?),(?P<payload>.*)$",
