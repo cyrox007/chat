@@ -29,7 +29,10 @@ from utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 
-def _persist_private_message_media(content_type: str, media_metadata: dict | None) -> tuple[dict | None, list[str]]:
+def _persist_private_message_media(
+    content_type: str,
+    media_metadata: dict | None,
+) -> tuple[dict | None, list[str], int]:
     metadata = media_metadata if isinstance(media_metadata, dict) else {}
 
     if content_type in {"file", "image", "video", "audio"}:
@@ -37,7 +40,11 @@ def _persist_private_message_media(content_type: str, media_metadata: dict | Non
             metadata.get("files"),
             content_type=content_type,
         )
-        return {"files": saved}, [item["url"] for item in saved]
+        return (
+            {"files": saved},
+            [item["url"] for item in saved],
+            sum(int(item["size"]) for item in saved),
+        )
 
     if content_type == "voice":
         voice = metadata.get("voice")
@@ -47,9 +54,9 @@ def _persist_private_message_media(content_type: str, media_metadata: dict | Non
                 detail={"error_type": "upload_voice_missing", "message": "Голосовое сообщение пустое."},
             )
         saved = save_message_voice(voice)
-        return {"voice": saved["url"]}, [saved["url"]]
+        return {"voice": saved["url"]}, [saved["url"]], int(saved["size"])
 
-    return media_metadata, []
+    return media_metadata, [], 0
 
 
 async def initialize_messenger_connection(
@@ -328,10 +335,26 @@ async def handle_send_private_message(
     saved_upload_urls: list[str] = []
     message_persisted = False
     try:
-        persisted_media_metadata, saved_upload_urls = _persist_private_message_media(
+        persisted_media_metadata, saved_upload_urls, uploaded_bytes = _persist_private_message_media(
             content_type,
             data.get("media_metadata"),
         )
+        if uploaded_bytes:
+            allowed_media_bytes = await realtime_service.allow_cost(
+                sender_uid,
+                "media-upload-bytes",
+                uploaded_bytes,
+                config.MEDIA_UPLOAD_RATE_LIMIT_BYTES,
+                config.MEDIA_UPLOAD_RATE_WINDOW_SECONDS,
+            )
+            if not allowed_media_bytes:
+                raise HTTPException(
+                    status_code=429,
+                    detail={
+                        "error_type": "media_upload_rate_limited",
+                        "message": "Слишком большой объём вложений за короткое время.",
+                    },
+                )
 
         formatted_message = await PrivateMessage.create_private_message(
             db_session,
