@@ -499,6 +499,44 @@ class RealtimeService:
             self._fallback_rate_limits[key] = (count, reset_at)
             return count <= limit
 
+    async def allow_cost(
+        self,
+        user_uid: UUID | str,
+        bucket: str,
+        cost: int,
+        limit: int,
+        window_seconds: int,
+    ) -> bool:
+        """Apply a distributed weighted rate limit without logging identifiers/payloads."""
+        normalized_cost = max(0, int(cost))
+        normalized_limit = max(1, int(limit))
+        if normalized_cost > normalized_limit:
+            return False
+        if normalized_cost == 0:
+            return True
+
+        key = f"pubchat:rt:rate:{bucket}:{user_uid}"
+        if self._redis:
+            pipe = self._redis.pipeline(transaction=True)
+            pipe.incrby(key, normalized_cost)
+            pipe.ttl(key)
+            count, ttl = await pipe.execute()
+            if int(ttl) < 0:
+                await self._redis.expire(key, max(1, int(window_seconds)))
+            return int(count) <= normalized_limit
+
+        now = time.time()
+        async with self._lock:
+            count, reset_at = self._fallback_rate_limits.get(
+                key,
+                (0, now + window_seconds),
+            )
+            if reset_at <= now:
+                count, reset_at = 0, now + window_seconds
+            count += normalized_cost
+            self._fallback_rate_limits[key] = (count, reset_at)
+            return count <= normalized_limit
+
     @staticmethod
     def _idempotency_key(user_uid: UUID | str, scope: str, event_id: str) -> str:
         digest = hashlib.sha256(event_id.encode("utf-8")).hexdigest()
