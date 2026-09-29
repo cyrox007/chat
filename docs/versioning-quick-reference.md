@@ -1,7 +1,7 @@
 # PubChat version quick reference
 
-- Current release candidate: **0.6.26-alpha.1** — large-pool discovery privacy/block regression.
-- Last released `main` checkpoint: **0.6.25-alpha.1** until the final exact-head gate passes and the release candidate merges.
+- Current release candidate: **0.6.27-alpha.1** — realtime Redis pool profiling baseline.
+- Last released `main` checkpoint: **0.6.26-alpha.1** until the final exact-head gate passes and the release candidate merges.
 - Current milestone: **0.6.x-alpha** — Pre-beta hardening continues.
 - Proven so far: PostgreSQL 16 migration/recovery; Redis 7.2 distributed semantics, restart recovery and real Sentinel master promotion; multi-process Uvicorn/WebSocket + bounded backpressure; persistent systemd-owned production listener; message notification preferences/active-context suppression; durable unread-Messenger email delivery; Web Push/PWA Messenger delivery.
 - Trust & Safety baseline: platform report intake/triage/evidence audit; Account-level capability restrictions; target-visible reasons/expiry; independent appeal queue; full `account.access` suspension; server-side enforcement for Messenger send, Space chat/media, Space create/join/invite, Persona edit and organic discovery publication.
@@ -26,7 +26,8 @@
 - Organic discovery candidate generation now interleaves bounded membership, recent-activity, upcoming, shared-context and freshness sources before canonical eligibility/ranking, so older revived Spaces are not excluded by newest-only catalog bias.
 - Discovery DB performance now has an aggregate profiler plus CI query-budget/wall-time guard on a 260-Space PostgreSQL fixture; production diagnostics never emit SQL params or entity IDs.
 - Large-pool discovery privacy regression proves blocked-owner suppression, private eligibility and no pending-private live-context leakage while keeping the same bounded query budget.
-- Still open before beta: accumulation of real shadow-calibration data and provider-level backup/snapshot lifecycle verification, anonymized production-like legacy snapshot rehearsal, production-like load/pool profiling, broader provider/HTTP/realtime/Redis/PostgreSQL observability, upload/privacy review, real iOS/iPadOS PWA/device testing and accessibility hardening and unit-economics/monetization planning.
+- Redis pool observability/profile now exposes privacy-safe utilization/headroom and runs a near-limit bounded realtime profile with machine gates for errors, p95 and saturation.
+- Still open before beta: accumulation of real shadow-calibration data and provider-level backup/snapshot lifecycle verification, anonymized production-like legacy snapshot rehearsal, sustained production-like soak/mass-reconnect profiling, broader provider/HTTP/realtime/Redis/PostgreSQL observability, upload/privacy review, real iOS/iPadOS PWA/device testing and accessibility hardening and unit-economics/monetization planning.
 - Alpha: hardening is incomplete; exact checkpoint CI is mandatory.
 - Beta: launch-critical flows and production-like gates are complete; focus shifts to stabilization.
 - Stable: starts at **1.0.0** after the full launch gate passes.
