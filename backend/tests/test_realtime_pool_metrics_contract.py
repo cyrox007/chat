@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+from app import app
 from components.realtime.pool_metrics import realtime_pool_health, redis_pool_snapshot
 from settings import config
 
@@ -21,6 +22,10 @@ class _FakeService:
 
 
 class RealtimePoolMetricsContractTests(unittest.TestCase):
+    def test_admin_pool_health_route_is_registered(self):
+        paths = {route.path for route in app.routes}
+        self.assertIn("/admin/operations/realtime-redis", paths)
+
     def test_pool_snapshot_is_aggregate_and_privacy_safe(self):
         with patch.multiple(
             config,
