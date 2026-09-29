@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from components.auth.permissions import require_admin
 from components.notification.operations_metrics import external_delivery_metrics
+from components.realtime import realtime_service
+from components.realtime.pool_metrics import realtime_pool_health
 from database import Database
 
 
@@ -20,5 +22,9 @@ def install(app: FastAPI) -> None:
     ):
         metrics = await external_delivery_metrics(db, window_hours=window_hours)
         return {"status": "ok", "metrics": metrics}
+
+    @router.get("/realtime-redis")
+    async def realtime_redis_metrics():
+        return {"status": "ok", "metrics": realtime_pool_health(realtime_service)}
 
     app.include_router(router)
