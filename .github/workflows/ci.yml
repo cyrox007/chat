@@ -102,6 +102,21 @@ jobs:
         env:
           PUBCHAT_REDIS_INTEGRATION: "1"
         run: python -m unittest tests.test_redis_realtime_integration
+      - name: Profile realtime Redis pool near configured limit
+        env:
+          REDIS_MAX_CONNECTIONS: "12"
+          REDIS_POOL_ALERT_UTILIZATION_PERCENT: "90"
+          REDIS_POOL_MIN_HEADROOM_CONNECTIONS: "1"
+          PUBCHAT_REDIS_POOL_PROFILE_INTEGRATION: "1"
+        run: |
+          python -m unittest tests.test_realtime_pool_profile_redis_integration
+          python -m workers.realtime_pool_profile \
+            --operations 120 \
+            --concurrency 10 \
+            --max-error-rate-percent 0 \
+            --max-p95-ms 2000 \
+            --max-saturation-samples 0 \
+            --require-healthy
       - name: Drill Redis restart and realtime recovery
         run: |
           REDIS_CONTAINER_ID="$(docker ps --filter 'ancestor=redis:7.2-alpine' --format '{{.ID}}' | head -n 1)"
