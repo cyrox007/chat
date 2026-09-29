@@ -2,6 +2,20 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.27-alpha.1] — 2026-09-29
+
+Stage 6 checkpoint 19 — realtime Redis pool profiling baseline.
+
+- добавлен privacy-safe snapshot Redis connection pool: max/in-use/available/created/headroom/utilization без Redis URL, credentials, ticket values или Account identifiers;
+- admin-only `GET /admin/operations/realtime-redis` показывает текущий pool health и configured alert thresholds;
+- `REDIS_POOL_ALERT_UTILIZATION_PERCENT` и `REDIS_POOL_MIN_HEADROOM_CONNECTIONS` влияют только на observability, не меняя pool size/retry/traffic policy;
+- standalone `python -m workers.realtime_pool_profile` выполняет bounded profile через реальные RealtimeService primitives: ticket round-trip, presence register/touch/unregister и idempotency claim/release;
+- CLI имеет machine gates по error rate, p95 latency и saturation samples;
+- CI специально уменьшает pool до 12 connections и запускает 120 operations при concurrency 10;
+- functional CI #748: 120/120 completed, 0 errors, peak 11/12 in-use, 91.67% observed utilization, 0 saturation samples, p95 19 ms на конкретном GitHub runner;
+- эти latency/throughput цифры не являются production SLO; checkpoint фиксирует bounded regression/capacity signal, а не универсальный benchmark;
+- полный functional exact-head CI #748 зелёный: backend, frontend, dependency-security и Chromium/Firefox/WebKit/mobile browser-smoke.
+
 ## [0.6.26-alpha.1] — 2026-09-28
 
 Stage 6 checkpoint 18 — large-pool discovery privacy/block regression.
