@@ -1,8 +1,4 @@
-import base64
-import os
-import uuid
 from datetime import datetime, timedelta
-from pathlib import Path
 from uuid import UUID
 
 from fastapi import HTTPException, WebSocket, WebSocketDisconnect
@@ -19,10 +15,9 @@ from components.user.model import Penalty
 from settings import config
 from socket_manager import room_manager as manager
 from utils.file_handler import (
-    AUDIO_MIME_TYPES,
-    allowed_mime_types_for_message,
-    save_data_url,
-    save_file_record,
+    remove_saved_file,
+    save_message_files,
+    save_message_voice,
 )
 from utils.logger import setup_logger
 
@@ -315,65 +310,22 @@ async def handle_file_message(
     db_session: AsyncSession,
     websocket: WebSocket,
 ) -> None:
-    files = data.get("media_metadata", {}).get("files", [])
+    media_metadata = data.get("media_metadata") or {}
+    files = media_metadata.get("files")
     if not files:
-        return
-
-    if len(files) > config.MAX_FILES_LIMIT:
-        await websocket.send_json(
-            {
-                "type": "error",
-                "error_type": "too_many_files",
-                "frontId": data.get("frontId"),
-                "details": {"max_allowed_files": config.MAX_FILES_LIMIT},
-            }
-        )
         return
 
     front_id = data.get("frontId")
     if not await _claim_client_event(websocket, room_uid, user_uid, front_id):
         return
 
-    saved_files = []
-    errors = []
+    saved_files: list[dict] = []
+    message_persisted = False
     try:
-        for file_data in files:
-            try:
-                file_url = file_data.get("url")
-                file_type = file_data.get("type")
-                file_name = str(file_data.get("name") or "")[:MAX_FILENAME_LENGTH]
-                file_size = file_data.get("size")
-                if not all([file_url, file_type, file_name, file_size]):
-                    raise ValueError("Missing required file data")
-
-                saved_files.append(
-                    save_file_record(
-                        {
-                            "url": file_url,
-                            "type": file_type,
-                            "name": file_name,
-                            "size": file_size,
-                        },
-                        allowed_mime_types=allowed_mime_types_for_message(
-                            data.get("content_type", "file")
-                        ),
-                    )
-                )
-            except Exception as exc:
-                logger.warning("Не удалось сохранить realtime attachment: %s", exc)
-                errors.append({"file_name": file_data.get("name"), "error": "upload_failed"})
-
-        if not saved_files:
-            await _release_client_event(room_uid, user_uid, front_id)
-            await websocket.send_json(
-                {
-                    "type": "error",
-                    "error_type": "attachments_failed",
-                    "frontId": front_id,
-                    "details": errors,
-                }
-            )
-            return
+        saved_files = save_message_files(
+            files,
+            content_type=data.get("content_type", "file"),
+        )
 
         formatted_message = await Message.create_message(
             db_session,
@@ -386,22 +338,36 @@ async def handle_file_message(
                 "reply_to_uid": data.get("reply_to_uid"),
             },
         )
+        message_persisted = True
         formatted_message["frontId"] = front_id
         await manager.broadcast_to_room(room_uid, formatted_message)
         await _notify_online_members(db_session, room_uid, user_uid, formatted_message)
-
-        if errors:
-            await websocket.send_json(
-                {
-                    "type": "partial_error",
-                    "error_type": "some_attachments_failed",
-                    "frontId": front_id,
-                    "details": errors,
-                }
-            )
-    except Exception:
+    except HTTPException as exc:
+        if not message_persisted:
+            for item in saved_files:
+                remove_saved_file(item.get("url"))
         await _release_client_event(room_uid, user_uid, front_id)
-        raise
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        await websocket.send_json(
+            {
+                "type": "error",
+                "error_type": detail.get("error_type", "attachments_failed"),
+                "frontId": front_id,
+            }
+        )
+    except Exception:
+        if not message_persisted:
+            for item in saved_files:
+                remove_saved_file(item.get("url"))
+        await _release_client_event(room_uid, user_uid, front_id)
+        logger.exception("Не удалось сохранить Space attachment message")
+        await websocket.send_json(
+            {
+                "type": "error",
+                "error_type": "attachments_failed",
+                "frontId": front_id,
+            }
+        )
 
 
 async def handle_audio_message(
@@ -412,31 +378,37 @@ async def handle_audio_message(
     websocket: WebSocket,
 ) -> None:
     media_metadata = data.get("media_metadata") or {}
-    audio_url = media_metadata.get("voice")
-    uploaded_audio = None
-    if not audio_url:
-        files = media_metadata.get("files")
-        if isinstance(files, list) and files:
-            uploaded_audio = files[0]
-        else:
-            return
+    voice = media_metadata.get("voice")
+    files = media_metadata.get("files")
+    if not voice and not (isinstance(files, list) and files):
+        return
 
     front_id = data.get("frontId")
     if not await _claim_client_event(websocket, room_uid, user_uid, front_id):
         return
 
+    saved_audio = None
+    message_persisted = False
     try:
-        if audio_url:
-            saved_audio = save_data_url(
-                audio_url,
-                original_name="voice-message",
-                allowed_mime_types=AUDIO_MIME_TYPES,
-            )
+        if voice:
+            saved_audio = save_message_voice(voice)
         else:
-            saved_audio = save_file_record(
-                uploaded_audio,
-                allowed_mime_types=AUDIO_MIME_TYPES,
+            saved_files = save_message_files(
+                files,
+                content_type="audio",
             )
+            if len(saved_files) != 1:
+                for item in saved_files:
+                    remove_saved_file(item.get("url"))
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error_type": "upload_audio_count_invalid",
+                        "message": "Аудиосообщение должно содержать один файл.",
+                    },
+                )
+            saved_audio = saved_files[0]
+
         saved_audio_url = saved_audio["url"]
         formatted_message = await Message.create_message(
             db_session,
@@ -449,12 +421,27 @@ async def handle_audio_message(
                 "timestamp": datetime.utcnow().isoformat(),
             },
         )
+        message_persisted = True
         formatted_message["frontId"] = front_id
         await manager.broadcast_to_room(room_uid, formatted_message)
         await _notify_online_members(db_session, room_uid, user_uid, formatted_message)
-    except Exception as exc:
+    except HTTPException as exc:
+        if not message_persisted and saved_audio:
+            remove_saved_file(saved_audio.get("url"))
         await _release_client_event(room_uid, user_uid, front_id)
-        logger.warning("Не удалось обработать audio frame: %s", exc)
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        await websocket.send_json(
+            {
+                "type": "error",
+                "error_type": detail.get("error_type", "audio_failed"),
+                "frontId": front_id,
+            }
+        )
+    except Exception:
+        if not message_persisted and saved_audio:
+            remove_saved_file(saved_audio.get("url"))
+        await _release_client_event(room_uid, user_uid, front_id)
+        logger.exception("Не удалось обработать audio frame")
         await websocket.send_json(
             {
                 "type": "error",
