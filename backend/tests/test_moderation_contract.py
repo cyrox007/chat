@@ -19,6 +19,7 @@ from components.moderation.policy import (
     effective_restriction_status,
     target_restriction_projection,
 )
+from components.moderation.service import reporter_space_report_projection
 from components.moderation.schemas import (
     ModerationActionCreateRequest,
     ModerationAppealResolveRequest,
@@ -243,6 +244,26 @@ class ModerationContractTests(unittest.TestCase):
             {"uid", "restriction_uid", "actor_account_uid", "event_type", "note", "created_at"},
             audit_columns,
         )
+
+    def test_space_reporter_projection_never_correlates_target_account_or_persona(self):
+        now = datetime.utcnow()
+        report = ModerationReport(
+            uid="00000000-0000-0000-0000-000000000061",
+            room_uid="00000000-0000-0000-0000-000000000062",
+            reporter_account_uid="00000000-0000-0000-0000-000000000063",
+            target_account_uid="00000000-0000-0000-0000-000000000064",
+            message_uid="00000000-0000-0000-0000-000000000065",
+            category="harassment",
+            description="space report",
+            status="open",
+            created_at=now,
+        )
+        projection = reporter_space_report_projection(report)
+        self.assertNotIn("target", projection)
+        self.assertNotIn("target_account_uid", projection)
+        self.assertNotIn("reporter_account_uid", projection)
+        self.assertNotIn(str(report.target_account_uid), str(projection))
+        self.assertEqual(projection["space_uid"], str(report.room_uid))
 
     def test_reporter_projection_never_exposes_target_or_internal_queue_state(self):
         now = datetime.utcnow()
