@@ -326,6 +326,60 @@ def save_data_url(
     )
 
 
+def save_message_files(
+    files: list,
+    *,
+    content_type: str,
+    upload_root: Path = PUBLIC_UPLOAD_ROOT,
+) -> list[dict]:
+    if not isinstance(files, list) or not files:
+        raise _upload_error("upload_files_missing", "В сообщении нет файлов.")
+    if len(files) > int(config.MAX_FILES_LIMIT):
+        raise _upload_error(
+            "upload_too_many_files",
+            "Слишком много файлов в одном сообщении.",
+        )
+
+    allowed = allowed_mime_types_for_message(content_type)
+    if not allowed:
+        raise _upload_error("upload_type_not_allowed", "Этот тип сообщения не поддерживает файлы.")
+
+    saved: list[dict] = []
+    total_size = 0
+    try:
+        for item in files:
+            record = save_file_record(
+                item,
+                upload_root=upload_root,
+                allowed_mime_types=allowed,
+            )
+            saved.append(record)
+            total_size += int(record["size"])
+            if total_size > int(config.MAX_MESSAGE_MEDIA_TOTAL_SIZE):
+                raise _upload_error(
+                    "upload_message_too_large",
+                    "Общий размер файлов в сообщении превышает допустимый.",
+                )
+        return saved
+    except Exception:
+        for record in saved:
+            remove_saved_file(record.get("url"), upload_root=upload_root)
+        raise
+
+
+def save_message_voice(
+    value: str,
+    *,
+    upload_root: Path = PUBLIC_UPLOAD_ROOT,
+) -> dict:
+    return save_data_url(
+        value,
+        original_name="voice-message",
+        allowed_mime_types=AUDIO_MIME_TYPES,
+        upload_root=upload_root,
+    )
+
+
 def remove_saved_file(url: str, *, upload_root: Path = PUBLIC_UPLOAD_ROOT) -> None:
     if not isinstance(url, str) or not url.startswith("/uploads/"):
         return
