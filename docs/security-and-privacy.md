@@ -63,6 +63,26 @@ Support — отдельная social surface и повторно применя
 
 Если позже добавятся реальные payments, потребуется отдельная financial threat model: provider webhook authenticity, idempotency, replay protection, fraud/abuse limits, refund/chargeback lifecycle, payout boundary, auditability и separation между financial state и social authority.
 
+## Moderation / report / appeal projections
+
+Checkpoint `0.6.29-alpha.1` разделяет внутренние moderation records и user-facing представления.
+
+Reporter-facing report history может возвращать идентификатор **того объекта, на который пользователь сам пожаловался**, но не должен через Account linkage раскрывать:
+
+- другую/primary Persona того же target Account;
+- target Account UID;
+- queue priority;
+- moderator assignment;
+- internal resolution taxonomy.
+
+Target-facing restriction history содержит только то, что нужно для понимания и апелляции решения: capability, scope, public explanation, status и timing. Moderator actor UID, target Account UID, report linkage, internal reason code, origin и authority metadata остаются internal.
+
+Moderator queue/target lookup использует отдельные internal projections; это intentional privileged surface, а не переиспользование public response.
+
+Регрессионный PostgreSQL test использует две Persona одного target Account и проверяет, что жалоба на одну Persona не раскрывает другую Persona через moderation API.
+
+Подробности: [`moderation-privacy-v1.md`](moderation-privacy-v1.md).
+
 ## Файлы
 
 Checkpoint `0.6.28-alpha.1` закрывает базовый upload/media security review для текущих поддерживаемых типов:
