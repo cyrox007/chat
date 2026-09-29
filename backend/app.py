@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from components.realtime import realtime_service
-from middlewares import csrf_middleware, error_handling_middleware
+from middlewares import csrf_middleware, error_handling_middleware, security_headers_middleware
 from settings import config
 from utils.version import PROJECT_VERSION
 
@@ -64,6 +64,7 @@ def create_app() -> FastAPI:
 
     csrf_middleware(app)
     error_handling_middleware(app)
+    security_headers_middleware(app)
 
     csrf_routes.install(app)
     service_routes.install(app)
