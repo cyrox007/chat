@@ -33,7 +33,14 @@ class TrustSafetyPostgresIntegrationTests(unittest.TestCase):
 
             async with Database.sessionmaker()() as setup_db:
                 for account_uid in [reporter_uid, target_uid, *moderator_uids]:
-                    setup_db.add(Account(uid=account_uid, status="active", trust_level="new"))
+                    setup_db.add(
+                        Account(
+                            uid=account_uid,
+                            legacy_user_uid=account_uid if account_uid == reporter_uid else None,
+                            status="active",
+                            trust_level="new",
+                        )
+                    )
                 setup_db.add(
                     Persona(
                         uid=persona_uid,
