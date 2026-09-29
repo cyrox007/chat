@@ -324,6 +324,22 @@ async def handle_file_message(
             files,
             content_type=data.get("content_type", "file"),
         )
+        uploaded_bytes = sum(int(item["size"]) for item in saved_files)
+        allowed_media_bytes = await realtime_service.allow_cost(
+            user_uid,
+            "media-upload-bytes",
+            uploaded_bytes,
+            config.MEDIA_UPLOAD_RATE_LIMIT_BYTES,
+            config.MEDIA_UPLOAD_RATE_WINDOW_SECONDS,
+        )
+        if not allowed_media_bytes:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error_type": "media_upload_rate_limited",
+                    "message": "Слишком большой объём вложений за короткое время.",
+                },
+            )
 
         formatted_message = await Message.create_message(
             db_session,
@@ -408,6 +424,22 @@ async def handle_audio_message(
             saved_audio = saved_files[0]
 
         saved_audio_url = saved_audio["url"]
+        allowed_media_bytes = await realtime_service.allow_cost(
+            user_uid,
+            "media-upload-bytes",
+            int(saved_audio["size"]),
+            config.MEDIA_UPLOAD_RATE_LIMIT_BYTES,
+            config.MEDIA_UPLOAD_RATE_WINDOW_SECONDS,
+        )
+        if not allowed_media_bytes:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error_type": "media_upload_rate_limited",
+                    "message": "Слишком большой объём вложений за короткое время.",
+                },
+            )
+
         formatted_message = await Message.create_message(
             db_session,
             {
