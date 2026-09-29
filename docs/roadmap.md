@@ -2,13 +2,13 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.27-alpha.1`**; last merged `main` checkpoint: **`0.6.26-alpha.1`**.
+Release candidate: **`0.6.28-alpha.1`**; last merged `main` checkpoint: **`0.6.27-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
 Уже закреплены CI: PostgreSQL migration/recovery, Redis distributed/restart recovery, real Sentinel promotion, multi-process Uvicorn/WebSocket rolling restart, bounded backpressure, production deploy continuity, message notification policy с distributed active-context suppression, durable unread-Messenger email delivery, Web Push/PWA Messenger delivery, full `account.access` enforcement и fine-grained platform moderation permission boundaries.
 
-Provider-neutral AI assessment / copilot, anti-spam/raid behavioral signals, reported-media moderation, operations metrics, incident rehearsal, private-evidence retention/expiry и shadow-calibration/storage-lifecycle gate уже закрыты отдельными checkpoints. Protective holds остаются default-off; следующий Trust & Safety operational task — **накопить human-reviewed shadow data и подтвердить фактический provider backup/snapshot lifecycle перед enforce**. External-delivery observability baseline уже закрывает ledger-side backlog/failure visibility. Browser/security checkpoint закрывает same-origin `/api`, explicit CSRF proof, dependency audit и Chromium/Firefox/WebKit/mobile auth-session matrix; дальше остаются broader HTTP/realtime/Redis/PostgreSQL/provider telemetry, real-device PWA/accessibility gates и формализация unit economics/monetization boundaries.
+Provider-neutral AI assessment / copilot, anti-spam/raid behavioral signals, reported-media moderation, operations metrics, incident rehearsal, private-evidence retention/expiry и shadow-calibration/storage-lifecycle gate уже закрыты отдельными checkpoints. Protective holds остаются default-off; следующий Trust & Safety operational task — **накопить human-reviewed shadow data и подтвердить фактический provider backup/snapshot lifecycle перед enforce**. External-delivery observability baseline уже закрывает ledger-side backlog/failure visibility. Browser/security checkpoint закрывает same-origin `/api`, explicit CSRF proof, dependency audit и Chromium/Firefox/WebKit/mobile auth-session matrix. Upload/media baseline теперь закрывает allowlist, byte/signature validation, atomic writes и media-rate limiting; дальше остаются broader HTTP/realtime/Redis/PostgreSQL/provider telemetry, malware/CDR policy для более широких типов, real-device PWA/accessibility gates и формализация unit economics/monetization boundaries.
 
 Отдельно зафиксированы два обязательных launch workstream, которые раньше были недооценены: **production-grade moderation / Trust & Safety** и **устойчивая монетизация / unit economics**. PubChat не может считать наличие таблиц moderation готовой системой и не может рассчитывать, что инфраструктура, поддержка и Trust & Safety будут бесконечно финансироваться только энтузиазмом команды.
 
@@ -36,6 +36,18 @@ Product identity/Activities, earned engagement, occurrences/reminders, cosmetic 
 - pending private membership не получает recent/upcoming live-context reasons/projection;
 - response проверяется на отсутствие sensitive sentinel name/UID;
 - privacy path остаётся внутри discovery query/latency budget.
+
+### Stage 6 checkpoint 20 — Upload / media security hardening ✅ `0.6.28-alpha.1`
+- strict server MIME allowlist; unknown/SVG/HTML/legacy office/archive payloads rejected;
+- decoded/streamed actual-byte caps replace trust in client-declared size;
+- supported raster/audio/video/PDF/OOXML payloads require signature/magic validation;
+- atomic UUID public writes, path confinement and partial-file cleanup;
+- Messenger/Space share one validated upload pipeline with all-or-nothing per-message file/byte caps;
+- Account-level media volume uses distributed Redis weighted limiting;
+- raw Messenger `data:` metadata persistence removed; avatars restricted to raster images;
+- upload responses add `nosniff`, sandbox CSP and same-origin resource policy; documents force attachment disposition;
+- frontend accept list mirrors server policy;
+- functional exact-head CI #758 green across backend, frontend, dependency-security and browser-smoke.
 
 ### Stage 6 checkpoint 19 — Realtime Redis pool profiling ✅ `0.6.27-alpha.1`
 - privacy-safe pool snapshot показывает max/in-use/available/created/headroom/utilization без Redis URL/credentials/tickets/Account IDs;
@@ -278,7 +290,8 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 ### 6.5 Security/privacy 🚧
 - ✅ session/cookie/CSRF browser contract: explicit signed cookie + matching header proof;
 - ✅ registration/login/refresh automated Chromium/Firefox/WebKit/mobile compatibility gate;
-- upload/media review;
+- ✅ upload/media baseline review for current allowlist;
+- ⏳ malware scanning/CDR + shared/object storage/public URL policy for broader file support;
 - moderation/report/appeal privacy audit;
 - Account block coverage + privacy side-channel + secret/logging review;
 - financial threat model до real payments.
