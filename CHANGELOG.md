@@ -2,6 +2,25 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.28-alpha.1] — 2026-09-29
+
+Stage 6 checkpoint 20 — upload/media security hardening.
+
+- upload pipeline теперь принимает только явный server MIME allowlist; unknown/SVG/HTML/legacy office/archive types отклоняются до сохранения;
+- base64/data-URL parsing стал строгим, а size limits применяются к реально decoded/streamed bytes, а не к client-declared size;
+- supported raster/audio/video/PDF/OOXML uploads проходят signature/magic verification; DOCX/XLSX дополнительно проверяются как ожидаемый Office ZIP shape;
+- публичные файлы сохраняются atomic write + UUID filename с path confinement и cleanup partial files;
+- Messenger/Space attachments используют единый validated pipeline; per-message file-count/byte cap работает all-or-nothing;
+- Account-level media byte-rate budget применяется через distributed Redis weighted limiter;
+- Messenger больше не сохраняет raw `data:` URI в PostgreSQL media metadata;
+- avatar upload ограничен raster image types, а legacy profile debug `print()` с потенциальным base64 payload удалён;
+- `/uploads` получает `X-Content-Type-Options: nosniff`, sandbox CSP и same-origin resource policy; documents принудительно отдаются как attachment;
+- frontend picker синхронизирован с server allowlist;
+- tests покрывают MIME spoofing, invalid base64, lied size, multipart byte caps, cleanup, Office ZIP shape, response headers, metadata normalization и weighted byte limiter;
+- functional exact-head CI #758 полностью зелёный: backend, frontend, dependency-security и browser-smoke.
+
+Этот checkpoint уменьшает upload attack surface, но не заменяет полноценный malware scanning/CDR pipeline для произвольных документов и архивов; такие форматы остаются запрещёнными до отдельной политики.
+
 ## [0.6.27-alpha.1] — 2026-09-29
 
 Stage 6 checkpoint 19 — realtime Redis pool profiling baseline.
