@@ -45,7 +45,7 @@
 		<section v-else-if="activeTab === 'reports'" class="record-list">
 			<article v-for="report in reports" :key="report.uid" class="record-card">
 				<div class="record-icon"><i class="fas fa-flag"></i></div>
-				<div><div class="record-title"><strong>{{ categoryLabel(report.category) }}</strong><span :class="`status status--${report.status}`">{{ reportStatusLabel(report.status) }}</span></div><p>{{ report.description || 'Без дополнительного комментария.' }}</p><small>{{ report.target?.display_name || report.target?.handle || 'Участник' }} · {{ formatDate(report.created_at) }}</small></div>
+				<div><div class="record-title"><strong>{{ categoryLabel(report.category) }}</strong><span :class="`status status--${report.status}`">{{ reportStatusLabel(report.status) }}</span></div><p>{{ report.description || 'Без дополнительного комментария.' }}</p><small>Отправлено {{ formatDate(report.created_at) }}</small></div>
 			</article>
 			<div v-if="!reports.length" class="state-block state-block--compact"><i class="fas fa-flag"></i><strong>Жалоб пока нет</strong><span>Это хорошо. Если понадобится помощь, новая жалоба останется видна здесь.</span></div>
 		</section>

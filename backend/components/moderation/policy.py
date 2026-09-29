@@ -156,6 +156,27 @@ def restriction_projection(restriction: PlatformRestriction) -> dict:
     }
 
 
+def target_restriction_projection(restriction: PlatformRestriction) -> dict:
+    """Projection safe for the Account affected by a restriction.
+
+    Moderator/account identifiers, report linkage, internal reason taxonomy and
+    automation origin are operational state. The affected Account receives only
+    the information needed to understand duration/scope and appeal the decision.
+    """
+    return {
+        "uid": str(restriction.uid),
+        "capability": restriction.capability,
+        "scope_type": restriction.scope_type,
+        "scope_uid": str(restriction.scope_uid) if restriction.scope_uid else None,
+        "public_explanation": restriction.public_explanation,
+        "status": effective_restriction_status(restriction),
+        "starts_at": restriction.starts_at.isoformat(),
+        "expires_at": restriction.expires_at.isoformat() if restriction.expires_at else None,
+        "revoked_at": restriction.revoked_at.isoformat() if restriction.revoked_at else None,
+        "created_at": restriction.created_at.isoformat(),
+    }
+
+
 async def _audit_restriction(
     db: AsyncSession,
     restriction_uid: UUID,
@@ -416,6 +437,7 @@ async def list_account_restrictions(
     account_uid: UUID,
     *,
     include_inactive: bool = True,
+    include_internal: bool = False,
     limit: int = 100,
 ) -> list[dict]:
     filters = [PlatformRestriction.target_account_uid == account_uid]
@@ -434,7 +456,10 @@ async def list_account_restrictions(
         .order_by(PlatformRestriction.created_at.desc())
         .limit(limit)
     )
-    return [restriction_projection(item) for item in result.scalars().all()]
+    items = result.scalars().all()
+    if include_internal:
+        return [restriction_projection(item) for item in items]
+    return [target_restriction_projection(item) for item in items]
 
 
 async def active_restriction_for_subject(

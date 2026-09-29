@@ -49,6 +49,20 @@ def _persona_projection(account_uid: UUID | None, personas: dict[UUID, Persona])
     }
 
 
+def reporter_space_report_projection(report: ModerationReport) -> dict:
+    """User-facing Space report projection without Account/Persona correlation."""
+    return {
+        "uid": str(report.uid),
+        "space_uid": str(report.room_uid),
+        "category": report.category,
+        "description": report.description,
+        "status": report.status,
+        "message_uid": str(report.message_uid) if report.message_uid else None,
+        "created_at": report.created_at.isoformat(),
+        "resolved_at": report.resolved_at.isoformat() if report.resolved_at else None,
+    }
+
+
 def _effective_action_status(action: ModerationAction) -> str:
     if action.status == "active" and action.expires_at and action.expires_at <= datetime.utcnow():
         return "expired"
@@ -164,21 +178,7 @@ async def list_my_reports(
         .offset(offset)
     )
     reports = result.scalars().all()
-    personas = await _persona_map(db, {item.target_account_uid for item in reports if item.target_account_uid})
-    return [
-        {
-            "uid": str(item.uid),
-            "space_uid": str(item.room_uid),
-            "category": item.category,
-            "description": item.description,
-            "status": item.status,
-            "message_uid": str(item.message_uid) if item.message_uid else None,
-            "target": _persona_projection(item.target_account_uid, personas),
-            "created_at": item.created_at.isoformat(),
-            "resolved_at": item.resolved_at.isoformat() if item.resolved_at else None,
-        }
-        for item in reports
-    ], total
+    return [reporter_space_report_projection(item) for item in reports], total
 
 
 async def list_space_reports(

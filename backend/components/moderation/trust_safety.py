@@ -108,6 +108,28 @@ async def _report_projection(
     return item
 
 
+def reporter_report_projection(report: TrustSafetyReport) -> dict:
+    """Privacy-minimal projection for the Account that submitted the report.
+
+    Never derive target identity from Account state here. Doing so can expose a
+    target's primary Persona and create an Account-to-Persona correlation that
+    the reporter did not previously know.
+    """
+    return {
+        "uid": str(report.uid),
+        "source_type": report.source_type,
+        "source_uid": str(report.source_uid),
+        "source_space_uid": str(report.source_room_uid) if report.source_room_uid else None,
+        "category": report.category,
+        "status": report.status,
+        "description": report.description,
+        "public_explanation": report.public_explanation,
+        "created_at": report.created_at.isoformat(),
+        "updated_at": report.updated_at.isoformat(),
+        "resolved_at": report.resolved_at.isoformat() if report.resolved_at else None,
+    }
+
+
 async def _account_for_legacy_user(db: AsyncSession, legacy_user_uid: UUID) -> Account:
     result = await db.execute(
         select(Account)
@@ -220,7 +242,7 @@ async def create_trust_safety_report(
     if existing:
         await _audit(db, existing.uid, reporter.uid, "duplicate_submission")
         await db.commit()
-        result = await _report_projection(db, existing, include_assignment=False)
+        result = reporter_report_projection(existing)
         result["deduplicated"] = True
         return result
 
@@ -264,7 +286,7 @@ async def create_trust_safety_report(
     )
     await db.commit()
     await db.refresh(report)
-    result = await _report_projection(db, report, include_assignment=False)
+    result = reporter_report_projection(report)
     result["deduplicated"] = False
     return result
 
@@ -289,13 +311,7 @@ async def list_my_trust_safety_reports(
         .limit(limit)
         .offset(offset)
     )
-    items = []
-    for report in result.scalars().all():
-        item = await _report_projection(db, report, include_assignment=False)
-        # Queue priority and moderator assignment are internal operational state.
-        item.pop("priority", None)
-        items.append(item)
-    return items, total
+    return [reporter_report_projection(report) for report in result.scalars().all()], total
 
 
 async def list_trust_safety_queue(

@@ -1,7 +1,7 @@
 # PubChat version quick reference
 
-- Current release candidate: **0.6.28-alpha.1** — upload/media security hardening.
-- Last released `main` checkpoint: **0.6.27-alpha.1** until the final exact-head gate passes and the release candidate merges.
+- Current release candidate: **0.6.29-alpha.1** — moderation privacy projection hardening.
+- Last released `main` checkpoint: **0.6.28-alpha.1** until the final exact-head gate passes and the release candidate merges.
 - Current milestone: **0.6.x-alpha** — Pre-beta hardening continues.
 - Proven so far: PostgreSQL 16 migration/recovery; Redis 7.2 distributed semantics, restart recovery and real Sentinel master promotion; multi-process Uvicorn/WebSocket + bounded backpressure; persistent systemd-owned production listener; message notification preferences/active-context suppression; durable unread-Messenger email delivery; Web Push/PWA Messenger delivery.
 - Trust & Safety baseline: platform report intake/triage/evidence audit; Account-level capability restrictions; target-visible reasons/expiry; independent appeal queue; full `account.access` suspension; server-side enforcement for Messenger send, Space chat/media, Space create/join/invite, Persona edit and organic discovery publication.
@@ -28,6 +28,7 @@
 - Large-pool discovery privacy regression proves blocked-owner suppression, private eligibility and no pending-private live-context leakage while keeping the same bounded query budget.
 - Redis pool observability/profile now exposes privacy-safe utilization/headroom and runs a near-limit bounded realtime profile with machine gates for errors, p95 and saturation.
 - Upload/media baseline now enforces a strict server allowlist, real-byte/signature validation, atomic/path-confined storage, per-message and distributed Account byte limits, safe metadata and hardened `/uploads` response headers.
+- Moderation privacy projections now separate reporter/target responses from privileged moderator metadata and prevent hidden Account→primary-Persona correlation through report history.
 - Still open before beta: accumulation of real shadow-calibration data and provider-level backup/snapshot lifecycle verification, anonymized production-like legacy snapshot rehearsal, sustained production-like soak/mass-reconnect profiling, broader provider/HTTP/realtime/Redis/PostgreSQL observability, malware/CDR/shared-storage policy for broader file support, real iOS/iPadOS PWA/device testing and accessibility hardening and unit-economics/monetization planning.
 - Alpha: hardening is incomplete; exact checkpoint CI is mandatory.
 - Beta: launch-critical flows and production-like gates are complete; focus shifts to stabilization.

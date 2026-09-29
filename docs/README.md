@@ -27,6 +27,7 @@
 - [`client-architecture.md`](client-architecture.md) — SPA-first/API-first модель клиента.
 - [`api-and-realtime.md`](api-and-realtime.md) — HTTP API, auth/session и WebSocket v2.
 - [`security-and-privacy.md`](security-and-privacy.md) — security model и privacy boundaries.
+- [`moderation-privacy-v1.md`](moderation-privacy-v1.md) — reporter/target vs moderator-only moderation projection boundaries (`0.6.29-alpha.1`).
 - [`upload-media-security-v1.md`](upload-media-security-v1.md) — server allowlist, byte/signature validation, storage/rate-limit/response-header contract (`0.6.28-alpha.1`).
 - [`development.md`](development.md) — ветки, миграции, тесты и CI.
 - [`operations.md`](operations.md) — production-конфигурация и эксплуатационные ограничения.
@@ -63,9 +64,9 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Release candidate текущей ветки: `0.6.28-alpha.1`; последний выпущенный `main` checkpoint — `0.6.27-alpha.1` до финального exact-head CI и merge.
+Release candidate текущей ветки: `0.6.29-alpha.1`; последний выпущенный `main` checkpoint — `0.6.28-alpha.1` до финального exact-head CI и merge.
 
-Текущая development-линия: `0.6.x-alpha`. `0.6.28-alpha.1` закрывает upload/media security baseline поверх уже выпущенных browser, data, discovery и realtime-capacity hardening checkpoints.
+Текущая development-линия: `0.6.x-alpha`. `0.6.29-alpha.1` закрывает moderation/report/restriction projection privacy baseline поверх уже выпущенных upload/browser/data/discovery/realtime hardening checkpoints.
 
 - `trust-safety-incident-rehearsal-v1.md` — moderation incident matrix, protective-hold safeguards и beta enablement gate.
 
