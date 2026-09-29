@@ -18,7 +18,7 @@ from components.room.model import Room, RoomBan, RoomMember
 from components.user.model import Penalty
 from settings import config
 from socket_manager import room_manager as manager
-from utils.file_handler import save_file
+from utils.file_handler import AUDIO_MIME_TYPES, save_data_url, save_file_record
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -341,21 +341,15 @@ async def handle_file_message(
                 if not all([file_url, file_type, file_name, file_size]):
                     raise ValueError("Missing required file data")
 
-                saved_file_url = save_file(
-                    {
-                        "url": file_url,
-                        "type": file_type,
-                        "name": file_name,
-                        "size": file_size,
-                    }
-                )
                 saved_files.append(
-                    {
-                        "url": saved_file_url,
-                        "type": file_type,
-                        "name": file_name,
-                        "size": file_size,
-                    }
+                    save_file_record(
+                        {
+                            "url": file_url,
+                            "type": file_type,
+                            "name": file_name,
+                            "size": file_size,
+                        }
+                    )
                 )
             except Exception as exc:
                 logger.warning("Не удалось сохранить realtime attachment: %s", exc)
@@ -418,23 +412,12 @@ async def handle_audio_message(
         return
 
     try:
-        mime_type, encoded_data = audio_url.split(",", 1)
-        file_content = base64.b64decode(encoded_data)
-        if len(file_content) > config.MAX_FILE_SIZE:
-            raise ValueError("audio_too_large")
-
-        extension = mime_type.split(";")[0].split("/")[1]
-        if extension not in {"webm", "ogg", "mp3", "mpeg", "wav", "m4a", "mp4"}:
-            raise ValueError("unsupported_audio_type")
-
-        upload_dir = Path("uploads/audio")
-        os.makedirs(upload_dir, exist_ok=True)
-        file_name = f"{uuid.uuid4()}.{extension}"
-        file_path = upload_dir / file_name
-        with open(file_path, "wb") as file_handle:
-            file_handle.write(file_content)
-
-        saved_audio_url = f"{config.BASE_URL}/uploads/audio/{file_name}"
+        saved_audio = save_data_url(
+            audio_url,
+            original_name="voice-message",
+            allowed_mime_types=AUDIO_MIME_TYPES,
+        )
+        saved_audio_url = saved_audio["url"]
         formatted_message = await Message.create_message(
             db_session,
             {
