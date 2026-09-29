@@ -49,7 +49,18 @@ class Config:
     # Sentinel fields below are configured, Sentinel takes precedence and
     # REDIS_URL is ignored by the realtime client factory.
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0" if DEBUG else "")
-    REDIS_MAX_CONNECTIONS = int(os.getenv("REDIS_MAX_CONNECTIONS", "100"))
+    REDIS_MAX_CONNECTIONS = max(4, int(os.getenv("REDIS_MAX_CONNECTIONS", "100")))
+    REDIS_POOL_ALERT_UTILIZATION_PERCENT = max(
+        50,
+        min(100, int(os.getenv("REDIS_POOL_ALERT_UTILIZATION_PERCENT", "85"))),
+    )
+    REDIS_POOL_MIN_HEADROOM_CONNECTIONS = max(
+        1,
+        min(
+            max(1, REDIS_MAX_CONNECTIONS // 4),
+            int(os.getenv("REDIS_POOL_MIN_HEADROOM_CONNECTIONS", "5")),
+        ),
+    )
     REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS = float(
         os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS", "5")
     )

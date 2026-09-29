@@ -2,7 +2,7 @@
 
 ## Current release
 
-`0.6.26-alpha.1`
+`0.6.27-alpha.1`
 
 Current development milestone remains `0.6.x-alpha` — Pre-beta hardening.
 
@@ -35,7 +35,7 @@ After `1.0.0`, normal SemVer rules apply.
 
 Alpha is used while launch-critical hardening or product domains are incomplete. Every recorded alpha checkpoint must pass CI on the exact versioned head.
 
-PubChat remains alpha because Stage 6 still requires production-like legacy snapshot rehearsal, broader load/pool profiling and observability, upload/privacy review, accessibility hardening and real iOS/iPadOS PWA/device rehearsal.
+PubChat remains alpha because Stage 6 still requires production-like legacy snapshot rehearsal, broader sustained load/soak profiling and observability, upload/privacy review, accessibility hardening and real iOS/iPadOS PWA/device rehearsal.
 
 Checkpoint progression:
 - `0.6.0-alpha.1` — PostgreSQL migration/schema-drift/async integration baseline;
@@ -56,6 +56,7 @@ Checkpoint progression:
 - `0.6.24-alpha.1` — multi-source bounded organic-discovery candidate generation without newest-catalog monopoly.
 - `0.6.25-alpha.1` — discovery query-budget/latency profiling gate over a synthetic large candidate set.
 - `0.6.26-alpha.1` — large-pool discovery privacy/block regression for blocked owners, private eligibility and pending-context leakage.
+- `0.6.27-alpha.1` — realtime Redis pool utilization/headroom observability and bounded near-limit capacity profile.
 
 These checkpoints do not declare Stage 6 complete.
 

@@ -93,15 +93,14 @@ Integration harness поднимает на runner:
 
 ## Observability
 
-До beta нужны metrics/alerts минимум для:
+Checkpoint `0.6.27-alpha.1` уже добавляет privacy-safe pool utilization/headroom metrics и bounded near-limit profile. До beta всё ещё нужны metrics/alerts минимум для:
 
 - current master identity / topology changes;
 - Sentinel master discovery failures;
-- Redis command error rate/timeouts;
+- Redis command error rate/timeouts over time;
 - promotion duration;
 - replication link/lag;
 - PubSub reconnect count/time;
-- realtime ticket/presence errors во время failover;
-- pool saturation.
+- realtime ticket/presence errors во время failover.
 
-Credentials и ticket values в logs/metrics запрещены.
+Pool snapshot доступен через admin operations endpoint, а staging profile — через `workers.realtime_pool_profile`. Credentials, Redis URL, ticket values и Account identifiers в logs/metrics запрещены.

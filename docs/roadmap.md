@@ -2,7 +2,7 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.26-alpha.1`**; last merged `main` checkpoint: **`0.6.25-alpha.1`**.
+Release candidate: **`0.6.27-alpha.1`**; last merged `main` checkpoint: **`0.6.26-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
@@ -36,6 +36,15 @@ Product identity/Activities, earned engagement, occurrences/reminders, cosmetic 
 - pending private membership не получает recent/upcoming live-context reasons/projection;
 - response проверяется на отсутствие sensitive sentinel name/UID;
 - privacy path остаётся внутри discovery query/latency budget.
+
+### Stage 6 checkpoint 19 — Realtime Redis pool profiling ✅ `0.6.27-alpha.1`
+- privacy-safe pool snapshot показывает max/in-use/available/created/headroom/utilization без Redis URL/credentials/tickets/Account IDs;
+- admin-only operations endpoint даёт текущий pool health;
+- bounded profiler гоняет production RealtimeService primitives, а не synthetic raw-command microbenchmark;
+- CI уменьшает pool до 12 connections и запускает 120 operations при concurrency 10;
+- functional run #748: 0 errors, peak 11/12 in-use, 0 saturation samples; p95 19 ms рассматривается только как наблюдение конкретного runner, не SLO;
+- machine gates контролируют error rate, broad p95 ceiling и saturation samples;
+- полный functional exact-head CI #748 green.
 
 ### Stage 6 checkpoint 17 — Discovery query profiling / latency guard ✅ `0.6.25-alpha.1`
 - privacy-safe profiler измеряет SQL statement/select count, DB time и wall time без params/IDs/payload;
@@ -263,7 +272,8 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ✅ multi-source bounded candidate generation вместо newest-catalog bias;
 - ✅ query/DB profiling и bounded ranking latency/load guard;
 - ✅ privacy/block regression на большом candidate set;
-- production-like realtime/Redis pool saturation profiling.
+- ✅ bounded realtime/Redis pool utilization + near-limit profiling;
+- ⏳ sustained production-like soak / mass reconnect / provider-specific capacity profiling.
 
 ### 6.5 Security/privacy 🚧
 - ✅ session/cookie/CSRF browser contract: explicit signed cookie + matching header proof;
@@ -279,7 +289,8 @@ Large-scale throughput/pool saturation остаётся в performance/observabi
 - ✅ health-gated rolling deploy + staged asset-first SPA publish;
 - ✅ external Messenger email systemd scheduler/service + fail-fast provider config installer;
 - ✅ external Messenger Web Push systemd scheduler/service + VAPID preflight installer;
-- ⏳ Sentinel topology/promotion/pool metrics и alerting;
+- ✅ Redis pool utilization/headroom metrics + bounded profile gate;
+- ⏳ Sentinel topology/promotion/replication-lag metrics и alerting;
 - ✅ email/push durable-ledger delivery metrics/health;
 - ⏳ SMTP/Web Push provider-side health/latency telemetry;
 - ⏳ structured logs/error tracking, incident procedure;

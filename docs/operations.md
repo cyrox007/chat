@@ -45,6 +45,44 @@ Proxy должен корректно передавать WebSocket Upgrade/Con
 
 Service worker обслуживает application shell/static assets и не должен кэшировать API/auth/realtime responses или credentials. Web Push добавляет `push`/`notificationclick`, но не меняет это cache boundary.
 
+## Realtime Redis pool observability
+
+Checkpoint `0.6.27-alpha.1` добавляет privacy-safe connection-pool health и bounded capacity profiler.
+
+Admin endpoint:
+
+```
+GET /admin/operations/realtime-redis
+```
+
+Он возвращает только aggregate pool state: configured max, current in-use/available/created, headroom, utilization и near-capacity flag. Redis URL, credentials, tickets, keys и Account identifiers не возвращаются.
+
+Thresholds:
+
+```dotenv
+REDIS_POOL_ALERT_UTILIZATION_PERCENT=85
+REDIS_POOL_MIN_HEADROOM_CONNECTIONS=5
+```
+
+Они не меняют размер pool и не выполняют traffic shedding.
+
+Controlled staging rehearsal:
+
+```bash
+cd /home/projects/pubchat/backend
+venv/bin/python3 -m workers.realtime_pool_profile \
+  --operations 120 \
+  --concurrency 10 \
+  --max-error-rate-percent 0 \
+  --max-p95-ms 2000 \
+  --max-saturation-samples 0 \
+  --require-healthy
+```
+
+Не используйте CI latency как production SLO. Для capacity decision повторяйте profile на production-like hardware/topology и увеличивайте нагрузку ступенчато, наблюдая pool headroom, Redis latency/error rate и WebSocket reconnect behavior.
+
+Подробности: [`realtime-redis-pool-profile-v1.md`](realtime-redis-pool-profile-v1.md).
+
 ## Redis
 
 В production Redis обязателен. Он обслуживает one-time socket tickets, pub/sub, distributed presence, active context, heartbeat state, rate limiting и idempotency.
