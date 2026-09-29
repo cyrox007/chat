@@ -17,6 +17,7 @@ from components.moderation.model import (
 from components.moderation.policy import (
     PLATFORM_CAPABILITIES,
     effective_restriction_status,
+    target_restriction_projection,
 )
 from components.moderation.schemas import (
     ModerationActionCreateRequest,
@@ -27,7 +28,7 @@ from components.moderation.schemas import (
     TrustSafetyDecisionRequest,
     TrustSafetyReportCreateRequest,
 )
-from components.moderation.trust_safety import trust_safety_priority
+from components.moderation.trust_safety import reporter_report_projection, trust_safety_priority
 
 
 class ModerationContractTests(unittest.TestCase):
@@ -241,6 +242,73 @@ class ModerationContractTests(unittest.TestCase):
         self.assertEqual(
             {"uid", "restriction_uid", "actor_account_uid", "event_type", "note", "created_at"},
             audit_columns,
+        )
+
+    def test_reporter_projection_never_exposes_target_or_internal_queue_state(self):
+        now = datetime.utcnow()
+        report = TrustSafetyReport(
+            uid="00000000-0000-0000-0000-000000000041",
+            reporter_account_uid="00000000-0000-0000-0000-000000000042",
+            target_account_uid="00000000-0000-0000-0000-000000000043",
+            source_type="persona",
+            source_uid="00000000-0000-0000-0000-000000000044",
+            category="privacy",
+            priority="high",
+            description="privacy report",
+            status="resolved",
+            assigned_to_account_uid="00000000-0000-0000-0000-000000000045",
+            resolution_code="internal_policy_code",
+            public_explanation="Проверка завершена.",
+            created_at=now,
+            updated_at=now,
+            resolved_at=now,
+        )
+        projection = reporter_report_projection(report)
+        self.assertNotIn("target", projection)
+        self.assertNotIn("priority", projection)
+        self.assertNotIn("assigned_to_account_uid", projection)
+        self.assertNotIn("assigned_at", projection)
+        self.assertNotIn("resolution_code", projection)
+        serialized = str(projection)
+        self.assertNotIn(str(report.target_account_uid), serialized)
+        self.assertNotIn(str(report.assigned_to_account_uid), serialized)
+        self.assertEqual(projection["public_explanation"], "Проверка завершена.")
+
+    def test_target_restriction_projection_hides_moderation_identity_and_taxonomy(self):
+        now = datetime.utcnow()
+        restriction = PlatformRestriction(
+            uid="00000000-0000-0000-0000-000000000051",
+            report_uid="00000000-0000-0000-0000-000000000052",
+            actor_account_uid="00000000-0000-0000-0000-000000000053",
+            target_account_uid="00000000-0000-0000-0000-000000000054",
+            capability="messenger.send",
+            scope_type="platform",
+            reason_code="internal_reason_code",
+            public_explanation="Отправка сообщений временно ограничена.",
+            origin="human",
+            status="active",
+            actor_authority_level=50,
+            target_authority_level=0,
+            starts_at=now,
+            created_at=now,
+        )
+        projection = target_restriction_projection(restriction)
+        for key in {
+            "report_uid",
+            "actor_account_uid",
+            "target_account_uid",
+            "reason_code",
+            "origin",
+            "actor_authority_level",
+            "target_authority_level",
+        }:
+            self.assertNotIn(key, projection)
+        serialized = str(projection)
+        self.assertNotIn(str(restriction.actor_account_uid), serialized)
+        self.assertNotIn(str(restriction.target_account_uid), serialized)
+        self.assertEqual(
+            projection["public_explanation"],
+            "Отправка сообщений временно ограничена.",
         )
 
     def test_effective_restriction_status_does_not_rewrite_history(self):
