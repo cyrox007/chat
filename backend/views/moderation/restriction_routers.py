@@ -118,6 +118,7 @@ def install(app: FastAPI) -> None:
             db,
             target.uid,
             include_inactive=include_inactive,
+            include_internal=True,
             limit=limit,
         )
         return {"status": "ok", "restrictions": items}
