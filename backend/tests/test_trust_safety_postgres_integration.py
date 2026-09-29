@@ -9,7 +9,11 @@ from sqlalchemy import delete, select
 from components.identity.model import Account, Persona
 from components.model_registry import ensure_models_registered
 from components.moderation.model import TrustSafetyAuditEvent, TrustSafetyReport
-from components.moderation.trust_safety import claim_trust_safety_report, trust_safety_evidence
+from components.moderation.trust_safety import (
+    claim_trust_safety_report,
+    list_my_trust_safety_reports,
+    trust_safety_evidence,
+)
 from database import Database
 
 
@@ -64,6 +68,22 @@ class TrustSafetyPostgresIntegrationTests(unittest.TestCase):
                         return ("rejected", moderator_uid, exc.detail)
 
             try:
+                async with Database.sessionmaker()() as reporter_db:
+                    reports, total = await list_my_trust_safety_reports(
+                        reporter_db,
+                        reporter_uid,
+                    )
+                    self.assertEqual(total, 1)
+                    self.assertEqual(len(reports), 1)
+                    reporter_view = reports[0]
+                    self.assertNotIn("target", reporter_view)
+                    self.assertNotIn("priority", reporter_view)
+                    self.assertNotIn("assigned_to_account_uid", reporter_view)
+                    self.assertNotIn("resolution_code", reporter_view)
+                    serialized = str(reporter_view)
+                    self.assertNotIn(str(target_uid), serialized)
+                    self.assertNotIn(str(persona_uid), serialized)
+
                 results = await asyncio.gather(*(try_claim(uid) for uid in moderator_uids))
                 claimed = [item for item in results if item[0] == "claimed"]
                 rejected = [item for item in results if item[0] == "rejected"]
