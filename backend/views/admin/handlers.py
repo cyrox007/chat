@@ -4,7 +4,7 @@ from typing import Optional
 
 from fastapi import HTTPException, Request, Response, status
 from components.device.model import UserDevice
-from utils.file_handler import save_file
+from utils.file_handler import IMAGE_MIME_TYPES, save_file
 from components.room.model import Room
 from utils.logger import setup_logger
 from components.user.model import Penalty, User
@@ -530,7 +530,7 @@ async def update_user(target_uid: UUID, request: Request, response: Response, db
         if 'avatar' in user_data and user_data['avatar']:
             try:
                 # Сохраняем файл через утилиту save_file
-                avatar_url = save_file(user_data['avatar'])
+                avatar_url = save_file(user_data['avatar'], allowed_mime_types=IMAGE_MIME_TYPES)
                 user_data['avatar'] = avatar_url  # Заменяем Base64 на URL аватара
             except HTTPException as e:
                 response.status_code = e.status_code
