@@ -13,7 +13,7 @@ from components.moderation.model import (
     PlatformRestrictionAppeal,
     PlatformRestrictionAuditEvent,
 )
-from components.moderation.policy import issue_platform_restriction
+from components.moderation.policy import issue_platform_restriction, list_account_restrictions
 from components.moderation.restriction_appeals import (
     claim_platform_restriction_appeal,
     create_platform_restriction_appeal,
@@ -75,6 +75,40 @@ class PlatformRestrictionAppealPostgresIntegrationTests(unittest.TestCase):
                         ),
                     )
                     restriction_uid = UUID(restriction["uid"])
+
+                async with Database.sessionmaker()() as db:
+                    target_items = await list_account_restrictions(
+                        db,
+                        user_uid,
+                        include_inactive=True,
+                    )
+                    self.assertEqual(len(target_items), 1)
+                    target_view = target_items[0]
+                    for key in {
+                        "report_uid",
+                        "actor_account_uid",
+                        "target_account_uid",
+                        "reason_code",
+                        "origin",
+                    }:
+                        self.assertNotIn(key, target_view)
+                    serialized = str(target_view)
+                    self.assertNotIn(str(issuer_uid), serialized)
+                    self.assertNotIn(str(user_uid), serialized)
+                    self.assertEqual(
+                        target_view["public_explanation"],
+                        "Личные сообщения временно ограничены.",
+                    )
+
+                    internal_items = await list_account_restrictions(
+                        db,
+                        user_uid,
+                        include_inactive=True,
+                        include_internal=True,
+                    )
+                    self.assertEqual(internal_items[0]["actor_account_uid"], str(issuer_uid))
+                    self.assertEqual(internal_items[0]["target_account_uid"], str(user_uid))
+                    self.assertEqual(internal_items[0]["reason_code"], "dm_abuse")
 
                 async with Database.sessionmaker()() as db:
                     appeal = await create_platform_restriction_appeal(
