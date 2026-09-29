@@ -18,7 +18,12 @@ from components.room.model import Room, RoomBan, RoomMember
 from components.user.model import Penalty
 from settings import config
 from socket_manager import room_manager as manager
-from utils.file_handler import AUDIO_MIME_TYPES, save_data_url, save_file_record
+from utils.file_handler import (
+    AUDIO_MIME_TYPES,
+    allowed_mime_types_for_message,
+    save_data_url,
+    save_file_record,
+)
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -348,7 +353,10 @@ async def handle_file_message(
                             "type": file_type,
                             "name": file_name,
                             "size": file_size,
-                        }
+                        },
+                        allowed_mime_types=allowed_mime_types_for_message(
+                            data.get("content_type", "file")
+                        ),
                     )
                 )
             except Exception as exc:
@@ -403,20 +411,32 @@ async def handle_audio_message(
     db_session: AsyncSession,
     websocket: WebSocket,
 ) -> None:
-    audio_url = data.get("media_metadata", {}).get("voice")
+    media_metadata = data.get("media_metadata") or {}
+    audio_url = media_metadata.get("voice")
+    uploaded_audio = None
     if not audio_url:
-        return
+        files = media_metadata.get("files")
+        if isinstance(files, list) and files:
+            uploaded_audio = files[0]
+        else:
+            return
 
     front_id = data.get("frontId")
     if not await _claim_client_event(websocket, room_uid, user_uid, front_id):
         return
 
     try:
-        saved_audio = save_data_url(
-            audio_url,
-            original_name="voice-message",
-            allowed_mime_types=AUDIO_MIME_TYPES,
-        )
+        if audio_url:
+            saved_audio = save_data_url(
+                audio_url,
+                original_name="voice-message",
+                allowed_mime_types=AUDIO_MIME_TYPES,
+            )
+        else:
+            saved_audio = save_file_record(
+                uploaded_audio,
+                allowed_mime_types=AUDIO_MIME_TYPES,
+            )
         saved_audio_url = saved_audio["url"]
         formatted_message = await Message.create_message(
             db_session,
