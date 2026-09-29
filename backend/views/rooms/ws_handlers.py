@@ -23,8 +23,6 @@ from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-MAX_FILENAME_LENGTH = 255
-
 
 async def initialize_websocket(
     websocket: WebSocket,
