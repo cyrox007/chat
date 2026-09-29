@@ -31,6 +31,7 @@ class TrustSafetyPostgresIntegrationTests(unittest.TestCase):
             target_uid = uuid4()
             moderator_uids = [uuid4(), uuid4()]
             persona_uid = uuid4()
+            primary_persona_uid = uuid4()
             report_uid = uuid4()
 
             async with Database.sessionmaker()() as setup_db:
@@ -56,15 +57,25 @@ class TrustSafetyPostgresIntegrationTests(unittest.TestCase):
                             trust_level="new",
                         )
                     )
-                setup_db.add(
-                    Persona(
-                        uid=persona_uid,
-                        account_uid=target_uid,
-                        handle=f"ts-{str(persona_uid)[:8]}",
-                        display_name="Trust Safety Target",
-                        social_intent="open",
-                        is_primary=True,
-                    )
+                setup_db.add_all(
+                    [
+                        Persona(
+                            uid=persona_uid,
+                            account_uid=target_uid,
+                            handle=f"ts-source-{str(persona_uid)[:8]}",
+                            display_name="Reported Persona",
+                            social_intent="open",
+                            is_primary=False,
+                        ),
+                        Persona(
+                            uid=primary_persona_uid,
+                            account_uid=target_uid,
+                            handle=f"ts-primary-{str(primary_persona_uid)[:8]}",
+                            display_name="Private Primary Persona",
+                            social_intent="open",
+                            is_primary=True,
+                        ),
+                    ]
                 )
                 setup_db.add(
                     TrustSafetyReport(
@@ -102,9 +113,11 @@ class TrustSafetyPostgresIntegrationTests(unittest.TestCase):
                     self.assertNotIn("priority", reporter_view)
                     self.assertNotIn("assigned_to_account_uid", reporter_view)
                     self.assertNotIn("resolution_code", reporter_view)
+                    self.assertEqual(reporter_view["source_uid"], str(persona_uid))
                     serialized = str(reporter_view)
                     self.assertNotIn(str(target_uid), serialized)
-                    self.assertNotIn(str(persona_uid), serialized)
+                    self.assertNotIn(str(primary_persona_uid), serialized)
+                    self.assertNotIn("Private Primary Persona", serialized)
 
                 results = await asyncio.gather(*(try_claim(uid) for uid in moderator_uids))
                 claimed = [item for item in results if item[0] == "claimed"]
@@ -148,7 +161,11 @@ class TrustSafetyPostgresIntegrationTests(unittest.TestCase):
                     await cleanup_db.execute(
                         delete(TrustSafetyReport).where(TrustSafetyReport.uid == report_uid)
                     )
-                    await cleanup_db.execute(delete(Persona).where(Persona.uid == persona_uid))
+                    await cleanup_db.execute(
+                        delete(Persona).where(
+                            Persona.uid.in_([persona_uid, primary_persona_uid])
+                        )
+                    )
                     await cleanup_db.execute(
                         delete(Account).where(
                             Account.uid.in_([reporter_uid, target_uid, *moderator_uids])
