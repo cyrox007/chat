@@ -27,6 +27,7 @@
 - [`client-architecture.md`](client-architecture.md) — SPA-first/API-first модель клиента.
 - [`api-and-realtime.md`](api-and-realtime.md) — HTTP API, auth/session и WebSocket v2.
 - [`security-and-privacy.md`](security-and-privacy.md) — security model и privacy boundaries.
+- [`upload-media-security-v1.md`](upload-media-security-v1.md) — server allowlist, byte/signature validation, storage/rate-limit/response-header contract (`0.6.28-alpha.1`).
 - [`development.md`](development.md) — ветки, миграции, тесты и CI.
 - [`operations.md`](operations.md) — production-конфигурация и эксплуатационные ограничения.
 - [`production-deploy-v1.md`](production-deploy-v1.md) — persistent listener, staged SPA publish и health-gated rolling production deploy.
@@ -62,9 +63,9 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Release candidate текущей ветки: `0.6.27-alpha.1`; последний выпущенный `main` checkpoint — `0.6.26-alpha.1` до финального exact-head CI и merge.
+Release candidate текущей ветки: `0.6.28-alpha.1`; последний выпущенный `main` checkpoint — `0.6.27-alpha.1` до финального exact-head CI и merge.
 
-Текущая development-линия: `0.6.x-alpha`. `0.6.23-alpha.1` закрывает IANA timezone/DST semantics для recurring Activities поверх уже выпущенных capacity/mobile hardening checkpoints.
+Текущая development-линия: `0.6.x-alpha`. `0.6.28-alpha.1` закрывает upload/media security baseline поверх уже выпущенных browser, data, discovery и realtime-capacity hardening checkpoints.
 
 - `trust-safety-incident-rehearsal-v1.md` — moderation incident matrix, protective-hold safeguards и beta enablement gate.
 

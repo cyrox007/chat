@@ -17,7 +17,7 @@ from components.user.model import User
 from utils.logger import setup_logger
 from utils.password import hash_password, verify_password
 from utils.user_agents import parse_user_agent
-from utils.file_handler import save_file, save_uploaded_file
+from utils.file_handler import IMAGE_MIME_TYPES, save_file
 from components.auth.middleware import auth_middle, authorize_user
 
 
@@ -117,7 +117,7 @@ async def register(request: Request, response: Response, db_session=None):
                 return {"status": "error", "message": "Неверный формат аватара"}
             
             try:
-                avatar_url = save_file(avatar_data)  # Ваша функция сохранения
+                avatar_url = save_file(avatar_data, allowed_mime_types=IMAGE_MIME_TYPES)
             except Exception as e:
                 logger.error(f"Ошибка загрузки аватара: {e}")
                 response.status_code = 400
@@ -432,7 +432,7 @@ async def update_profile(request: Request, response: Response, db_session=None):
         if 'avatar' in updated_data and updated_data['avatar']:
             try:
                 # Сохраняем файл через утилиту save_file
-                avatar_url = save_file(updated_data['avatar'])
+                avatar_url = save_file(updated_data['avatar'], allowed_mime_types=IMAGE_MIME_TYPES)
                 updated_data['avatar'] = avatar_url  # Заменяем Base64 на URL аватара
             except HTTPException as e:
                 response.status_code = e.status_code
@@ -440,7 +440,6 @@ async def update_profile(request: Request, response: Response, db_session=None):
                     'status': 'error',
                     'message': e.detail,
                 }
-        print(updated_data)
         user = await User.update_profile(db_session, target_user_uid, updated_data)
         
         if not user: 

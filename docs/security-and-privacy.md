@@ -65,7 +65,23 @@ Support — отдельная social surface и повторно применя
 
 ## Файлы
 
-Текущий upload layer остаётся compatibility area. Перед beta необходим отдельный security review MIME/content validation, malware/content scanning strategy, object storage и public URL policy.
+Checkpoint `0.6.28-alpha.1` закрывает базовый upload/media security review для текущих поддерживаемых типов:
+
+- сервер использует явный MIME allowlist и не сохраняет unknown/SVG/HTML/legacy Office/archive payloads;
+- лимиты считаются по реально decoded/streamed bytes, а не по client-declared size;
+- поддерживаемые raster/audio/video/PDF/OOXML типы проходят magic/signature validation;
+- DOCX/XLSX дополнительно проверяются как ожидаемый Office ZIP container;
+- публичные writes atomic, UUID-named и path-confined; partial files удаляются при ошибке;
+- Messenger и Space attachments используют общий validated pipeline;
+- per-message file-count/byte caps применяются all-or-nothing;
+- Account-level media volume ограничивается distributed Redis weighted limiter;
+- raw `data:` payload не сохраняется в Messenger metadata;
+- avatar upload ограничен raster image types;
+- `/uploads` отдаётся с `nosniff`, sandbox CSP и same-origin resource policy; документы force-download.
+
+Подробный контракт: [`upload-media-security-v1.md`](upload-media-security-v1.md).
+
+Открытый security scope: malware scanning/CDR для более широких document/archive типов, object/shared storage migration и production public-URL/CDN policy. До появления такого pipeline опасные/непроверяемые типы должны оставаться запрещёнными, а не приниматься как opaque binary.
 
 ## Security review для нового feature
 
@@ -87,7 +103,7 @@ Support — отдельная social surface и повторно применя
 ## До beta обязательно
 
 - production-like session/cookie/CSRF review;
-- upload/media review;
+- ✅ upload/media baseline для текущего allowlist; ⏳ malware/CDR + shared/object storage policy;
 - PostgreSQL/Redis integration tests;
 - privacy side-channel review;
 - dependency/security scan policy;

@@ -23,9 +23,40 @@ from components.user.model import User
 from database import Database
 from settings import config
 from socket_manager import private_manager
+from utils.file_handler import remove_saved_file, save_message_files, save_message_voice
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
+
+
+def _persist_private_message_media(
+    content_type: str,
+    media_metadata: dict | None,
+) -> tuple[dict | None, list[str], int]:
+    metadata = media_metadata if isinstance(media_metadata, dict) else {}
+
+    if content_type in {"file", "image", "video", "audio"}:
+        saved = save_message_files(
+            metadata.get("files"),
+            content_type=content_type,
+        )
+        return (
+            {"files": saved},
+            [item["url"] for item in saved],
+            sum(int(item["size"]) for item in saved),
+        )
+
+    if content_type == "voice":
+        voice = metadata.get("voice")
+        if not voice:
+            raise HTTPException(
+                status_code=400,
+                detail={"error_type": "upload_voice_missing", "message": "Голосовое сообщение пустое."},
+            )
+        saved = save_message_voice(voice)
+        return {"voice": saved["url"]}, [saved["url"]], int(saved["size"])
+
+    return media_metadata, [], 0
 
 
 async def initialize_messenger_connection(
@@ -301,7 +332,30 @@ async def handle_send_private_message(
         )
         return
 
+    saved_upload_urls: list[str] = []
+    message_persisted = False
     try:
+        persisted_media_metadata, saved_upload_urls, uploaded_bytes = _persist_private_message_media(
+            content_type,
+            data.get("media_metadata"),
+        )
+        if uploaded_bytes:
+            allowed_media_bytes = await realtime_service.allow_cost(
+                sender_uid,
+                "media-upload-bytes",
+                uploaded_bytes,
+                config.MEDIA_UPLOAD_RATE_LIMIT_BYTES,
+                config.MEDIA_UPLOAD_RATE_WINDOW_SECONDS,
+            )
+            if not allowed_media_bytes:
+                raise HTTPException(
+                    status_code=429,
+                    detail={
+                        "error_type": "media_upload_rate_limited",
+                        "message": "Слишком большой объём вложений за короткое время.",
+                    },
+                )
+
         formatted_message = await PrivateMessage.create_private_message(
             db_session,
             {
@@ -309,9 +363,10 @@ async def handle_send_private_message(
                 "content_type": content_type,
                 "sender_uid": str(sender_uid),
                 "receiver_uid": str(receiver_uid),
-                "media_metadata": data.get("media_metadata"),
+                "media_metadata": persisted_media_metadata,
             },
         )
+        message_persisted = True
         formatted_message["frontId"] = front_id
 
         try:
@@ -365,7 +420,23 @@ async def handle_send_private_message(
                 receiver_uid,
                 {**formatted_message, "notification": policy},
             )
+    except HTTPException as exc:
+        if not message_persisted:
+            for url in saved_upload_urls:
+                remove_saved_file(url)
+        await realtime_service.release_event(sender_uid, scope, front_id)
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        await websocket.send_json(
+            {
+                "type": "error",
+                "error_type": detail.get("error_type", "media_upload_failed"),
+                "frontId": front_id,
+            }
+        )
     except Exception:
+        if not message_persisted:
+            for url in saved_upload_urls:
+                remove_saved_file(url)
         await realtime_service.release_event(sender_uid, scope, front_id)
         logger.exception("Ошибка отправки private message")
         await websocket.send_json(

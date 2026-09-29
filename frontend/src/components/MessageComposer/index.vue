@@ -77,7 +77,7 @@
 
 		<!-- Скрытый элемент для выбора файлов -->
 		<input type="file" ref="fileInput" @change="handleFileUpload" multiple style="display: none;"
-			accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx" :disabled="isDisabled" />
+			accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/ogg,audio/mpeg,audio/wav,audio/ogg,audio/webm,.pdf,.docx,.xlsx" :disabled="isDisabled" />
 
 		<!-- Панель выбора эмодзи -->
 		<EmojiPicker @emoji-selected="insertEmoji" :is-show="isEmojiPickerVisible" />
@@ -130,9 +130,7 @@ const allowedMimeTypes = {
 	audio: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm'],
 	documents: [
 		'application/pdf',
-		'application/msword',
 		'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-		'application/vnd.ms-excel',
 		'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 	],
 };

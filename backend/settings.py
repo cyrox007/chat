@@ -345,8 +345,29 @@ class Config:
 
     # File storage
     UPLOADS_BASE_URL = f"{SERVER_HTTP_PROTOCOL}{SERVER_ADDR}/uploads/"
-    MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", 10 * 1024 * 1024))
-    MAX_FILES_LIMIT = int(os.getenv("MAX_FILES_LIMIT", "10"))
+    MAX_FILE_SIZE = max(
+        64 * 1024,
+        min(50 * 1024 * 1024, int(os.getenv("MAX_FILE_SIZE", 10 * 1024 * 1024))),
+    )
+    MAX_FILES_LIMIT = max(1, min(10, int(os.getenv("MAX_FILES_LIMIT", "10"))))
+    MAX_MESSAGE_MEDIA_TOTAL_SIZE = max(
+        MAX_FILE_SIZE,
+        min(
+            100 * 1024 * 1024,
+            int(os.getenv("MAX_MESSAGE_MEDIA_TOTAL_SIZE", 25 * 1024 * 1024)),
+        ),
+    )
+    MEDIA_UPLOAD_RATE_LIMIT_BYTES = max(
+        MAX_MESSAGE_MEDIA_TOTAL_SIZE,
+        min(
+            1024 * 1024 * 1024,
+            int(os.getenv("MEDIA_UPLOAD_RATE_LIMIT_BYTES", 50 * 1024 * 1024)),
+        ),
+    )
+    MEDIA_UPLOAD_RATE_WINDOW_SECONDS = max(
+        10,
+        min(3600, int(os.getenv("MEDIA_UPLOAD_RATE_WINDOW_SECONDS", "60"))),
+    )
 
 
 config = Config()
