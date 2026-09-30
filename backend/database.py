@@ -19,9 +19,9 @@ class Database:
         if cls._engine is None:
             cls._engine = create_async_engine(
                 config.database_url(async_mode=True),
-                pool_size=20,
-                max_overflow=10,
-                pool_timeout=30,
+                pool_size=config.DB_POOL_SIZE,
+                max_overflow=config.DB_POOL_MAX_OVERFLOW,
+                pool_timeout=config.DB_POOL_TIMEOUT_SECONDS,
                 pool_pre_ping=True,
                 pool_recycle=300,
                 echo=False,
