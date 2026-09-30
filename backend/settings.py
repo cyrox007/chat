@@ -43,6 +43,20 @@ class Config:
     DB_NAME = os.getenv("DB_NAME", "chat")
     DB_USER = os.getenv("DB_USER", "postgres")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
+    DB_POOL_SIZE = max(1, min(200, int(os.getenv("DB_POOL_SIZE", "20"))))
+    DB_POOL_MAX_OVERFLOW = max(0, min(200, int(os.getenv("DB_POOL_MAX_OVERFLOW", "10"))))
+    DB_POOL_TIMEOUT_SECONDS = max(1, min(120, int(os.getenv("DB_POOL_TIMEOUT_SECONDS", "30"))))
+    DB_POOL_ALERT_UTILIZATION_PERCENT = max(
+        50,
+        min(100, int(os.getenv("DB_POOL_ALERT_UTILIZATION_PERCENT", "85"))),
+    )
+    DB_POOL_MIN_HEADROOM_CONNECTIONS = max(
+        1,
+        min(
+            max(1, (DB_POOL_SIZE + DB_POOL_MAX_OVERFLOW) // 4),
+            int(os.getenv("DB_POOL_MIN_HEADROOM_CONNECTIONS", "3")),
+        ),
+    )
 
     # Redis / realtime
     # Direct topology remains the default/backward-compatible mode. When both
