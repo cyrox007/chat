@@ -41,6 +41,7 @@ class DatabasePoolMetricsContractTests(unittest.TestCase):
         ):
             payload = database_pool_snapshot()
 
+        self.assertEqual(payload["scope"], "current_process")
         self.assertEqual(payload["max_connections"], 30)
         self.assertEqual(payload["checked_out_connections"], 7)
         self.assertEqual(payload["headroom_connections"], 23)
@@ -62,6 +63,8 @@ class DatabasePoolMetricsContractTests(unittest.TestCase):
             payload = database_pool_health()
 
         self.assertFalse(payload["healthy"])
+        self.assertFalse(payload["aggregation"]["cross_process"])
+        self.assertIn("independent SQLAlchemy pool", payload["aggregation"]["note"])
         self.assertIn("postgres.pool_near_capacity", payload["attention_reasons"])
         self.assertEqual(payload["pool"]["headroom_connections"], 2)
 
