@@ -31,13 +31,21 @@ class HttpRuntimeMetricsContractTests(unittest.TestCase):
         self.assertEqual(payload["in_flight_requests"], 0)
         self.assertFalse(payload["aggregation"]["cross_process"])
 
+        privacy = payload["privacy"]
+        self.assertFalse(privacy["contains_paths"])
+        self.assertFalse(privacy["contains_query_strings"])
+        self.assertFalse(privacy["contains_headers"])
+        self.assertFalse(privacy["contains_request_bodies"])
+        self.assertFalse(privacy["contains_account_ids"])
+        self.assertFalse(privacy["contains_ip_addresses"])
+
         serialized = json.dumps(payload).lower()
         for forbidden in (
             "/identity/",
-            "query_string",
-            "authorization",
-            "account_uid",
-            "ip_address",
+            "authorization: bearer",
+            "secret@example.com",
+            "account-123",
+            "203.0.113.10",
         ):
             self.assertNotIn(forbidden, serialized)
 
