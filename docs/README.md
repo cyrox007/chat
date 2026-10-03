@@ -31,6 +31,7 @@
 - [`upload-media-security-v1.md`](upload-media-security-v1.md) — server allowlist, byte/signature validation, storage/rate-limit/response-header contract (`0.6.28-alpha.1`).
 - [`development.md`](development.md) — ветки, миграции, тесты и CI.
 - [`operations.md`](operations.md) — production-конфигурация и эксплуатационные ограничения.
+- [`postgres-pool-observability-v1.md`](postgres-pool-observability-v1.md) — per-process SQLAlchemy pool capacity/health и multi-worker aggregation boundary (`0.6.30-alpha.1`).
 - [`production-deploy-v1.md`](production-deploy-v1.md) — persistent listener, staged SPA publish и health-gated rolling production deploy.
 - [`message-notification-delivery-v1.md`](message-notification-delivery-v1.md) — message preferences, online/offline routing, active-context suppression и external channel policy.
 - [`message-email-delivery-v1.md`](message-email-delivery-v1.md) — durable unread-Messenger email ledger/provider/retry/systemd contract (`0.6.8-alpha.1`).
