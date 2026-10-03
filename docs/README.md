@@ -65,9 +65,9 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Release candidate текущей ветки: `0.6.29-alpha.1`; последний выпущенный `main` checkpoint — `0.6.28-alpha.1` до финального exact-head CI и merge.
+Release candidate текущей ветки: `0.6.30-alpha.1`; последний выпущенный `main` checkpoint — `0.6.29-alpha.1` до финального exact-head CI и merge.
 
-Текущая development-линия: `0.6.x-alpha`. `0.6.29-alpha.1` закрывает moderation/report/restriction projection privacy baseline поверх уже выпущенных upload/browser/data/discovery/realtime hardening checkpoints.
+Текущая development-линия: `0.6.x-alpha`. `0.6.30-alpha.1` добавляет per-process PostgreSQL pool capacity/headroom observability с явной границей multi-worker aggregation.
 
 - `trust-safety-incident-rehearsal-v1.md` — moderation incident matrix, protective-hold safeguards и beta enablement gate.
 
