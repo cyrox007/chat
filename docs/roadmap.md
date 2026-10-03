@@ -2,7 +2,7 @@
 
 ## Текущий статус
 
-Release candidate: **`0.6.29-alpha.1`**; last merged `main` checkpoint: **`0.6.28-alpha.1`**.
+Release candidate: **`0.6.30-alpha.1`**; last merged `main` checkpoint: **`0.6.29-alpha.1`**.
 
 Current milestone: **`0.6.x-alpha`** — Pre-beta hardening продолжается.
 
@@ -36,6 +36,14 @@ Product identity/Activities, earned engagement, occurrences/reminders, cosmetic 
 - pending private membership не получает recent/upcoming live-context reasons/projection;
 - response проверяется на отсутствие sensitive sentinel name/UID;
 - privacy path остаётся внутри discovery query/latency budget.
+
+### Stage 6 checkpoint 22 — PostgreSQL pool observability ✅ `0.6.30-alpha.1`
+- SQLAlchemy pool size/overflow/timeout вынесены в bounded environment settings;
+- admin-only runtime endpoint показывает privacy-safe checked-out/in, overflow, headroom, utilization и near-capacity health;
+- метрика явно имеет `scope=current_process`: каждый Uvicorn worker владеет собственным pool;
+- standalone CLI исключён как вводящий в заблуждение для live worker pools;
+- capacity planning документирован как per-process capacity × worker count плюс другие PostgreSQL clients;
+- functional exact-head CI #787 green до release/version sync.
 
 ### Stage 6 checkpoint 21 — Moderation privacy projections ✅ `0.6.29-alpha.1`
 - reporter Trust & Safety history больше не выводит target Account UID/primary Persona, queue priority, moderator assignment или internal resolution code;
