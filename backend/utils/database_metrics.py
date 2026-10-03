@@ -39,6 +39,7 @@ def database_pool_snapshot() -> dict:
     )
 
     return {
+        "scope": "current_process",
         "pool_size": pool_size,
         "max_overflow": max_overflow,
         "max_connections": max_connections,
@@ -64,6 +65,10 @@ def database_pool_health() -> dict:
         "thresholds": {
             "alert_utilization_percent": config.DB_POOL_ALERT_UTILIZATION_PERCENT,
             "min_headroom_connections": config.DB_POOL_MIN_HEADROOM_CONNECTIONS,
+        },
+        "aggregation": {
+            "cross_process": False,
+            "note": "Each application process owns an independent SQLAlchemy pool.",
         },
         "privacy": {
             "contains_database_url": False,
