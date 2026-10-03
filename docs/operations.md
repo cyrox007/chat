@@ -83,6 +83,30 @@ venv/bin/python3 -m workers.realtime_pool_profile \
 
 Подробности: [`realtime-redis-pool-profile-v1.md`](realtime-redis-pool-profile-v1.md).
 
+## PostgreSQL pool observability
+
+Checkpoint `0.6.30-alpha.1` добавляет admin-only runtime health текущего SQLAlchemy pool:
+
+```text
+GET /admin/operations/postgres-pool
+```
+
+Метрика имеет явный `scope=current_process`: каждый Uvicorn worker владеет независимым pool. Поэтому один ответ не является cluster-wide health. При capacity planning учитывайте `(DB_POOL_SIZE + DB_POOL_MAX_OVERFLOW) × число backend workers` плюс отдельные PostgreSQL clients для migrations/workers/maintenance.
+
+Настройки:
+
+```dotenv
+DB_POOL_SIZE=20
+DB_POOL_MAX_OVERFLOW=10
+DB_POOL_TIMEOUT_SECONDS=30
+DB_POOL_ALERT_UTILIZATION_PERCENT=85
+DB_POOL_MIN_HEADROOM_CONNECTIONS=3
+```
+
+Standalone pool-health CLI намеренно отсутствует: отдельный процесс создал бы собственный пустой pool и дал ложную картину live web workers. Cross-process aggregation остаётся задачей telemetry/exporter слоя.
+
+Подробности: [`postgres-pool-observability-v1.md`](postgres-pool-observability-v1.md).
+
 ## Redis
 
 В production Redis обязателен. Он обслуживает one-time socket tickets, pub/sub, distributed presence, active context, heartbeat state, rate limiting и idempotency.
