@@ -2,6 +2,22 @@
 
 Формат до стабильного релиза: `MAJOR.MINOR.PATCH-channel.N`.
 
+## [0.6.30-alpha.1] — 2026-10-03
+
+Stage 6 checkpoint 22 — PostgreSQL pool observability baseline.
+
+- SQLAlchemy pool size, max overflow и checkout timeout вынесены в bounded environment settings вместо hardcoded значений;
+- admin-only `GET /admin/operations/postgres-pool` показывает aggregate checked-out/checked-in/overflow/headroom/utilization и near-capacity health;
+- utilization/headroom thresholds являются только observability policy и не меняют pool size или traffic behavior;
+- response privacy contract не содержит DB URL/credentials, SQL text/parameters, Account IDs или connection identities;
+- multi-worker semantics зафиксированы явно: `scope=current_process`, потому что каждый application process владеет независимым SQLAlchemy pool;
+- standalone pool-health CLI намеренно не добавлен: отдельный процесс наблюдал бы собственный новый pool и создавал ложную картину live workers;
+- operations docs фиксируют capacity planning как per-process pool × backend worker count плюс отдельные PostgreSQL clients;
+- PyJWT обновлён до 2.15.0; production dependency audit остаётся обязательным CI gate;
+- functional exact-head CI #787 полностью зелёный: backend, frontend, dependency-security и browser-smoke.
+
+Checkpoint закрывает первый PostgreSQL capacity-observability slice, но не cross-process/server-wide telemetry и не production-like sustained SQL workload profiling.
+
 ## [0.6.29-alpha.1] — 2026-09-29
 
 Stage 6 checkpoint 21 — moderation/report/appeal privacy projection hardening.

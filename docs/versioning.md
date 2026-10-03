@@ -2,7 +2,7 @@
 
 ## Current release
 
-`0.6.29-alpha.1`
+`0.6.30-alpha.1`
 
 Current development milestone remains `0.6.x-alpha` — Pre-beta hardening.
 
@@ -59,6 +59,7 @@ Checkpoint progression:
 - `0.6.27-alpha.1` — realtime Redis pool utilization/headroom observability and bounded near-limit capacity profile.
 - `0.6.28-alpha.1` — strict upload/media allowlist, byte/signature validation, atomic writes, distributed media-rate budget and hardened public-file response policy.
 - `0.6.29-alpha.1` — moderation privacy projection separation for reporters, restriction targets and privileged moderator workflows.
+- `0.6.30-alpha.1` — per-process PostgreSQL pool utilization/headroom observability with explicit multi-worker aggregation boundary.
 
 These checkpoints do not declare Stage 6 complete.
 

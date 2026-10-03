@@ -31,6 +31,7 @@
 - [`upload-media-security-v1.md`](upload-media-security-v1.md) — server allowlist, byte/signature validation, storage/rate-limit/response-header contract (`0.6.28-alpha.1`).
 - [`development.md`](development.md) — ветки, миграции, тесты и CI.
 - [`operations.md`](operations.md) — production-конфигурация и эксплуатационные ограничения.
+- [`postgres-pool-observability-v1.md`](postgres-pool-observability-v1.md) — per-process SQLAlchemy pool capacity/health и multi-worker aggregation boundary (`0.6.30-alpha.1`).
 - [`production-deploy-v1.md`](production-deploy-v1.md) — persistent listener, staged SPA publish и health-gated rolling production deploy.
 - [`message-notification-delivery-v1.md`](message-notification-delivery-v1.md) — message preferences, online/offline routing, active-context suppression и external channel policy.
 - [`message-email-delivery-v1.md`](message-email-delivery-v1.md) — durable unread-Messenger email ledger/provider/retry/systemd contract (`0.6.8-alpha.1`).
@@ -64,9 +65,9 @@
 
 `VERSION` и `CHANGELOG.md` — источник истины для выпущенного checkpoint. Активный development scope находится в `roadmap.md`.
 
-Release candidate текущей ветки: `0.6.29-alpha.1`; последний выпущенный `main` checkpoint — `0.6.28-alpha.1` до финального exact-head CI и merge.
+Release candidate текущей ветки: `0.6.30-alpha.1`; последний выпущенный `main` checkpoint — `0.6.29-alpha.1` до финального exact-head CI и merge.
 
-Текущая development-линия: `0.6.x-alpha`. `0.6.29-alpha.1` закрывает moderation/report/restriction projection privacy baseline поверх уже выпущенных upload/browser/data/discovery/realtime hardening checkpoints.
+Текущая development-линия: `0.6.x-alpha`. `0.6.30-alpha.1` добавляет per-process PostgreSQL pool capacity/headroom observability с явной границей multi-worker aggregation.
 
 - `trust-safety-incident-rehearsal-v1.md` — moderation incident matrix, protective-hold safeguards и beta enablement gate.
 

@@ -6,6 +6,7 @@ from components.notification.operations_metrics import external_delivery_metrics
 from components.realtime import realtime_service
 from components.realtime.pool_metrics import realtime_pool_health
 from database import Database
+from utils.database_metrics import database_pool_health
 
 
 def install(app: FastAPI) -> None:
@@ -26,5 +27,9 @@ def install(app: FastAPI) -> None:
     @router.get("/realtime-redis")
     async def realtime_redis_metrics():
         return {"status": "ok", "metrics": realtime_pool_health(realtime_service)}
+
+    @router.get("/postgres-pool")
+    async def postgres_pool_metrics():
+        return {"status": "ok", "metrics": database_pool_health()}
 
     app.include_router(router)
