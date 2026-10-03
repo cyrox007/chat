@@ -58,6 +58,25 @@ class Config:
         ),
     )
 
+    # Privacy-safe per-process HTTP observability. The bounded sample contains
+    # only status class + latency; paths, query strings and identities are never stored.
+    HTTP_METRICS_SAMPLE_SIZE = max(
+        100, min(10000, int(os.getenv("HTTP_METRICS_SAMPLE_SIZE", "2000")))
+    )
+    HTTP_METRICS_MIN_HEALTH_SAMPLE = max(
+        1,
+        min(
+            HTTP_METRICS_SAMPLE_SIZE,
+            int(os.getenv("HTTP_METRICS_MIN_HEALTH_SAMPLE", "20")),
+        ),
+    )
+    HTTP_ALERT_5XX_PERCENT = max(
+        0.1, min(100.0, float(os.getenv("HTTP_ALERT_5XX_PERCENT", "5")))
+    )
+    HTTP_ALERT_P95_MS = max(
+        50.0, min(60000.0, float(os.getenv("HTTP_ALERT_P95_MS", "2000")))
+    )
+
     # Redis / realtime
     # Direct topology remains the default/backward-compatible mode. When both
     # Sentinel fields below are configured, Sentinel takes precedence and
