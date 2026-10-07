@@ -5,6 +5,7 @@ import store from './stores';
 import { registerPubChatServiceWorker } from '@/pwa/registerServiceWorker';
 
 import "@/assets/main.css";
+import "@/assets/layout-fixes.css";
 import "@/assets/ui-utilities.css";
 import "@/assets/messaging-ux.css";
 
