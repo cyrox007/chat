@@ -4,7 +4,6 @@
       <button type="button" title="Аудиозвонок" aria-label="Аудиозвонок" @click="startCall('audio')"><i class="fas fa-phone"></i></button>
       <button type="button" title="Видеозвонок" aria-label="Видеозвонок" @click="startCall('video')"><i class="fas fa-video"></i></button>
     </div>
-
     <Transition name="call-overlay">
       <section v-if="visible" class="call-overlay" role="dialog" aria-modal="true" :aria-label="title">
         <div class="call-card" :class="{ 'call-card--video': call.state.mode === 'video' }">
@@ -12,7 +11,6 @@
             <video ref="remoteVideo" class="call-video__remote" autoplay playsinline></video>
             <video ref="localVideo" class="call-video__local" autoplay playsinline muted></video>
           </div>
-
           <div class="call-copy">
             <div class="call-avatar">{{ avatarLetter }}</div>
             <span class="call-state">{{ statusLabel }}</span>
@@ -20,7 +18,6 @@
             <p>{{ call.state.mode === 'video' ? 'Видеозвонок' : 'Аудиозвонок' }}</p>
             <p v-if="call.state.error" class="call-error">{{ call.state.error }}</p>
           </div>
-
           <div v-if="call.state.phase === 'incoming'" class="call-actions call-actions--incoming">
             <button type="button" class="call-action call-action--decline" aria-label="Отклонить" @click="call.decline()"><i class="fas fa-phone-slash"></i></button>
             <button type="button" class="call-action call-action--accept" aria-label="Принять" @click="call.accept()"><i :class="call.state.mode === 'video' ? 'fas fa-video' : 'fas fa-phone'"></i></button>
@@ -41,7 +38,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { useWebRtcCall } from '@/calls/useWebRtcCall';
@@ -51,29 +48,20 @@ const store = useStore();
 const router = useRouter();
 const remoteVideo = ref(null);
 const localVideo = ref(null);
-const visible = computed(() => call.state.phase !== 'idle');
+const isAuthenticated = computed(() => Boolean(store.getters.isAuth));
+const visible = computed(() => isAuthenticated.value && call.state.phase !== 'idle');
 const activeDialog = computed(() => store.getters['messenger/getActiveDialog']);
-const launcherVisible = computed(() => Boolean(
-  activeDialog.value
-  && router.currentRoute.value.path.startsWith('/messenger')
-  && ['idle','ended'].includes(call.state.phase)
-));
+const launcherVisible = computed(() => Boolean(isAuthenticated.value && activeDialog.value && router.currentRoute.value.path.startsWith('/messenger') && ['idle','ended'].includes(call.state.phase)));
 const peerName = computed(() => call.state.peer?.display_name || call.state.peer?.username || call.state.peer?.name || 'Участник PubChat');
 const avatarLetter = computed(() => peerName.value.slice(0,1).toUpperCase());
 const title = computed(() => `${call.state.mode === 'video' ? 'Видео' : 'Аудио'}звонок с ${peerName.value}`);
 const statusLabel = computed(() => ({ outgoing:'Вызываем…',incoming:'Входящий звонок',connecting:'Соединяем…',active:'На связи',ended:'Звонок завершён',error:'Связь прервана' }[call.state.phase] || 'Звонок'));
-
-const startCall = async (mode) => {
-  if (call.state.phase === 'ended') call.dismiss();
-  try { await call.start({ uid: activeDialog.value }, mode); } catch (_) { /* overlay shows error */ }
-};
-const attachStreams = async () => {
-  await nextTick();
-  if (remoteVideo.value && call.state.remoteStream && remoteVideo.value.srcObject !== call.state.remoteStream) remoteVideo.value.srcObject = call.state.remoteStream;
-  if (localVideo.value && call.state.localStream && localVideo.value.srcObject !== call.state.localStream) localVideo.value.srcObject = call.state.localStream;
-};
+const startCall = async (mode) => { if (call.state.phase === 'ended') call.dismiss(); try { await call.start({ uid: activeDialog.value }, mode); } catch (_) {} };
+const attachStreams = async () => { await nextTick(); if (remoteVideo.value && call.state.remoteStream && remoteVideo.value.srcObject !== call.state.remoteStream) remoteVideo.value.srcObject = call.state.remoteStream; if (localVideo.value && call.state.localStream && localVideo.value.srcObject !== call.state.localStream) localVideo.value.srcObject = call.state.localStream; };
 watch(() => [call.state.phase, call.state.localStream, call.state.remoteStream], attachStreams, { deep:false });
-onMounted(() => call.connect());
+watch(isAuthenticated, (value) => { if (value) call.connect().catch(() => {}); else call.disconnect(); });
+onMounted(() => { if (isAuthenticated.value) call.connect().catch(() => {}); });
+onBeforeUnmount(() => call.disconnect());
 </script>
 
 <style scoped>
@@ -86,5 +74,5 @@ onMounted(() => call.connect());
 .call-actions{position:relative;z-index:2;display:flex;justify-content:center;gap:.75rem}.call-action{width:52px;height:52px;border:0;border-radius:50%;background:color-mix(in srgb,var(--ui-text) 10%,var(--ui-surface));color:inherit;font-size:1.05rem;cursor:pointer}.call-action.active{background:var(--ui-warning-soft);color:var(--ui-warning)}.call-action--decline{background:var(--ui-danger);color:#fff}.call-action--accept{background:var(--ui-success);color:#fff}.call-actions--incoming{gap:2rem}.call-dismiss{min-height:42px;padding:0 1.1rem;border:1px solid var(--ui-border);border-radius:999px;background:var(--ui-surface);color:var(--ui-text);cursor:pointer}
 .call-overlay-enter-active,.call-overlay-leave-active{transition:opacity .18s ease}.call-overlay-enter-from,.call-overlay-leave-to{opacity:0}.call-overlay-enter-active .call-card{transition:transform .22s var(--ui-ease-out)}.call-overlay-enter-from .call-card{transform:translateY(12px) scale(.98)}
 @media(min-width:721px){.call-launcher{top:5rem;right:1.25rem}}
-@media(max-width:680px){.call-launcher{top:calc(var(--ui-mobile-topbar-height) + 3.35rem);right:.65rem}.call-launcher button{width:34px;height:34px}.call-overlay{padding:0}.call-card{width:100%;min-height:100dvh;border:0;border-radius:0;padding:calc(1rem + env(safe-area-inset-top)) 1rem calc(1.2rem + env(safe-area-inset-bottom))}.call-card--video{min-height:100dvh}.call-action{width:50px;height:50px}.call-video__local{top:calc(.8rem + env(safe-area-inset-top));right:.8rem;width:28%;border-radius:12px}}
+@media(max-width:680px){.call-launcher{top:calc(var(--ui-mobile-topbar-height) + 3.05rem);right:.5rem}.call-launcher button{width:32px;height:32px}.call-overlay{padding:0}.call-card{width:100%;min-height:100dvh;border:0;border-radius:0;padding:calc(1rem + env(safe-area-inset-top)) 1rem calc(1.2rem + env(safe-area-inset-bottom))}.call-card--video{min-height:100dvh}.call-action{width:50px;height:50px}.call-video__local{top:calc(.8rem + env(safe-area-inset-top));right:.8rem;width:28%;border-radius:12px}}
 </style>
