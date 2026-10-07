@@ -13,6 +13,7 @@ from sqlalchemy.orm import configure_mappers
 from components.user import model as _user_model  # noqa: F401
 from components.room import model as _room_model  # noqa: F401
 from components.message import model as _message_model  # noqa: F401
+from components.message import reaction_model as _message_reaction_model  # noqa: F401
 from components.device import model as _device_model  # noqa: F401
 
 # Revival domains.
