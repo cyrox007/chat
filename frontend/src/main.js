@@ -9,6 +9,7 @@ import "@/assets/main.css";
 import "@/assets/layout-fixes.css";
 import "@/assets/ui-utilities.css";
 import "@/assets/messaging-ux.css";
+import "@/assets/mobile-density.css";
 
 const app = createApp(App);
 app.use(store);
