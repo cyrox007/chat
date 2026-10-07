@@ -11,7 +11,6 @@ import "@/assets/ui-utilities.css";
 import "@/assets/messaging-ux.css";
 
 const app = createApp(App);
-
 app.use(store);
 app.use(router);
 app.mount('#app');
@@ -21,7 +20,10 @@ app.mount('#app');
 const callRoot = document.createElement('div');
 callRoot.id = 'pubchat-call-root';
 document.body.appendChild(callRoot);
-createApp(CallOverlay).mount(callRoot);
+const callApp = createApp(CallOverlay);
+callApp.use(store);
+callApp.use(router);
+callApp.mount(callRoot);
 
 window.addEventListener('pubchat:account-access-restricted', () => {
 	if (router.currentRoute.value.name !== 'restricted-safety') {
