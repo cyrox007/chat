@@ -1,20 +1,24 @@
 <template>
-  <article class="message" :class="message.isCurrentUser ? 'sent' : 'received'" :data-message-id="message.uid" :data-is-read="message.is_read">
+  <article class="message" :class="[message.isCurrentUser ? 'sent' : 'received', { deleted: isDeleted }]" :data-message-id="message.uid" :data-is-read="message.is_read">
     <div v-if="message.reply_to" class="reply-preview">
       <div class="reply-header"><i class="fas fa-reply"></i><span>{{ message.reply_to.sender?.name || 'Пользователь' }}</span><time>{{ replyTime }}</time></div>
       <div class="reply-content">{{ truncate(message.reply_to.content, 70) }}</div>
     </div>
 
     <div class="message-body">
-      <p v-if="message.content_type === 'text'" class="message-text">{{ message.content }}</p>
+      <p v-if="isDeleted" class="deleted-copy"><i class="far fa-trash-can"></i> Сообщение удалено</p>
+      <p v-else-if="message.content_type === 'text'" class="message-text">{{ message.content }}</p>
       <MediaMessage v-else-if="mediaTypes.has(message.content_type)" :kind="message.content_type" :metadata="message.media_metadata || {}" :content="message.content || ''" />
-      <p v-if="message.content && message.content_type !== 'text'" class="media-caption">{{ message.content }}</p>
+      <p v-if="!isDeleted && message.content && message.content_type !== 'text'" class="media-caption">{{ message.content }}</p>
     </div>
+
+    <MessageActions v-if="message.uid" surface="messenger" :message="message" :is-own="Boolean(message.isCurrentUser)" />
 
     <footer class="message-meta">
       <time class="message-time">{{ formatTime(message.created_at) }}</time>
+      <span v-if="message.media_metadata?.edited_at" class="edited-label">изменено</span>
       <span v-if="message.isCurrentUser" class="read-state" :title="message.is_read ? 'Прочитано' : 'Доставлено'"><i :class="message.is_read ? 'fas fa-check-double' : 'fas fa-check'"></i></span>
-      <button v-if="!message.isCurrentUser && message.uid && !reportSent" class="report-toggle" type="button" :aria-expanded="reportOpen" @click="reportOpen = !reportOpen"><i class="far fa-flag"></i><span>Пожаловаться</span></button>
+      <button v-if="!message.isCurrentUser && message.uid && !reportSent && !isDeleted" class="report-toggle" type="button" :aria-expanded="reportOpen" @click="reportOpen = !reportOpen"><i class="far fa-flag"></i><span>Пожаловаться</span></button>
       <span v-if="reportSent" class="report-sent"><i class="fas fa-check"></i> Жалоба отправлена</span>
     </footer>
 
@@ -35,11 +39,13 @@
 <script setup>
 import { computed, ref } from 'vue';
 import MediaMessage from '@/components/Message/MediaMessage.vue';
+import MessageActions from '@/components/Message/MessageActions.vue';
 import ModerationService from '@/API/ModerationService';
 import { formatUTCDate } from '@/utils/dateFormatter';
 
 const props = defineProps({ message: { type: Object, required: true } });
 const mediaTypes = new Set(['image', 'video', 'audio', 'voice', 'file']);
+const isDeleted = computed(() => props.message.content_type === 'deleted');
 const reportOpen = ref(false); const reportSubmitting = ref(false); const reportSent = ref(false); const reportError = ref(''); const reportCategory = ref('harassment'); const reportDescription = ref('');
 const truncate = (text, length) => String(text || '').length > length ? `${String(text).slice(0, length)}…` : String(text || '');
 const submitReport = async () => {
@@ -57,28 +63,9 @@ const replyTime = computed(() => props.message.reply_to?.created_at ? formatUTCD
 </script>
 
 <style scoped>
-.message { width: fit-content; max-width: min(76%,680px); margin: .18rem 0; }
-.message.sent { margin-left: auto; }
-.message.received { margin-right: auto; }
-.message-body { min-width: 0; padding: .48rem .65rem; border: 1px solid var(--ui-border); border-radius: 16px; text-align: left; box-shadow: var(--ui-shadow-sm); }
-.message.sent .message-body { background: var(--sent-message-bg); color: var(--sent-message-text); border-color: color-mix(in srgb,var(--ui-primary) 24%,var(--ui-border)); }
-.message.received .message-body { background: var(--received-message-bg); color: var(--received-message-text); }
-.message-text,.media-caption { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.36; }
-.message-text { font-size: .94rem; }
-.media-caption { margin-top: .35rem; font-size: .84rem; }
-.message-meta { display: flex; align-items: center; gap: .35rem; min-height: 19px; margin-top: .12rem; padding: 0 .25rem; color: var(--ui-text-subtle); }
-.message.sent .message-meta { justify-content: flex-end; }
-.message-time,.read-state { font-size: .66rem; }
-.read-state { color: var(--ui-primary); }
-.report-toggle { display: inline-flex; align-items: center; gap: .25rem; padding: .1rem .25rem; border: 0; background: transparent; color: var(--ui-text-subtle); font-size: .65rem; cursor: pointer; }
-.report-toggle:hover { color: var(--ui-danger); }
-.report-sent { color: var(--ui-success); font-size: .65rem; }
-.reply-preview { margin-bottom: .28rem; padding: .32rem .48rem; border-left: 3px solid var(--ui-primary); border-radius: 0 8px 8px 0; background: var(--ui-surface-muted); }
-.reply-header { display: flex; align-items: center; gap: .3rem; color: var(--ui-primary); font-size: .68rem; font-weight: 700; }
-.reply-header time { margin-left: auto; color: var(--ui-text-subtle); font-weight: 400; }
-.reply-content { margin-top: .1rem; color: var(--ui-text-muted); font-size: .75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.report-form { display: grid; gap: .55rem; margin-top: .4rem; padding: .65rem; border: 1px solid var(--ui-border); border-radius: 12px; background: var(--ui-surface); color: var(--ui-text); text-align: left; }
-.report-form label { display: grid; gap: .25rem; font-size: .72rem; font-weight: 700; }.report-form label span{font-weight:400;color:var(--ui-text-subtle)}
-.report-form select,.report-form textarea { width: 100%; padding: .45rem .5rem; border: 1px solid var(--ui-border); border-radius: 8px; background: var(--ui-surface); color: var(--ui-text); font: inherit; }.report-privacy,.report-error{margin:0;font-size:.68rem}.report-privacy{color:var(--ui-text-muted)}.report-error{color:var(--ui-danger)}.report-actions{display:flex;justify-content:flex-end;gap:.4rem}.report-actions>button:not(.ui-button){border:0;background:transparent;color:var(--ui-text-muted);cursor:pointer}
-@media(max-width:680px){.message{max-width:89%;margin:.1rem 0}.message-body{padding:.4rem .52rem;border-radius:14px;box-shadow:none}.message-text{font-size:.9rem;line-height:1.32}.message-meta{margin-top:.06rem;min-height:17px}.report-toggle span{display:none}.report-form{min-width:min(17rem,84vw)}}
+.message{width:fit-content;max-width:min(76%,680px);margin:.14rem 0}.message.sent{margin-left:auto}.message.received{margin-right:auto}.message.deleted{opacity:.82}.message-body{min-width:0;padding:.45rem .62rem;border:1px solid var(--ui-border);border-radius:16px;text-align:left;box-shadow:var(--ui-shadow-sm)}.message.sent .message-body{background:var(--sent-message-bg);color:var(--sent-message-text);border-color:color-mix(in srgb,var(--ui-primary) 24%,var(--ui-border))}.message.received .message-body{background:var(--received-message-bg);color:var(--received-message-text)}
+.message-text,.media-caption{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.34}.message-text{font-size:.93rem}.media-caption{margin-top:.35rem;font-size:.84rem}.deleted-copy{display:flex;align-items:center;gap:.35rem;margin:0;color:var(--ui-text-muted);font-size:.8rem;font-style:italic}.message-meta{display:flex;align-items:center;gap:.32rem;min-height:17px;margin-top:.04rem;padding:0 .2rem;color:var(--ui-text-subtle)}.message.sent .message-meta{justify-content:flex-end}.message-time,.read-state,.edited-label{font-size:.64rem}.edited-label{font-style:italic}.read-state{color:var(--ui-primary)}
+.report-toggle{display:inline-flex;align-items:center;gap:.25rem;padding:.1rem .25rem;border:0;background:transparent;color:var(--ui-text-subtle);font-size:.65rem;cursor:pointer}.report-toggle:hover{color:var(--ui-danger)}.report-sent{color:var(--ui-success);font-size:.65rem}.reply-preview{margin-bottom:.28rem;padding:.32rem .48rem;border-left:3px solid var(--ui-primary);border-radius:0 8px 8px 0;background:var(--ui-surface-muted)}.reply-header{display:flex;align-items:center;gap:.3rem;color:var(--ui-primary);font-size:.68rem;font-weight:700}.reply-header time{margin-left:auto;color:var(--ui-text-subtle);font-weight:400}.reply-content{margin-top:.1rem;color:var(--ui-text-muted);font-size:.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.report-form{display:grid;gap:.55rem;margin-top:.4rem;padding:.65rem;border:1px solid var(--ui-border);border-radius:12px;background:var(--ui-surface);color:var(--ui-text);text-align:left}.report-form label{display:grid;gap:.25rem;font-size:.72rem;font-weight:700}.report-form label span{font-weight:400;color:var(--ui-text-subtle)}.report-form select,.report-form textarea{width:100%;padding:.45rem .5rem;border:1px solid var(--ui-border);border-radius:8px;background:var(--ui-surface);color:var(--ui-text);font:inherit}.report-privacy,.report-error{margin:0;font-size:.68rem}.report-privacy{color:var(--ui-text-muted)}.report-error{color:var(--ui-danger)}.report-actions{display:flex;justify-content:flex-end;gap:.4rem}.report-actions>button:not(.ui-button){border:0;background:transparent;color:var(--ui-text-muted);cursor:pointer}
+@media(max-width:680px){.message{max-width:89%;margin:.08rem 0}.message-body{padding:.36rem .5rem;border-radius:14px;box-shadow:none}.message-text{font-size:.89rem;line-height:1.3}.message-meta{min-height:15px}.report-toggle span{display:none}.report-form{min-width:min(17rem,84vw)}}
 </style>
