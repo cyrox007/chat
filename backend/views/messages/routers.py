@@ -44,29 +44,42 @@ def _user_uid(current_user: dict) -> UUID:
         raise HTTPException(status_code=401, detail={"error_type": "invalid_account"}) from exc
 
 
-async def _publish_update(surface: str, message, payload: dict) -> None:
-    event = {"type": "message_updated", "surface": surface, **payload}
+def _standard_frame(surface: str, message, *, overrides: dict | None = None) -> dict:
+    overrides = overrides or {}
+    metadata = dict(message.media_metadata or {})
+    if "media_metadata" in overrides:
+        metadata = dict(overrides["media_metadata"] or {})
     if surface == "room":
-        await room_manager.broadcast_to_room(message.room_uid, event)
-    else:
-        await private_manager.send_to_user(message.sender_uid, event)
-        if message.receiver_uid != message.sender_uid:
-            await private_manager.send_to_user(message.receiver_uid, event)
-
-
-async def _publish_reactions(surface: str, message, reactions: list[dict]) -> None:
-    event = {
-        "type": "message_reactions",
-        "surface": surface,
-        "message_uid": str(message.uid),
-        "reactions": reactions,
+        return {
+            "type": "message",
+            "uid": str(message.uid),
+            "content": overrides.get("content", message.text or ""),
+            "content_type": overrides.get("content_type", message.content_type),
+            "media_metadata": metadata,
+            "sender": {"uid": str(message.author_uid)},
+            "room_uid": str(message.room_uid),
+            "created_at": message.created_at.isoformat(),
+        }
+    return {
+        "type": "private_message",
+        "uid": str(message.uid),
+        "content": overrides.get("content", message.text or ""),
+        "content_type": overrides.get("content_type", message.content_type),
+        "media_metadata": metadata,
+        "sender_uid": str(message.sender_uid),
+        "receiver_uid": str(message.receiver_uid),
+        "is_read": bool(message.is_read),
+        "created_at": message.created_at.isoformat(),
     }
+
+
+async def _publish_frame(surface: str, message, frame: dict) -> None:
     if surface == "room":
-        await room_manager.broadcast_to_room(message.room_uid, event)
+        await room_manager.broadcast_to_room(message.room_uid, frame)
     else:
-        await private_manager.send_to_user(message.sender_uid, event)
+        await private_manager.send_to_user(message.sender_uid, frame)
         if message.receiver_uid != message.sender_uid:
-            await private_manager.send_to_user(message.receiver_uid, event)
+            await private_manager.send_to_user(message.receiver_uid, frame)
 
 
 def install(app: FastAPI):
@@ -84,7 +97,7 @@ def install(app: FastAPI):
         await assert_allowed(db, user_uid, "messenger.send" if surface == "messenger" else "space.chat.send")
         message = await load_message(db, surface, message_uid)
         result = await edit_message(db, surface, message_uid, user_uid, payload.content)
-        await _publish_update(surface, message, result)
+        await _publish_frame(surface, message, _standard_frame(surface, message, overrides=result))
         return {"status": "ok", "message": result}
 
     @router.delete("/{surface}/{message_uid}")
@@ -97,7 +110,7 @@ def install(app: FastAPI):
         user_uid = _user_uid(current_user)
         message = await load_message(db, surface, message_uid)
         result = await soft_delete_message(db, surface, message_uid, user_uid)
-        await _publish_update(surface, message, result)
+        await _publish_frame(surface, message, _standard_frame(surface, message, overrides=result))
         return {"status": "ok", "message": result}
 
     @router.get("/{surface}/{message_uid}/reactions")
@@ -123,7 +136,9 @@ def install(app: FastAPI):
         user_uid = _user_uid(current_user)
         message = await load_message(db, surface, message_uid)
         result = await toggle_reaction(db, surface, message_uid, user_uid, payload.emoji)
-        await _publish_reactions(surface, message, result["reactions"])
+        metadata = dict(message.media_metadata or {})
+        metadata["reactions"] = result["reactions"]
+        await _publish_frame(surface, message, _standard_frame(surface, message, overrides={"media_metadata": metadata}))
         return {"status": "ok", **result}
 
     @router.post("/{surface}/{message_uid}/forward", status_code=status.HTTP_201_CREATED)
