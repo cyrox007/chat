@@ -4,8 +4,8 @@ import logging
 
 from components.model_registry import ensure_models_registered
 from components.transcription.service import run_transcription_worker
+from components.transcription.settings import transcription_config
 from database import Database
-from settings import config
 from utils.logger import setup_logger
 from utils.observability import log_structured
 
@@ -15,7 +15,7 @@ logger = setup_logger(__name__)
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Process PubChat voice/video transcription jobs.")
-    parser.add_argument("--batch-size", type=int, default=config.TRANSCRIPTION_BATCH_SIZE)
+    parser.add_argument("--batch-size", type=int, default=transcription_config.batch_size)
     return parser
 
 
