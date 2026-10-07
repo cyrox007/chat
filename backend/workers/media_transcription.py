@@ -27,6 +27,7 @@ async def run(batch_size: int) -> int:
             logger,
             logging.INFO,
             "transcription.worker_complete",
+            discovered=stats.discovered,
             claimed=stats.claimed,
             completed=stats.completed,
             retried=stats.retried,
