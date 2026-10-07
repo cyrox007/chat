@@ -1,134 +1,53 @@
 <template>
-  <div class="message-actions">
+  <div v-if="!isDeleted" class="message-actions">
     <div v-if="reactions.length" class="reaction-summary">
       <button v-for="reaction in reactions" :key="reaction.emoji" type="button" :class="{ selected: reaction.selected }" @click="toggleReaction(reaction.emoji)">
         <span>{{ reaction.emoji }}</span><small>{{ reaction.count }}</small>
       </button>
     </div>
-
-    <button class="message-actions__toggle" type="button" aria-label="Действия с сообщением" :aria-expanded="open" @click.stop="open = !open">
-      <i class="fas fa-ellipsis"></i>
-    </button>
-
+    <button class="message-actions__toggle" type="button" aria-label="Действия с сообщением" :aria-expanded="open" @click.stop="open = !open"><i class="fas fa-ellipsis"></i></button>
     <div v-if="open" class="message-actions__menu" @click.stop>
-      <div class="quick-reactions" aria-label="Реакции">
-        <button v-for="emoji in quickReactions" :key="emoji" type="button" @click="toggleReaction(emoji)">{{ emoji }}</button>
-      </div>
+      <div class="quick-reactions" aria-label="Реакции"><button v-for="emoji in quickReactions" :key="emoji" type="button" @click="toggleReaction(emoji)">{{ emoji }}</button></div>
+      <button type="button" @click="reply"><i class="fas fa-reply"></i><span>Ответить</span></button>
       <button type="button" @click="copyText"><i class="far fa-copy"></i><span>Копировать</span></button>
       <button type="button" @click="openForward"><i class="fas fa-share"></i><span>Переслать</span></button>
-      <button v-if="isOwn && message.content_type !== 'deleted'" type="button" @click="beginEdit"><i class="far fa-pen-to-square"></i><span>Редактировать</span></button>
-      <button v-if="isOwn && message.content_type !== 'deleted'" class="danger" type="button" @click="removeMessage"><i class="far fa-trash-can"></i><span>Удалить</span></button>
+      <button v-if="isOwn" type="button" @click="beginEdit"><i class="far fa-pen-to-square"></i><span>Редактировать</span></button>
+      <button v-if="isOwn" class="danger" type="button" @click="removeMessage"><i class="far fa-trash-can"></i><span>Удалить</span></button>
     </div>
-
     <Teleport to="body">
       <div v-if="editing" class="message-dialog-backdrop" @click.self="editing = false">
-        <form class="message-dialog" @submit.prevent="saveEdit">
-          <h3>Редактировать сообщение</h3>
-          <textarea v-model="editText" rows="4" maxlength="1000" autofocus></textarea>
-          <p v-if="error" class="dialog-error">{{ error }}</p>
-          <div class="dialog-actions"><button type="button" @click="editing = false">Отмена</button><button class="ui-button" type="submit" :disabled="busy || !editText.trim()">Сохранить</button></div>
-        </form>
+        <form class="message-dialog" @submit.prevent="saveEdit"><h3>Редактировать сообщение</h3><textarea v-model="editText" rows="4" maxlength="1000" autofocus></textarea><p v-if="error" class="dialog-error">{{ error }}</p><div class="dialog-actions"><button type="button" @click="editing = false">Отмена</button><button class="ui-button" type="submit" :disabled="busy || !editText.trim()">Сохранить</button></div></form>
       </div>
-
       <div v-if="forwarding" class="message-dialog-backdrop" @click.self="forwarding = false">
-        <section class="message-dialog forward-dialog">
-          <header><div><h3>Переслать сообщение</h3><p>Выберите диалог или пространство</p></div><button type="button" aria-label="Закрыть" @click="forwarding = false"><i class="fas fa-times"></i></button></header>
-          <input v-model.trim="targetSearch" type="search" placeholder="Найти…" />
-          <div v-if="targetsLoading" class="forward-state">Загружаем…</div>
-          <div v-else class="forward-targets">
-            <button v-for="target in filteredTargets" :key="`${target.surface}:${target.uid}`" type="button" @click="forwardTo(target)">
-              <span class="target-icon"><i :class="target.surface === 'room' ? 'fas fa-layer-group' : 'fas fa-user'"></i></span>
-              <span><strong>{{ target.name }}</strong><small>{{ target.surface === 'room' ? 'Пространство' : 'Личный диалог' }}</small></span>
-            </button>
-            <p v-if="!filteredTargets.length" class="forward-state">Подходящих получателей нет.</p>
-          </div>
-          <p v-if="error" class="dialog-error">{{ error }}</p>
-        </section>
+        <section class="message-dialog forward-dialog"><header><div><h3>Переслать сообщение</h3><p>Выберите диалог или пространство</p></div><button type="button" aria-label="Закрыть" @click="forwarding = false"><i class="fas fa-times"></i></button></header><input v-model.trim="targetSearch" type="search" placeholder="Найти…" /><div v-if="targetsLoading" class="forward-state">Загружаем…</div><div v-else class="forward-targets"><button v-for="target in filteredTargets" :key="`${target.surface}:${target.uid}`" type="button" @click="forwardTo(target)"><span class="target-icon"><i :class="target.surface === 'room' ? 'fas fa-layer-group' : 'fas fa-user'"></i></span><span><strong>{{ target.name }}</strong><small>{{ target.surface === 'room' ? 'Пространство' : 'Личный диалог' }}</small></span></button><p v-if="!filteredTargets.length" class="forward-state">Подходящих получателей нет.</p></div><p v-if="error" class="dialog-error">{{ error }}</p></section>
       </div>
     </Teleport>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import $api from '@/API';
 import MessageActionsService from '@/API/MessageActionsService';
 import MessengerService from '@/API/MessengerService';
 
-const props = defineProps({
-  surface: { type: String, required: true },
-  message: { type: Object, required: true },
-  isOwn: { type: Boolean, default: false },
-});
-const quickReactions = ['👍','❤️','😂','😮','😢','🔥'];
-const open = ref(false);
-const editing = ref(false);
-const forwarding = ref(false);
-const busy = ref(false);
-const error = ref('');
-const editText = ref('');
-const reactions = ref(Array.isArray(props.message.media_metadata?.reactions) ? props.message.media_metadata.reactions : []);
-const targets = ref([]);
-const targetsLoading = ref(false);
-const targetSearch = ref('');
-
-const filteredTargets = computed(() => {
-  const query = targetSearch.value.toLocaleLowerCase();
-  return targets.value.filter((target) => !query || target.name.toLocaleLowerCase().includes(query));
-});
-
-const loadReactions = async () => {
-  if (!props.message.uid) return;
-  try { reactions.value = (await MessageActionsService.reactions(props.surface, props.message.uid)).data.reactions || []; } catch (_) {}
-};
-const toggleReaction = async (emoji) => {
-  if (!props.message.uid || busy.value) return;
-  busy.value = true;
-  try { reactions.value = (await MessageActionsService.react(props.surface, props.message.uid, emoji)).data.reactions || []; }
-  finally { busy.value = false; open.value = false; }
-};
-const copyText = async () => {
-  const text = props.message.content || '';
-  if (text) { try { await navigator.clipboard.writeText(text); } catch (_) {} }
-  open.value = false;
-};
-const beginEdit = () => { editText.value = props.message.content || ''; error.value = ''; editing.value = true; open.value = false; };
-const saveEdit = async () => {
-  if (!editText.value.trim() || busy.value) return;
-  busy.value = true; error.value = '';
-  try { await MessageActionsService.edit(props.surface, props.message.uid, editText.value.trim()); editing.value = false; }
-  catch (_) { error.value = 'Не удалось сохранить изменения.'; }
-  finally { busy.value = false; }
-};
-const removeMessage = async () => {
-  open.value = false;
-  if (!confirm('Удалить это сообщение?')) return;
-  try { await MessageActionsService.remove(props.surface, props.message.uid); } catch (_) { /* realtime notice handles transport errors elsewhere */ }
-};
-const loadForwardTargets = async () => {
-  targetsLoading.value = true; error.value = '';
-  try {
-    const [dialogsResponse, spacesResponse] = await Promise.all([
-      MessengerService.getDialogs().catch(() => ({ data: { dialogs: [] } })),
-      $api.get('/spaces/v1', { params: { limit: 50, offset: 0 } }).catch(() => ({ data: { spaces: [] } })),
-    ]);
-    const dialogs = dialogsResponse.data?.dialogs || dialogsResponse.data?.data || [];
-    const spaces = spacesResponse.data?.spaces || [];
-    targets.value = [
-      ...dialogs.map((dialog) => ({ surface: 'messenger', uid: dialog.partner_id, name: dialog.partner?.display_name || dialog.partner?.username || 'Личный диалог' })),
-      ...spaces.filter((space) => space.viewer_membership?.status === 'active' || space.can_manage).map((space) => ({ surface: 'room', uid: space.uid, name: space.name || 'Пространство' })),
-    ];
-  } finally { targetsLoading.value = false; }
-};
-const openForward = async () => { open.value = false; forwarding.value = true; targetSearch.value = ''; await loadForwardTargets(); };
-const forwardTo = async (target) => {
-  if (busy.value) return;
-  busy.value = true; error.value = '';
-  try { await MessageActionsService.forward(props.surface, props.message.uid, target.surface, target.uid); forwarding.value = false; }
-  catch (err) { error.value = err.response?.data?.detail?.error_type === 'dm_not_allowed' ? 'Получатель не принимает такие личные сообщения.' : 'Не удалось переслать сообщение.'; }
-  finally { busy.value = false; }
-};
-
+const props = defineProps({ surface:{type:String,required:true}, message:{type:Object,required:true}, isOwn:{type:Boolean,default:false} });
+const quickReactions=['👍','❤️','😂','😮','😢','🔥'];
+const open=ref(false),editing=ref(false),forwarding=ref(false),busy=ref(false),error=ref(''),editText=ref(''),targets=ref([]),targetsLoading=ref(false),targetSearch=ref('');
+const reactions=ref(Array.isArray(props.message.media_metadata?.reactions)?props.message.media_metadata.reactions:[]);
+const isDeleted=computed(()=>props.message.content_type==='deleted');
+const filteredTargets=computed(()=>{const q=targetSearch.value.toLocaleLowerCase();return targets.value.filter(t=>!q||t.name.toLocaleLowerCase().includes(q));});
+const loadReactions=async()=>{if(!props.message.uid)return;try{reactions.value=(await MessageActionsService.reactions(props.surface,props.message.uid)).data.reactions||[];}catch(_){}};
+const toggleReaction=async emoji=>{if(!props.message.uid||busy.value)return;busy.value=true;try{reactions.value=(await MessageActionsService.react(props.surface,props.message.uid,emoji)).data.reactions||[];}finally{busy.value=false;open.value=false;}};
+const reply=()=>{window.dispatchEvent(new CustomEvent('pubchat:message-reply',{detail:{uid:props.message.uid,content:props.message.content||'',sender:props.message.sender||{uid:props.message.sender_uid,name:'Пользователь'},created_at:props.message.created_at}}));open.value=false;};
+const copyText=async()=>{const text=props.message.content||'';if(text)try{await navigator.clipboard.writeText(text);}catch(_){}open.value=false;};
+const beginEdit=()=>{editText.value=props.message.content||'';error.value='';editing.value=true;open.value=false;};
+const saveEdit=async()=>{if(!editText.value.trim()||busy.value)return;busy.value=true;error.value='';try{await MessageActionsService.edit(props.surface,props.message.uid,editText.value.trim());editing.value=false;}catch(_){error.value='Не удалось сохранить изменения.';}finally{busy.value=false;}};
+const removeMessage=async()=>{open.value=false;if(!confirm('Удалить это сообщение?'))return;try{await MessageActionsService.remove(props.surface,props.message.uid);}catch(_){}};
+const loadForwardTargets=async()=>{targetsLoading.value=true;error.value='';try{const[d,s]=await Promise.all([MessengerService.getDialogs().catch(()=>({data:{dialogs:[]}})),$api.get('/spaces/v1',{params:{limit:50,offset:0}}).catch(()=>({data:{spaces:[]}}))]);const dialogs=d.data?.dialogs||d.data?.data||[];const spaces=s.data?.spaces||[];targets.value=[...dialogs.map(x=>({surface:'messenger',uid:x.partner_id,name:x.partner?.display_name||x.partner?.username||'Личный диалог'})),...spaces.filter(x=>x.viewer_membership?.status==='active'||x.can_manage).map(x=>({surface:'room',uid:x.uid,name:x.name||'Пространство'}))];}finally{targetsLoading.value=false;}};
+const openForward=async()=>{open.value=false;forwarding.value=true;targetSearch.value='';await loadForwardTargets();};
+const forwardTo=async target=>{if(busy.value)return;busy.value=true;error.value='';try{await MessageActionsService.forward(props.surface,props.message.uid,target.surface,target.uid);forwarding.value=false;}catch(err){error.value=err.response?.data?.detail?.error_type==='dm_not_allowed'?'Получатель не принимает такие личные сообщения.':'Не удалось переслать сообщение.';}finally{busy.value=false;}};
+watch(()=>props.message.media_metadata?.reactions,(value)=>{if(Array.isArray(value))reactions.value=value;},{deep:true});
 onMounted(loadReactions);
 </script>
 
