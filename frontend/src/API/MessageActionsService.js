@@ -9,6 +9,10 @@ export default class MessageActionsService {
     return $api.delete(`/messages/v2/${surface}/${uid}`);
   }
 
+  static reply(surface, uid, content) {
+    return $api.post(`/messages/v2/${surface}/${uid}/reply`, { content });
+  }
+
   static reactions(surface, uid) {
     return $api.get(`/messages/v2/${surface}/${uid}/reactions`);
   }
