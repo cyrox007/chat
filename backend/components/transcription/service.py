@@ -41,6 +41,19 @@ def _with_transcription(metadata: dict | None, *, status: str, text: str = "", l
     return value
 
 
+async def _load_message(db: AsyncSession, surface: str, message_uid: UUID):
+    model = Message if surface == "room" else PrivateMessage if surface == "messenger" else None
+    return await db.get(model, message_uid) if model else None
+
+
+async def _set_message_metadata(db: AsyncSession, surface: str, message_uid: UUID, metadata: dict) -> bool:
+    message = await _load_message(db, surface, message_uid)
+    if not message:
+        return False
+    message.media_metadata = metadata
+    return True
+
+
 async def enqueue_message_transcription(
     db: AsyncSession,
     *,
@@ -48,6 +61,7 @@ async def enqueue_message_transcription(
     message_uid: UUID | str,
     content_type: str,
     media_metadata: dict | None,
+    commit: bool = True,
 ) -> MediaTranscriptionJob | None:
     if content_type not in TRANSCRIBABLE_TYPES:
         return None
@@ -68,25 +82,64 @@ async def enqueue_message_transcription(
     job = MediaTranscriptionJob(surface=surface, message_uid=uid, media_url=url, status="pending")
     db.add(job)
     await _set_message_metadata(db, surface, uid, _with_transcription(media_metadata, status="pending"))
-    await db.commit()
+    if commit:
+        await db.commit()
     return job
 
 
-async def _load_message(db: AsyncSession, surface: str, message_uid: UUID):
-    model = Message if surface == "room" else PrivateMessage if surface == "messenger" else None
-    return await db.get(model, message_uid) if model else None
+async def discover_transcription_jobs(db: AsyncSession, *, scan_limit: int = 200) -> int:
+    """Find newly persisted voice/audio/video messages without coupling to one transport.
 
-
-async def _set_message_metadata(db: AsyncSession, surface: str, message_uid: UUID, metadata: dict) -> bool:
-    message = await _load_message(db, surface, message_uid)
-    if not message:
-        return False
-    message.media_metadata = metadata
-    return True
+    Both websocket surfaces are covered, including old messages created while the
+    worker/provider was temporarily unavailable.
+    """
+    discovered = 0
+    specs = (("room", Message), ("messenger", PrivateMessage))
+    for surface, model in specs:
+        messages = (
+            await db.execute(
+                select(model)
+                .where(model.content_type.in_(TRANSCRIBABLE_TYPES))
+                .order_by(model.created_at.desc())
+                .limit(scan_limit)
+            )
+        ).scalars().all()
+        if not messages:
+            continue
+        existing = set(
+            (
+                await db.execute(
+                    select(MediaTranscriptionJob.message_uid).where(
+                        MediaTranscriptionJob.surface == surface,
+                        MediaTranscriptionJob.message_uid.in_([message.uid for message in messages]),
+                    )
+                )
+            ).scalars().all()
+        )
+        for message in messages:
+            if message.uid in existing:
+                continue
+            url = _media_url(message.media_metadata, message.content_type)
+            if not url:
+                continue
+            db.add(
+                MediaTranscriptionJob(
+                    surface=surface,
+                    message_uid=message.uid,
+                    media_url=url,
+                    status="pending",
+                )
+            )
+            message.media_metadata = _with_transcription(message.media_metadata, status="pending")
+            discovered += 1
+    if discovered:
+        await db.commit()
+    return discovered
 
 
 @dataclass(slots=True)
 class TranscriptionWorkerStats:
+    discovered: int = 0
     claimed: int = 0
     completed: int = 0
     retried: int = 0
@@ -162,6 +215,7 @@ async def run_transcription_worker(session_factory: async_sessionmaker, *, batch
     stats = TranscriptionWorkerStats()
     limit = batch_size or transcription_config.batch_size
     async with session_factory() as db:
+        stats.discovered = await discover_transcription_jobs(db, scan_limit=max(200, limit * 5))
         now = datetime.utcnow()
         jobs = (
             await db.execute(
