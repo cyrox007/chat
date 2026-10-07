@@ -12,7 +12,7 @@ logger = setup_logger(__name__)
 ACCOUNT_RESTRICTED_CLOSE_CODE = 4003
 
 
-def install_account_control(private_manager, room_manager) -> None:
+def install_account_control(private_manager, room_manager, call_manager=None) -> None:
     async def handle_account_control(event: dict) -> None:
         if event.get("kind") != "account_control" or event.get("action") != "disconnect_account":
             return
@@ -23,16 +23,20 @@ def install_account_control(private_manager, room_manager) -> None:
 
         reason = str(event.get("reason") or "Account access restricted")[:120]
 
-        for websocket in list(private_manager.user_connections.get(user_uid, [])):
-            try:
-                await asyncio.wait_for(
-                    websocket.close(code=ACCOUNT_RESTRICTED_CLOSE_CODE, reason=reason),
-                    timeout=config.REALTIME_SEND_TIMEOUT_SECONDS,
-                )
-            except Exception:
-                pass
-            finally:
-                await private_manager.disconnect(websocket)
+        direct_managers = [private_manager]
+        if call_manager is not None:
+            direct_managers.append(call_manager)
+        for manager in direct_managers:
+            for websocket in list(manager.user_connections.get(user_uid, [])):
+                try:
+                    await asyncio.wait_for(
+                        websocket.close(code=ACCOUNT_RESTRICTED_CLOSE_CODE, reason=reason),
+                        timeout=config.REALTIME_SEND_TIMEOUT_SECONDS,
+                    )
+                except Exception:
+                    pass
+                finally:
+                    await manager.disconnect(websocket)
 
         for room_uid, connections in list(room_manager.room_connections.items()):
             for websocket, connection_user_uid in list(connections):
